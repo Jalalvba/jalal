@@ -1,5 +1,4 @@
-// app/api/ds/export/route.ts
-
+// app/api/export/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -9,6 +8,7 @@ import { NextResponse } from "next/server";
 
 type Line = {
   n_intervention?: string;
+  cmd_num?: string;
   code_art?: string;
   designation_art?: string;
   designation_conso?: string;
@@ -63,16 +63,46 @@ type DsItem = {
   lines?: Line[];
 };
 
+// ✅ FIXED: keys match what /api/parc actually returns (camelCase projection)
+type ParcItem = {
+  id?: number;
+  company?: string;
+  client?: string;
+  brand?: string;
+  model?: string | number;
+  imm?: string;
+  ww?: string;
+  vin?: string;
+  vehicle_state?: string;
+  vehicle_type?: string;
+  location_type?: string;
+  tenant?: string;
+  received?: string;
+  received_date?: string;
+  mce_date?: string;
+  sold?: string;
+  scrap?: string;
+  purchase_order?: string;
+  purchase_price_net?: number;
+};
+
 type ExportPayload = {
   imm: string;
   count: number;
   items: DsItem[];
+
+  // visibility
   visibleCardFields: string[];
   visibleLineFields: string[];
-  vehicleMetaFields: { key: string; label: string }[];
+
+  // labels
+  vehicleMetaFields: { key: string; label: string }[]; // keys are camelCase ParcItem keys
   cardFieldLabels: Record<string, string>;
   lineFieldLabels: Record<string, string>;
   topBarKeys: string[];
+
+  // vehicle card from /api/parc
+  vehicle?: ParcItem | null;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -111,6 +141,15 @@ function getLineValue(line: Line, key: string): string {
   return String(v).trim() || "—";
 }
 
+function getVehicleValue(vehicle: ParcItem | null | undefined, key: string): string {
+  if (!vehicle) return "—";
+  const v = (vehicle as Record<string, unknown>)[key];
+  if (v == null) return "—";
+  // ✅ FIXED: key is now camelCase
+  if (key === "purchase_price_net") return fmtNum(v as number, 2) + " MAD";
+  return String(v).trim() || "—";
+}
+
 // ─── DocX builders ────────────────────────────────────────────────────────────
 
 const COLORS = {
@@ -129,7 +168,7 @@ const PAGE_W = 9360; // A4 content width in DXA with 1" margins
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  // ✅ Dynamic import fixes Turbopack/Vercel build issues
+  // Dynamic import fixes Turbopack/Vercel build issues
   const {
     Document,
     Packer,
@@ -179,11 +218,7 @@ export async function POST(req: Request) {
           borders,
           width: { size: PAGE_W - 2200, type: WidthType.DXA },
           margins: { top: 60, bottom: 60, left: 100, right: 100 },
-          children: [
-            new Paragraph({
-              children: [new TextRun({ text: value, size: 18, font: "Arial" })],
-            }),
-          ],
+          children: [new Paragraph({ children: [new TextRun({ text: value, size: 18, font: "Arial" })] })],
         }),
       ],
     });
@@ -199,19 +234,11 @@ export async function POST(req: Request) {
     });
   }
 
-  function buildVehicleTable(item: DsItem, fields: { key: string; label: string }[]) {
+  function buildVehicleTable(vehicle: ParcItem | null | undefined, fields: { key: string; label: string }[]) {
     return new Table({
       width: { size: PAGE_W, type: WidthType.DXA },
       columnWidths: [2200, PAGE_W - 2200],
-      rows: fields.map((f) =>
-        labelValueRow(
-          f.label,
-          (() => {
-            const v = (item as Record<string, unknown>)[f.key];
-            return v != null ? String(v).trim() || "—" : "—";
-          })()
-        )
-      ),
+      rows: fields.map((f) => labelValueRow(f.label, getVehicleValue(vehicle, f.key))),
     });
   }
 
@@ -230,7 +257,7 @@ export async function POST(req: Request) {
     totalMtHt?: number | null
   ) {
     const numKeys = new Set(["qte", "mt_ht", "prix_unitaire", "dernier_prix"]);
-    const colW = Math.floor(PAGE_W / fields.length);
+    const colW = Math.floor(PAGE_W / Math.max(fields.length, 1));
     const colWidths = fields.map((_, i) =>
       i === fields.length - 1 ? PAGE_W - colW * (fields.length - 1) : colW
     );
@@ -281,33 +308,34 @@ export async function POST(req: Request) {
         })
     );
 
-    const rows: any[] = [headerRow, ...dataRows];
+    const rows: InstanceType<typeof TableRow>[] = [headerRow, ...dataRows];
 
     if (lines.length > 1 && totalMtHt != null && fields.includes("mt_ht")) {
-      const totalRow = new TableRow({
-        children: fields.map((key, i) =>
-          new TableCell({
-            borders,
-            width: { size: colWidths[i], type: WidthType.DXA },
-            shading: { fill: COLORS.totalBg, type: ShadingType.CLEAR },
-            margins: { top: 60, bottom: 60, left: 100, right: 100 },
-            children: [
-              new Paragraph({
-                alignment: numKeys.has(key) ? AlignmentType.RIGHT : AlignmentType.LEFT,
-                children: [
-                  new TextRun({
-                    text: key === "mt_ht" ? fmtNum(totalMtHt, 2) : i === 0 ? "Total" : "",
-                    bold: true,
-                    size: 18,
-                    font: "Arial",
-                  }),
-                ],
-              }),
-            ],
-          })
-        ),
-      });
-      rows.push(totalRow);
+      rows.push(
+        new TableRow({
+          children: fields.map((key, i) =>
+            new TableCell({
+              borders,
+              width: { size: colWidths[i], type: WidthType.DXA },
+              shading: { fill: COLORS.totalBg, type: ShadingType.CLEAR },
+              margins: { top: 60, bottom: 60, left: 100, right: 100 },
+              children: [
+                new Paragraph({
+                  alignment: numKeys.has(key) ? AlignmentType.RIGHT : AlignmentType.LEFT,
+                  children: [
+                    new TextRun({
+                      text: key === "mt_ht" ? fmtNum(totalMtHt, 2) : i === 0 ? "Total" : "",
+                      bold: true,
+                      size: 18,
+                      font: "Arial",
+                    }),
+                  ],
+                }),
+              ],
+            })
+          ),
+        })
+      );
     }
 
     return new Table({
@@ -327,10 +355,13 @@ export async function POST(req: Request) {
     cardFieldLabels,
     lineFieldLabels,
     topBarKeys,
+    vehicle,
+    imm,
   } = payload;
 
-  const vehicle = items[0];
-  const immat = vehicle?.Immatriculation ?? "—";
+  const firstDs = items?.[0];
+  // ✅ FIXED: vehicle.imm instead of vehicle.Immatriculation
+  const immat = (vehicle?.imm ?? firstDs?.Immatriculation ?? imm ?? "—").toString();
   const now = new Date().toLocaleDateString("fr-FR");
   const topSet = new Set(topBarKeys);
 
@@ -338,6 +369,7 @@ export async function POST(req: Request) {
 
   const children: (InstanceType<typeof Paragraph> | InstanceType<typeof Table>)[] = [];
 
+  // Title
   children.push(
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
@@ -368,18 +400,27 @@ export async function POST(req: Request) {
     })
   );
 
-  children.push(sectionHeading("Véhicule — Données fixes"));
+  // Vehicle (from parc)
+  children.push(sectionHeading("Véhicule — Données fixes (parc)"));
   children.push(buildVehicleTable(vehicle, vehicleMetaFields));
   children.push(new Paragraph({ spacing: { before: 300, after: 0 }, children: [] }));
 
+  // DS items — only fields the user has checked visible in the UI
   items.forEach((it, idx) => {
+    // Top summary line (mirrors the UI top bar)
     const topParts: string[] = [];
-    if (visibleCardFields.includes("Date DS") && it["Date DS"]) topParts.push(fmtDate(it["Date DS"]));
-    if (visibleCardFields.includes("Site") && it.Site) topParts.push(it.Site);
-    if (visibleCardFields.includes("Type DS") && it["Type DS"]) topParts.push(it["Type DS"]!);
-    if (visibleCardFields.includes("KM") && it.KM != null) topParts.push(fmtNum(it.KM) + " km");
+    if (visibleCardFields.includes("Date DS") && it["Date DS"])
+      topParts.push(fmtDate(it["Date DS"]));
+    if (visibleCardFields.includes("KM") && it.KM != null)
+      topParts.push(fmtNum(it.KM) + " km");
     if (visibleCardFields.includes("MT Total HT") && it["MT Total HT"] != null)
       topParts.push(fmtNum(it["MT Total HT"], 2) + " MAD");
+    if (visibleCardFields.includes("Site") && it.Site)
+      topParts.push(it.Site);
+    if (visibleCardFields.includes("Type DS") && it["Type DS"])
+      topParts.push(it["Type DS"]!);
+    if (visibleCardFields.includes("Affectation") && it.Affectation)
+      topParts.push(it.Affectation);
 
     children.push(
       new Paragraph({
@@ -397,10 +438,12 @@ export async function POST(req: Request) {
       })
     );
 
+    // Info grid — only fields visible in UI, minus top-bar ones and N°DS
     if (infoFields.length > 0) {
       children.push(buildDsInfoTable(it, infoFields, cardFieldLabels));
     }
 
+    // Lines table — only columns visible in UI
     if (it.lines?.length && visibleLineFields.length > 0) {
       children.push(
         new Paragraph({
@@ -437,7 +480,9 @@ export async function POST(req: Request) {
             children: [
               new Paragraph({
                 border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: COLORS.border, space: 1 } },
-                children: [new TextRun({ text: `Historique DS — ${immat}`, size: 18, color: "888888", font: "Arial" })],
+                children: [
+                  new TextRun({ text: `Historique DS — ${immat}`, size: 18, color: "888888", font: "Arial" }),
+                ],
               }),
             ],
           }),
@@ -464,19 +509,13 @@ export async function POST(req: Request) {
   });
 
   const buffer = await Packer.toBuffer(doc);
-
-  // ✅ TS-safe: convert Buffer -> Uint8Array (BodyInit compatible)
   const body = new Uint8Array(buffer);
 
   return new NextResponse(body, {
     status: 200,
     headers: {
-      "Content-Type":
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "Content-Disposition": `attachment; filename="historique_ds_${immat.replace(
-        /[^a-zA-Z0-9-]/g,
-        "_"
-      )}.docx"`,
+      "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "Content-Disposition": `attachment; filename="historique_ds_${immat.replace(/[^a-zA-Z0-9-]/g, "_")}.docx"`,
     },
   });
 }
