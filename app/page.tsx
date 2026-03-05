@@ -1,7 +1,46 @@
 // app/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+// ─── Cookie helpers ──────────────────────────────────────────────────────────
+
+const COOKIE_CARD  = "ds_visible_card";
+const COOKIE_LINE  = "ds_visible_line";
+const COOKIE_DAYS  = 365;
+
+function cookieSet(name: string, value: string) {
+  const expires = new Date();
+  expires.setDate(expires.getDate() + COOKIE_DAYS);
+  document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+}
+
+function cookieGet(name: string): string | null {
+  const match = document.cookie
+    .split("; ")
+    .find(row => row.startsWith(name + "="));
+  return match ? decodeURIComponent(match.split("=")[1]) : null;
+}
+
+function loadCardFields(): Set<keyof DsHistoryItem> {
+  try {
+    const raw = cookieGet(COOKIE_CARD);
+    if (!raw) return DEFAULT_CARD_VISIBLE;
+    const parsed = JSON.parse(raw) as string[];
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_CARD_VISIBLE;
+    return new Set(parsed as (keyof DsHistoryItem)[]);
+  } catch { return DEFAULT_CARD_VISIBLE; }
+}
+
+function loadLineFields(): Set<keyof Line> {
+  try {
+    const raw = cookieGet(COOKIE_LINE);
+    if (!raw) return DEFAULT_LINE_VISIBLE;
+    const parsed = JSON.parse(raw) as string[];
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_LINE_VISIBLE;
+    return new Set(parsed as (keyof Line)[]);
+  } catch { return DEFAULT_LINE_VISIBLE; }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -92,33 +131,24 @@ type DsApiResponse = {
 };
 
 type ParcItem = {
-  id?: number;
-
-  company?: string;
-  client?: string;
-
-  brand?: string;
-  model?: string | number;
-
   imm?: string;
   ww?: string;
   vin?: string;
-
+  brand?: string;
+  model?: string | number;
   vehicle_state?: string;
   vehicle_type?: string;
-
   location_type?: string;
   tenant?: string;
-
   received?: string;
   received_date?: string;
   mce_date?: string;
-
   sold?: string;
   scrap?: string;
-
   purchase_order?: string;
   purchase_price_net?: number;
+  company?: string;
+  client?: string;
 };
 
 type ParcApiResponse = {
@@ -130,6 +160,56 @@ type ParcApiResponse = {
   error?: string;
 };
 
+type CpItem = {
+  reference?: string;
+  nature?: string;
+  statut?: string;
+  ww?: string;
+  imm?: string;
+  vin?: string;
+  marque?: string;
+  model?: string;
+  version?: string;
+  type_vehicle?: string;
+  type_location?: string;
+  client?: string;
+  gestionnaire?: string;
+  duree?: string;
+  km_prevu?: number;
+  bon_commande?: string;
+  mce_date?: string;
+  date_debut_contrat?: string;
+  date_fin_contrat?: string;
+  date_debut_facturation?: string;
+  etat_livraison?: string;
+  date_livraison?: string;
+  etat_restitution?: string;
+  etat_prorogation?: string;
+  avenant?: string;
+  vh_relais?: string;
+  type?: string;
+  date_debut_rl?: string;
+  km_depart?: number;
+  dernier_km?: number;
+  date_dernier_km?: string;
+  total_relais?: number;
+  km_consomme?: number;
+  ecart_km?: number;
+  projection_km?: number;
+  ecart_pct?: number;
+  conducteur?: string;
+  intersociete?: string;
+  type_vehicle?: string;
+};
+
+type CpApiResponse = {
+  ok: boolean;
+  count: number;
+  items: CpItem[];
+  item: CpItem | null;
+  error?: string;
+};
+
 // ─── Field definitions ────────────────────────────────────────────────────────
 
 type MetaField = { key: keyof ParcItem; label: string };
@@ -137,31 +217,24 @@ type CardField = { key: keyof DsHistoryItem; label: string; group: string };
 type LineField  = { key: keyof Line; label: string };
 
 const VEHICLE_META_FIELDS: MetaField[] = [
-  { key: "imm",               label: "Immatriculation" },
-  { key: "ww",                label: "Numéro WW" },
-  { key: "vin",               label: "VIN" },
-
-  { key: "brand",             label: "Marque" },
-  { key: "model",             label: "Modèle" },
-
-  { key: "company",           label: "Société" },
-  { key: "client",            label: "Client" },
-
-  { key: "vehicle_type",      label: "Type véhicule" },
-  { key: "vehicle_state",     label: "Etat véhicule" },
-
-  { key: "location_type",     label: "Type location" },
-  { key: "tenant",            label: "Locataire" },
-
-  { key: "received",          label: "Reçu" },
-  { key: "received_date",     label: "Date réception" },
-  { key: "mce_date",          label: "Date MCE" },
-
-  { key: "sold",              label: "Vendu" },
-  { key: "scrap",             label: "Epave" },
-
-  { key: "purchase_order",    label: "Bon de commande" },
-  { key: "purchase_price_net",label: "Prix achat net" },
+  { key: "imm",                label: "Immatriculation" },
+  { key: "ww",                 label: "Numéro WW" },
+  { key: "vin",                label: "VIN" },
+  { key: "brand",              label: "Marque" },
+  { key: "model",              label: "Modèle" },
+  { key: "company",            label: "Société" },
+  { key: "client",             label: "Client" },
+  { key: "vehicle_type",       label: "Type véhicule" },
+  { key: "vehicle_state",      label: "Etat véhicule" },
+  { key: "location_type",      label: "Type location" },
+  { key: "tenant",             label: "Locataire" },
+  { key: "received",           label: "Reçu" },
+  { key: "received_date",      label: "Date réception" },
+  { key: "mce_date",           label: "Date MCE" },
+  { key: "sold",               label: "Vendu" },
+  { key: "scrap",              label: "Epave" },
+  { key: "purchase_order",     label: "Bon de commande" },
+  { key: "purchase_price_net", label: "Prix achat net" },
 ];
 
 const CARD_FIELDS: CardField[] = [
@@ -238,6 +311,8 @@ const DEFAULT_CARD_VISIBLE = new Set<keyof DsHistoryItem>([
 const DEFAULT_LINE_VISIBLE = new Set<keyof Line>(["code_art","designation_art","qte","mt_ht"]);
 const CARD_GROUPS = ["Identification","Dates","Localisation","DS Info","Intervenants","Facturation"];
 const TOP_BAR_KEYS = new Set(["Site","Date DS","Type DS","Affectation","MT Total HT","KM"]);
+// Always shown in card body regardless of user field preferences
+const MANDATORY_CARD_KEYS = new Set<keyof DsHistoryItem>(["Description","Techniciens","ENTITE"]);
 const NUM_LINE_KEYS = new Set(["qte","mt_ht","prix_unitaire","dernier_prix"]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -278,96 +353,56 @@ function displayVehicleValue(vehicle: ParcItem, key: keyof ParcItem): string {
   return String(v).trim() || "—";
 }
 
-// ─── PDF export ───────────────────────────────────────────────────────────────
+// ─── PDF export (server-side via /api/export?format=pdf) ─────────────────────
 
-function buildPdfHtml(
+async function downloadPdf(
   data: DsApiResponse,
   vehicle: ParcItem,
-  orderedCardFields: CardField[],
-  orderedLineFields: LineField[],
-  visibleCardFields: Set<keyof DsHistoryItem>
-): string {
-  const now = new Date().toLocaleDateString("fr-FR");
-  const NAVY = "#1e3a5f";
+  contracts: CpItem[],
+  visibleCardFields: Set<keyof DsHistoryItem>,
+  visibleLineFields: Set<keyof Line>,
+  setExporting: (v: boolean) => void
+) {
+  setExporting(true);
+  try {
+    const parcFieldsForExport = VEHICLE_META_FIELDS.filter(f =>
+      ([...PARC_MANDATORY, ...PARC_EXTRA] as string[]).includes(f.key as string)
+    );
+    const cardFieldLabels = Object.fromEntries(CARD_FIELDS.map(f => [f.key, f.label]));
+    const lineFieldLabels = Object.fromEntries(LINE_FIELDS.map(f => [f.key, f.label]));
 
-  const vehicleRows = VEHICLE_META_FIELDS.map(f => {
-    const val = displayVehicleValue(vehicle, f.key);
-    return `<tr>
-      <td style="font-weight:600;padding:5px 10px;color:${NAVY};background:#eef3f8;width:190px;font-size:10.5px;border:1px solid #c5d3e0">${f.label}</td>
-      <td style="padding:5px 10px;font-size:10.5px;border:1px solid #c5d3e0">${val}</td>
-    </tr>`;
-  }).join("");
-
-  const dsHtml = data.items.map(it => {
-    const topFields = CARD_FIELDS.filter(f => TOP_BAR_KEYS.has(f.key as string) && visibleCardFields.has(f.key));
-    const topHtml   = topFields.map(f =>
-      `<span style="margin-right:12px"><span style="opacity:.7">${f.label}:</span> <b>${displayValue(it, f.key)}</b></span>`
-    ).join("");
-
-    const gridFields = orderedCardFields.filter(f => !TOP_BAR_KEYS.has(f.key as string));
-    const gridHtml = gridFields.length > 0
-      ? `<table style="width:100%;border-collapse:collapse;margin-top:6px">
-          ${gridFields.map(f => `<tr>
-            <td style="font-weight:600;color:${NAVY};padding:3px 10px 3px 0;width:170px;font-size:10px;vertical-align:top">${f.label}</td>
-            <td style="padding:3px 0;font-size:10.5px;white-space:${f.key==="Description"?"pre-wrap":"normal"}">${displayValue(it, f.key)}</td>
-          </tr>`).join("")}
-         </table>` : "";
-
-    const linesHtml = (it.lines?.length && orderedLineFields.length > 0)
-      ? `<div style="margin-top:10px">
-           <div style="font-size:9.5px;font-weight:700;color:${NAVY};margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Lignes (${it.lines.length})</div>
-           <table style="width:100%;border-collapse:collapse;font-size:9.5px">
-             <thead><tr style="background:${NAVY};color:#fff">
-               ${orderedLineFields.map(f=>`<th style="padding:5px 7px;text-align:${NUM_LINE_KEYS.has(f.key)?"right":"left"};border:1px solid ${NAVY}">${f.label}</th>`).join("")}
-             </tr></thead>
-             <tbody>
-               ${it.lines.map((l,i)=>`<tr style="background:${i%2===1?"#f5f8fc":"#fff"}">
-                 ${orderedLineFields.map(f=>`<td style="padding:4px 7px;border:1px solid #c5d3e0;text-align:${NUM_LINE_KEYS.has(f.key)?"right":"left"}">${displayLineValue(l,f.key)}</td>`).join("")}
-               </tr>`).join("")}
-             </tbody>
-             ${it.lines.length>1&&visibleCardFields.has("MT Total HT")&&it["MT Total HT"]!=null?`
-             <tfoot><tr style="background:#d5e8f0;font-weight:700">
-               ${orderedLineFields.map((f,i)=>`<td style="padding:4px 7px;border:1px solid #c5d3e0;text-align:${NUM_LINE_KEYS.has(f.key)?"right":"left"}">${f.key==="mt_ht"?fmtNum(it["MT Total HT"],2):i===0?"Total":""}</td>`).join("")}
-             </tr></tfoot>`:""}
-           </table>
-         </div>` : "";
-
-    return `<div style="page-break-inside:avoid;margin-bottom:16px;border:1px solid #c5d3e0;border-radius:5px;overflow:hidden">
-      <div style="background:${NAVY};padding:7px 12px;font-size:11px;color:#fff">
-        <b>${it["N°DS"]}</b>${topHtml?`<span style="margin-left:14px;font-size:10px">${topHtml}</span>`:""}
-      </div>
-      <div style="padding:8px 12px;background:#fff">${gridHtml}${linesHtml}</div>
-    </div>`;
-  }).join("");
-
-  const immTitle = (vehicle.imm ?? data.imm ?? "").toString();
-
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
-<title>Historique DS — ${immTitle}</title>
-<style>
-  *{box-sizing:border-box}
-  body{font-family:Arial,sans-serif;font-size:11px;color:#222;margin:20px}
-  h1{font-size:16px;color:#1e3a5f;margin:0 0 4px}
-  h2{font-size:12px;color:#1e3a5f;border-bottom:2px solid #1e3a5f;padding-bottom:4px;margin:18px 0 8px}
-  @page{margin:12mm}
-  @media print{body{margin:0}}
-</style></head><body>
-<h1>Historique DS — ${immTitle}</h1>
-<p style="color:#888;font-size:10px;margin:0 0 14px">Généré le ${now} · ${data.count} dossier${data.count>1?"s":""}</p>
-<h2>Véhicule</h2>
-<table style="border-collapse:collapse;margin-bottom:16px;width:520px">${vehicleRows}</table>
-<h2>Dossiers de service (${data.count})</h2>
-${dsHtml}
-</body></html>`;
-}
-
-function printAsPdf(html: string) {
-  const win = window.open("", "_blank");
-  if (!win) { alert("Veuillez autoriser les pop-ups pour télécharger le PDF."); return; }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.addEventListener("load", () => { win.focus(); win.print(); });
+    const res = await fetch("/api/export?format=pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        imm: (vehicle.imm ?? data.imm ?? "").toString(),
+        count: data.count,
+        items: data.items,
+        contracts,
+        visibleCardFields: [...visibleCardFields],
+        visibleLineFields: [...visibleLineFields],
+        vehicleMetaFields: parcFieldsForExport,
+        cardFieldLabels,
+        lineFieldLabels,
+        topBarKeys: [...TOP_BAR_KEYS],
+        parcMandatoryKeys: PARC_MANDATORY,
+        parcExtraKeys: PARC_EXTRA,
+        vehicle,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = `historique_ds_${((vehicle.imm ?? data.imm ?? "ds") as string).replace(/[^a-zA-Z0-9-]/g,"_")}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert(`Erreur PDF: ${e instanceof Error ? e.message : e}`);
+  } finally {
+    setExporting(false);
+  }
 }
 
 // ─── DOCX export ──────────────────────────────────────────────────────────────
@@ -375,6 +410,7 @@ function printAsPdf(html: string) {
 async function downloadDocx(
   data: DsApiResponse,
   vehicle: ParcItem,
+  contracts: CpItem[],
   visibleCardFields: Set<keyof DsHistoryItem>,
   visibleLineFields: Set<keyof Line>,
   setExporting: (v: boolean) => void
@@ -384,7 +420,10 @@ async function downloadDocx(
     const cardFieldLabels = Object.fromEntries(CARD_FIELDS.map(f => [f.key, f.label]));
     const lineFieldLabels = Object.fromEntries(LINE_FIELDS.map(f => [f.key, f.label]));
 
-    // ✅ moved to /api/export (your new structure)
+    const parcFieldsForExport = VEHICLE_META_FIELDS.filter(f =>
+      [...PARC_MANDATORY, ...PARC_EXTRA].includes(f.key as keyof ParcItem)
+    );
+
     const res = await fetch("/api/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -392,16 +431,15 @@ async function downloadDocx(
         imm: (vehicle.imm ?? data.imm ?? "").toString(),
         count: data.count,
         items: data.items,
-
-        // visibility & labels
+        contracts,
         visibleCardFields: [...visibleCardFields],
         visibleLineFields: [...visibleLineFields],
-        vehicleMetaFields: VEHICLE_META_FIELDS,
+        vehicleMetaFields: parcFieldsForExport,
         cardFieldLabels,
         lineFieldLabels,
         topBarKeys: [...TOP_BAR_KEYS],
-
-        // ✅ include parc vehicle card explicitly (export can use it)
+        parcMandatoryKeys: PARC_MANDATORY,
+        parcExtraKeys: PARC_EXTRA,
         vehicle,
       }),
     });
@@ -421,9 +459,179 @@ async function downloadDocx(
   }
 }
 
+// ─── CP Contracts Bar ────────────────────────────────────────────────────────
+
+// ─── CP Contract Row (with expand/collapse) ──────────────────────────────────
+
+function CpContractRow({ cp }: { cp: CpItem }) {
+  const [open, setOpen] = useState(false);
+  const statutStyle = ({
+    "Validé":   "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-800/40",
+    "Annulé":   "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800/40",
+    "Livré":    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800/40",
+    "En cours": "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/40",
+  } as Record<string,string>)[cp.statut ?? ""] ?? "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700";
+
+  const f = (label: string, value?: string | number | null, bold = false) => (
+    <div>
+      <div className="text-xs text-zinc-400 dark:text-zinc-500">{label}</div>
+      <div className={`mt-0.5 truncate text-sm dark:text-zinc-100 ${bold ? "font-bold text-zinc-800" : "font-semibold text-zinc-700 dark:text-zinc-200"}`}>
+        {value != null && String(value).trim() !== "" ? String(value) : "—"}
+      </div>
+    </div>
+  );
+  const km = (v?: number | null) => v != null ? new Intl.NumberFormat("fr-FR").format(v) + " km" : null;
+
+  return (
+    <div>
+      {/* ── MANDATORY: always visible ── */}
+      <div className="px-5 py-4 space-y-4">
+
+        {/* Row 1: Marque/Modèle · Client · Version · Fin contrat */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+          {f("Marque / Modèle", cp.marque && cp.model ? `${cp.marque} ${cp.model}` : (cp.marque ?? cp.model))}
+          {f("Client", cp.client, true)}
+          <div>
+            <div className="text-xs text-zinc-400 dark:text-zinc-500">Version</div>
+            <div className="mt-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 leading-tight line-clamp-2">{cp.version ?? "—"}</div>
+          </div>
+          {f("Fin contrat", cp.date_fin_contrat)}
+        </div>
+
+        {/* Row 2: VH relais · Type relais · Début RL */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+          {f("VH relais", cp.vh_relais)}
+          {f("Type relais", cp.type)}
+          {f("Début RL", cp.date_debut_rl)}
+        </div>
+
+      </div>
+
+      {/* ── EXTRA: visible only when expanded ── */}
+      {open && (
+        <div className="border-t border-zinc-100 px-5 py-4 space-y-4 dark:border-zinc-800">
+
+          {/* Row 3: Référence · Nature · Durée · WW · IMM · Gestionnaire */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+            <div>
+              <div className="text-xs text-zinc-400 dark:text-zinc-500">Référence</div>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{cp.reference ?? "—"}</span>
+                {cp.statut && <span className={`rounded-md border px-1.5 py-0.5 text-xs font-medium ${statutStyle}`}>{cp.statut}</span>}
+              </div>
+            </div>
+            {f("Nature", cp.nature)}
+            {f("Durée", cp.duree)}
+            {f("WW", cp.ww)}
+            {f("IMM", cp.imm)}
+          </div>
+
+          {/* Row 4: Type location · Type véhicule · Début contrat · Début facturation · KM prévu */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+            {f("Type location", cp.type_location)}
+            {f("Type véhicule", cp.type_vehicle)}
+            {f("Début contrat", cp.date_debut_contrat)}
+            {f("Début facturation", cp.date_debut_facturation)}
+            {f("KM prévu", km(cp.km_prevu))}
+          </div>
+
+          {/* Row 4b: Date MCE · Conducteur */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+            {f("Date MCE", cp.mce_date)}
+            {f("Conducteur", cp.conducteur?.trim() || "—")}
+          </div>
+
+          {/* Row 5: KM tracking */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+            {f("KM départ", km(cp.km_depart))}
+            {f("Dernier KM", km(cp.dernier_km))}
+            {f("Date dernier KM", cp.date_dernier_km)}
+            {f("KM consommé", km(cp.km_consomme))}
+            {f("Projection KM", km(cp.projection_km))}
+            {f("Ecart%", cp.ecart_pct != null ? cp.ecart_pct + "%" : null)}
+          </div>
+
+          {/* Row 6: Relais details */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+            {f("Total relais KM", km(cp.total_relais))}
+            {f("Ecart KM", km(cp.ecart_km))}
+          </div>
+
+          {/* Row 7: Etat badges */}
+          <div className="flex flex-wrap gap-2">
+            {([
+              ["Livraison",    cp.etat_livraison,  cp.date_livraison],
+              ["Restitution",  cp.etat_restitution, null],
+              ["Prorogation",  cp.etat_prorogation, null],
+              ["Avenant",      cp.avenant,          null],
+              ["Intersociété", cp.intersociete,     null],
+            ] as [string, string|undefined, string|undefined][]).map(([label, val, date]) => (
+              <span key={label} className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                <span className="text-zinc-400">{label}:</span>
+                <span className={`font-medium ${val === "Oui" ? "text-green-600 dark:text-green-400" : ""}`}>{val ?? "—"}</span>
+                {date && <span className="text-zinc-400 ml-1">{date}</span>}
+              </span>
+            ))}
+          </div>
+
+        </div>
+      )}
+
+      {/* Toggle button */}
+      <button onClick={() => setOpen(o => !o)}
+        className="flex w-full items-center justify-center gap-1.5 border-t border-zinc-100 py-2 text-xs font-medium text-zinc-400 transition hover:bg-zinc-50 hover:text-zinc-600 dark:border-zinc-800 dark:hover:bg-zinc-900 dark:hover:text-zinc-300">
+        {open
+          ? <><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 10l4-4 4 4" strokeLinecap="round"/></svg> Voir moins</>
+          : <><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6l4 4 4-4" strokeLinecap="round"/></svg> Voir plus</>}
+      </button>
+    </div>
+  );
+}
+
+const STATUT_STYLE: Record<string, string> = {
+  "Validé":   "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-800/40",
+  "Annulé":   "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800/40",
+  "En cours": "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800/40",
+};
+
+function CpContractsBar({ items }: { items: CpItem[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      {/* Header */}
+      <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
+        <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <line x1="10" y1="9" x2="8" y2="9"/>
+        </svg>
+        <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+          Contrats CP ({items.length})
+        </span>
+        <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">Source collection cp</span>
+      </div>
+
+      {/* One card per contract */}
+      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        {items.map((cp, i) => <CpContractRow key={i} cp={cp} />)}
+      </div>
+    </div>
+  );
+}
+
 // ─── Vehicle Meta Bar ─────────────────────────────────────────────────────────
 
+const PARC_MANDATORY: (keyof ParcItem)[] = ["imm","ww","vin","brand","model","vehicle_state","mce_date"];
+const PARC_EXTRA:     (keyof ParcItem)[] = ["company","client","vehicle_type","location_type","tenant","received","received_date","sold","scrap","purchase_order","purchase_price_net"];
+
 function VehicleMetaBar({ item }: { item: ParcItem }) {
+  const [open, setOpen] = useState(false);
+  const pf = (key: keyof ParcItem) => {
+    const f = VEHICLE_META_FIELDS.find(x => x.key === key);
+    return f ? { key, label: f.label } : { key, label: String(key) };
+  };
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
       <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
@@ -435,16 +643,38 @@ function VehicleMetaBar({ item }: { item: ParcItem }) {
         <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Véhicule (parc)</span>
         <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">Données fixes — source parc</span>
       </div>
+      {/* Mandatory fields — always visible */}
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-5 py-4 sm:grid-cols-4">
-        {VEHICLE_META_FIELDS.map(f => (
-          <div key={String(f.key)}>
-            <div className="text-xs text-zinc-400 dark:text-zinc-500">{f.label}</div>
-            <div className="mt-0.5 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-              {displayVehicleValue(item, f.key)}
+        {PARC_MANDATORY.map(key => {
+          const f = pf(key);
+          return (
+            <div key={String(key)}>
+              <div className="text-xs text-zinc-400 dark:text-zinc-500">{f.label}</div>
+              <div className="mt-0.5 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{displayVehicleValue(item, key)}</div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      {/* Extra fields — shown when expanded */}
+      {open && (
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-zinc-100 px-5 py-4 sm:grid-cols-4 dark:border-zinc-800">
+          {PARC_EXTRA.map(key => {
+            const f = pf(key);
+            return (
+              <div key={String(key)}>
+                <div className="text-xs text-zinc-400 dark:text-zinc-500">{f.label}</div>
+                <div className="mt-0.5 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{displayVehicleValue(item, key)}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <button onClick={() => setOpen(o => !o)}
+        className="flex w-full items-center justify-center gap-1.5 border-t border-zinc-100 py-2 text-xs font-medium text-zinc-400 transition hover:bg-zinc-50 hover:text-zinc-600 dark:border-zinc-800 dark:hover:bg-zinc-900 dark:hover:text-zinc-300">
+        {open
+          ? <><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 10l4-4 4 4" strokeLinecap="round"/></svg> Voir moins</>
+          : <><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6l4 4 4-4" strokeLinecap="round"/></svg> Voir plus · {PARC_EXTRA.length} champs</>}
+      </button>
     </div>
   );
 }
@@ -507,11 +737,21 @@ function FieldSelector({
   open: boolean; onClose: () => void;
 }) {
   if (!open) return null;
+
+  function saveCard(s: Set<keyof DsHistoryItem>) {
+    cookieSet(COOKIE_CARD, JSON.stringify([...s]));
+    setVisibleCardFields(s);
+  }
+  function saveLine(s: Set<keyof Line>) {
+    cookieSet(COOKIE_LINE, JSON.stringify([...s]));
+    setVisibleLineFields(s);
+  }
+
   const toggleCard = (key: keyof DsHistoryItem) => {
-    const n = new Set(visibleCardFields); n.has(key) ? n.delete(key) : n.add(key); setVisibleCardFields(n);
+    const n = new Set(visibleCardFields); n.has(key) ? n.delete(key) : n.add(key); saveCard(n);
   };
   const toggleLine = (key: keyof Line) => {
-    const n = new Set(visibleLineFields); n.has(key) ? n.delete(key) : n.add(key); setVisibleLineFields(n);
+    const n = new Set(visibleLineFields); n.has(key) ? n.delete(key) : n.add(key); saveLine(n);
   };
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end" onClick={onClose}>
@@ -519,7 +759,15 @@ function FieldSelector({
            onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 flex items-center justify-between border-b border-zinc-100 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
           <span className="text-sm font-semibold">Champs visibles</span>
-          <button onClick={onClose} className="rounded-lg px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">✕ Fermer</button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { saveCard(DEFAULT_CARD_VISIBLE); saveLine(DEFAULT_LINE_VISIBLE); }}
+              className="rounded-lg px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              title="Réinitialiser aux champs par défaut">
+              ↺ Reset
+            </button>
+            <button onClick={onClose} className="rounded-lg px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">✕ Fermer</button>
+          </div>
         </div>
         <div className="mx-3 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-400">
           🚗 Les champs <b>Véhicule</b> viennent de <b>/api/parc</b> (collection parc), pas des DS.
@@ -532,8 +780,8 @@ function FieldSelector({
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">{group}</span>
                   <div className="flex gap-2">
-                    <button onClick={() => { const n = new Set(visibleCardFields); fields.forEach(f => n.add(f.key)); setVisibleCardFields(n); }} className="text-xs text-blue-500 hover:underline">Tout</button>
-                    <button onClick={() => { const n = new Set(visibleCardFields); fields.forEach(f => { if (f.key !== "N°DS") n.delete(f.key); }); setVisibleCardFields(n); }} className="text-xs text-zinc-400 hover:underline">Aucun</button>
+                    <button onClick={() => { const n = new Set(visibleCardFields); fields.forEach(f => n.add(f.key)); saveCard(n); }} className="text-xs text-blue-500 hover:underline">Tout</button>
+                    <button onClick={() => { const n = new Set(visibleCardFields); fields.forEach(f => { if (f.key !== "N°DS") n.delete(f.key); }); saveCard(n); }} className="text-xs text-zinc-400 hover:underline">Aucun</button>
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -551,8 +799,8 @@ function FieldSelector({
             <div className="mb-2 flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Colonnes lignes</span>
               <div className="flex gap-2">
-                <button onClick={() => setVisibleLineFields(new Set(LINE_FIELDS.map(f => f.key)))} className="text-xs text-blue-500 hover:underline">Tout</button>
-                <button onClick={() => setVisibleLineFields(new Set(["code_art"] as (keyof Line)[]))} className="text-xs text-zinc-400 hover:underline">Aucun</button>
+                <button onClick={() => saveLine(new Set(LINE_FIELDS.map(f => f.key)))} className="text-xs text-blue-500 hover:underline">Tout</button>
+                <button onClick={() => saveLine(new Set(["code_art"] as (keyof Line)[]))} className="text-xs text-zinc-400 hover:underline">Aucun</button>
               </div>
             </div>
             <div className="space-y-1">
@@ -585,17 +833,82 @@ export default function Home() {
   const [year, setYear] = useState<string>("");
   const [limit, setLimit] = useState(200);
 
+  // Smart search suggestions
+  type SearchResult = { imm: string; ww: string; label: string; primary?: string; secondary?: string };
+  const [suggestions, setSuggestions]         = useState<SearchResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchLoading, setSearchLoading]     = useState(false);
+  const searchRef  = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node))
+        setShowSuggestions(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  function handleImmChange(val: string) {
+    setImm(val);
+    setShowSuggestions(false);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (val.trim().length < 2) { setSuggestions([]); return; }
+    debounceRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await fetch(`/api/query/search?q=${encodeURIComponent(val.trim())}`);
+        const json = await res.json();
+        setSuggestions(json.results ?? []);
+        setShowSuggestions((json.results ?? []).length > 0);
+      } catch { setSuggestions([]); }
+      finally { setSearchLoading(false); }
+    }, 300);
+  }
+
+  function selectSuggestion(s: SearchResult) {
+    setImm(s.imm);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    fetchAll(s.imm);
+  }
+
+  function handleImmKeyDown(e: React.KeyboardEvent) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    setShowSuggestions(false);
+    if (suggestions.length === 1) { selectSuggestion(suggestions[0]); return; }
+    if (suggestions.length === 0) { fetchAll(); return; }
+    // multiple suggestions — show them (already visible)
+  }
+
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string>("");
 
   const [data, setData]         = useState<DsApiResponse | null>(null);
   const [vehicle, setVehicle]   = useState<ParcItem | null>(null);
+  const [contracts, setContracts] = useState<CpItem[]>([]);
 
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const toggleExpand = (nds: string) => setExpandedCards(prev => {
+    const n = new Set(prev); n.has(nds) ? n.delete(nds) : n.add(nds); return n;
+  });
   const [exportingDocx, setExportingDocx] = useState(false);
+  const [exportingPdf,  setExportingPdf]  = useState(false);
 
-  const [visibleCardFields, setVisibleCardFields] = useState<Set<keyof DsHistoryItem>>(DEFAULT_CARD_VISIBLE);
-  const [visibleLineFields, setVisibleLineFields] = useState<Set<keyof Line>>(DEFAULT_LINE_VISIBLE);
+  const [visibleCardFields, setVisibleCardFields] = useState<Set<keyof DsHistoryItem>>(() => new Set(DEFAULT_CARD_VISIBLE));
+  const [visibleLineFields, setVisibleLineFields] = useState<Set<keyof Line>>(() => new Set(DEFAULT_LINE_VISIBLE));
+
+  // Load cookie preferences after mount (avoids SSR/client hydration mismatch)
+  useEffect(() => {
+    setVisibleCardFields(loadCardFields());
+    setVisibleLineFields(loadLineFields());
+  }, []);
 
   const years = useMemo(() => {
     const now = new Date().getUTCFullYear();
@@ -603,30 +916,47 @@ export default function Home() {
   }, []);
 
   async function fetchAll(nextImm?: string) {
-    const immVal = (nextImm ?? imm).trim();
-    if (!immVal) return;
+    const rawVal = (nextImm ?? imm).trim();
+    if (!rawVal) return;
 
     setLoading(true);
     setError("");
+    setSuggestions([]);
+    setShowSuggestions(false);
 
     try {
-      const dsQs = new URLSearchParams();
-      dsQs.set("imm", immVal);
-      dsQs.set("limit", String(limit));
+      // If partial input, resolve to exact IMM first
+      let immVal = rawVal;
+      if (rawVal.length < 10) {
+        const resolveRes  = await fetch(`/api/query?q=${encodeURIComponent(rawVal)}`);
+        const resolveJson = await resolveRes.json();
+        if (resolveJson.ok && resolveJson.mode === "suggest") {
+          setSuggestions(resolveJson.suggestions ?? []);
+          setShowSuggestions(true);
+          setData(null); setVehicle(null); setContracts([]);
+          return;
+        }
+        if (resolveJson.ok && resolveJson.mode === "data") {
+          immVal = resolveJson.imm ?? rawVal;
+          setImm(immVal);
+        }
+      }
+
+      const dsQs   = new URLSearchParams({ imm: immVal, limit: String(limit) });
       if (year) dsQs.set("year", year);
+      const parcQs = new URLSearchParams({ imm: immVal });
+      const cpQs   = new URLSearchParams({ imm: immVal, ww: immVal });
 
-      const parcQs = new URLSearchParams();
-      parcQs.set("imm", immVal);
-
-      const [dsRes, parcRes] = await Promise.all([
+      const [dsRes, parcRes, cpRes] = await Promise.all([
         fetch(`/api/ds/history?${dsQs}`),
         fetch(`/api/parc?${parcQs}`),
+        fetch(`/api/cp?${cpQs}`),
       ]);
 
-      const dsJson   = (await dsRes.json()) as DsApiResponse;
-      const parcJson = (await parcRes.json()) as ParcApiResponse;
+      const dsJson   = await dsRes.json()   as DsApiResponse;
+      const parcJson = await parcRes.json() as ParcApiResponse;
+      const cpJson   = await cpRes.json()   as CpApiResponse;
 
-      // DS
       if (!dsRes.ok || !dsJson.ok) {
         setData(null);
         setError(dsJson?.error || `Erreur DS (${dsRes.status})`);
@@ -634,12 +964,14 @@ export default function Home() {
         setData(dsJson);
       }
 
-      // Parc (not blocking DS if missing)
       if (parcRes.ok && parcJson.ok) setVehicle(parcJson.item ?? null);
       else setVehicle(null);
+
+      if (cpRes.ok && cpJson.ok) setContracts(cpJson.items ?? []);
+      else setContracts([]);
+
     } catch (e) {
-      setData(null);
-      setVehicle(null);
+      setData(null); setVehicle(null); setContracts([]);
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setLoading(false);
@@ -655,18 +987,14 @@ export default function Home() {
 
   function handlePdf() {
     if (!data) return;
-    const v = vehicle ?? {
-      imm: data.imm,
-      brand: data.items?.[0]?.Marque,
-      model: data.items?.[0]?.["Désignation véhicule"],
-    } as ParcItem; // fallback
-    printAsPdf(buildPdfHtml(data, v, orderedCardFields, orderedLineFields, visibleCardFields));
+    const v = vehicle ?? ({ imm: data.imm } as ParcItem);
+    downloadPdf(data, v, contracts, visibleCardFields, visibleLineFields, setExportingPdf);
   }
 
   function handleDocx() {
     if (!data) return;
     const v = vehicle ?? ({ imm: data.imm } as ParcItem);
-    downloadDocx(data, v, visibleCardFields, visibleLineFields, setExportingDocx);
+    downloadDocx(data, v, contracts, visibleCardFields, visibleLineFields, setExportingDocx);
   }
 
   return (
@@ -697,13 +1025,13 @@ export default function Home() {
             <button onClick={() => setSelectorOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 4h12M4 8h8M6 12h4" strokeLinecap="round"/></svg>
-              Champs ({visibleCardFields.size})
+              Champs ({mounted ? visibleCardFields.size : "..."})
             </button>
 
             {/* PDF */}
-            <button onClick={handlePdf} disabled={!data}
+            <button onClick={handlePdf} disabled={!data || exportingPdf}
               className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-400">
-              <DlIcon /> PDF
+              <DlIcon spinning={exportingPdf} /> {exportingPdf ? "Génération…" : "PDF"}
             </button>
 
             {/* Word DOCX */}
@@ -718,11 +1046,43 @@ export default function Home() {
         {/* Search */}
         <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           <div className="grid gap-3 sm:grid-cols-12 sm:items-end">
-            <div className="sm:col-span-5">
+            <div className="sm:col-span-5" ref={searchRef}>
               <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Immatriculation / WW / VIN</label>
-              <input value={imm} onChange={e => setImm(e.target.value)}
-                onKeyDown={e => e.key==="Enter" && fetchAll()} placeholder="ex: 48070-B-7 / 832223WW / VIN"
-                className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:focus:border-zinc-600" />
+              <div className="relative">
+                <input
+                  value={imm}
+                  onChange={e => handleImmChange(e.target.value)}
+                  onKeyDown={handleImmKeyDown}
+                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                  placeholder="ex: 48070 / 832223WW / VIN"
+                  className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 pr-8 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:focus:border-zinc-600"
+                />
+                {searchLoading && (
+                  <div className="absolute right-3 top-3.5">
+                    <svg className="h-4 w-4 animate-spin text-zinc-400" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                  </div>
+                )}
+                {showSuggestions && suggestions.length > 0 && (
+                  <ul className="absolute z-50 mt-1 w-full rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                    {suggestions.map(s => (
+                      <li key={s.imm}
+                        onMouseDown={() => selectSuggestion(s)}
+                        className="cursor-pointer px-4 py-2.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                        <span className="font-semibold text-zinc-800 dark:text-zinc-100">{s.primary ?? s.imm}</span>
+                        {s.label && (
+                          <span className="ml-2 text-xs text-zinc-400">{s.label}</span>
+                        )}
+                        {s.secondary && (
+                          <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-500">{s.secondary}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             <div className="sm:col-span-3">
               <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Année (optionnel)</label>
@@ -753,6 +1113,9 @@ export default function Home() {
         {/* Vehicle metadata (from parc) */}
         {vehicle && !loading && <div className="mt-4"><VehicleMetaBar item={vehicle} /></div>}
 
+        {/* CP Contracts */}
+        {contracts.length > 0 && !loading && <div className="mt-3"><CpContractsBar items={contracts} /></div>}
+
         {/* Results */}
         <div className="mt-4 space-y-3">
           {!data && !loading && (
@@ -770,8 +1133,15 @@ export default function Home() {
             </div>
           )}
 
-          {data && !loading && data.items.map(it => (
-            <div key={it["N°DS"]} className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          {data && !loading && data.items.map(it => {
+            const nds = it["N°DS"];
+            const isExpanded = expandedCards.has(nds);
+
+            // All card fields always visible (no collapse for DS cards)
+            const allCardFields = orderedCardFields;
+
+            return (
+            <div key={nds} className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
 
               {/* Top bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
@@ -785,7 +1155,7 @@ export default function Home() {
                     <span className="text-sm font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{fmtNum(it.KM)} km</span></>
                   )}
                 </div>
-                {/* RIGHT: Site · N°DS · MAD · Type DS · Affectation */}
+                {/* RIGHT: MAD · Site · N°DS · Type DS · Affectation */}
                 <div className="flex flex-wrap items-center gap-2">
                   {visibleCardFields.has("MT Total HT") && it["MT Total HT"] != null && (
                     <span className="text-sm font-semibold tabular-nums">{fmtNum(it["MT Total HT"], 2)} MAD</span>
@@ -793,7 +1163,7 @@ export default function Home() {
                   {visibleCardFields.has("Site") && (
                     <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">{it.Site ?? "—"}</span>
                   )}
-                  <span className="text-sm font-bold tracking-tight">{it["N°DS"]}</span>
+                  <span className="text-sm font-bold tracking-tight">{nds}</span>
                   {visibleCardFields.has("Type DS") && it["Type DS"] && (
                     <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium dark:bg-zinc-800 dark:text-zinc-300">{it["Type DS"]}</span>
                   )}
@@ -803,13 +1173,13 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Field grid */}
-              {orderedCardFields.length > 0 && (
+              {/* All card fields — always visible */}
+              {allCardFields.length > 0 && (
                 <div className="grid gap-x-6 gap-y-3 px-5 py-4 sm:grid-cols-3">
-                  {orderedCardFields.map(f => (
+                  {allCardFields.map(f => (
                     <div key={f.key} className={f.key === "Description" ? "sm:col-span-3" : ""}>
                       <div className="text-xs text-zinc-500 dark:text-zinc-400">{f.label}</div>
-                      <div className={`text-sm font-medium text-zinc-800 dark:text-zinc-200 ${f.key==="Description"?"whitespace-pre-wrap":"truncate"}`}>
+                      <div className={`text-sm font-medium text-zinc-800 dark:text-zinc-200 ${f.key === "Description" ? "whitespace-pre-wrap" : "truncate"}`}>
                         {displayValue(it, f.key)}
                       </div>
                     </div>
@@ -817,7 +1187,7 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Lines */}
+              {/* Lines — always visible */}
               {it.lines?.length && orderedLineFields.length > 0 ? (
                 <div className="border-t border-zinc-100 px-5 pb-4 pt-3 dark:border-zinc-800">
                   <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
@@ -833,7 +1203,8 @@ export default function Home() {
               ) : null}
 
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
