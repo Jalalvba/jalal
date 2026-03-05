@@ -85,7 +85,6 @@ export async function GET(req: Request) {
           avenant:               "$Avenant",
           intersociete:          "$Intersociété",
           conducteur:            "$Conducteur",
-          type_vehicle:          "$Type véhicule",
 
           // Relais / KM tracking
           vh_relais:             "$VH relais",
