@@ -763,7 +763,7 @@ export async function POST(req: Request) {
               children: [
                 new TableCell({
                   width: { size: 25, type: WidthType.PERCENTAGE },
-                  shading: { fill: COLORS.altRow },
+                  shading: { fill: COLORS.rowAlt },
                   children: [new Paragraph({ children: [new TextRun({ text: label, bold: true, size: 18, font: "Arial" })] })],
                 }),
                 new TableCell({
