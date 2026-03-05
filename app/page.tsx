@@ -199,7 +199,6 @@ type CpItem = {
   ecart_pct?: number;
   conducteur?: string;
   intersociete?: string;
-  type_vehicle?: string;
 };
 
 type CpApiResponse = {
