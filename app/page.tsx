@@ -1,5 +1,6 @@
 // app/page.tsx
 "use client";
+import Link from "next/link";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -1027,6 +1028,14 @@ export default function Home() {
               Champs ({mounted ? visibleCardFields.size : "..."})
             </button>
 
+ {/* Articles */}
+<Link
+  href="/articles"
+  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-400"
+>
+  🔎 Articles
+</Link>
+
             {/* PDF */}
             <button onClick={handlePdf} disabled={!data || exportingPdf}
               className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-400">
@@ -1039,6 +1048,8 @@ export default function Home() {
               <DlIcon spinning={exportingDocx} />
               {exportingDocx ? "Génération…" : "Word (.docx)"}
             </button>
+
+
           </div>
         </div>
 
