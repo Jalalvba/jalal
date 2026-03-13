@@ -596,19 +596,27 @@ const STATUT_STYLE: Record<string, string> = {
 
 function CpContractsBar({ items }: { items: CpItem[] }) {
   if (!items.length) return null;
+  const hasRemplacement = items.some(cp => cp.type?.trim().toLowerCase() === "remplacement");
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+    <div className={`rounded-2xl border shadow-sm ${hasRemplacement ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}>
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
-        <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/>
-          <line x1="16" y1="17" x2="8" y2="17"/>
-          <line x1="10" y1="9" x2="8" y2="9"/>
-        </svg>
-        <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-          Contrats CP ({items.length})
+      <div className={`flex items-center gap-2 border-b px-5 py-3 ${hasRemplacement ? "border-red-200 dark:border-red-800/50" : "border-zinc-100 dark:border-zinc-800"}`}>
+        {hasRemplacement ? (
+          <svg className="h-4 w-4 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        ) : (
+          <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <line x1="10" y1="9" x2="8" y2="9"/>
+          </svg>
+        )}
+        <span className={`text-xs font-semibold uppercase tracking-widest ${hasRemplacement ? "text-red-600 dark:text-red-400" : "text-zinc-400 dark:text-zinc-500"}`}>
+          {hasRemplacement && "⚠ "}Contrats CP ({items.length})
         </span>
         <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">Source collection cp</span>
       </div>
@@ -821,7 +829,7 @@ function FieldSelector({
 
 // ─── BDD Immobilisation Card ──────────────────────────────────────────────────
 
-type BddRow = { IMM: string; date: string; client: string; modele: string; ETAT: string; prestataire: string; commentaire: string; mois_restant: string; date_fin_contrat: string; lieu_Reparation: string; Motif: string; "station_départ": string; ds: string; date_ds: string; };
+type BddRow = { IMM: string; date: string; client: string; modele: string; ETAT: string; prestataire: string; commentaire: string; "Reunion N-1": string; mois_restant: string; date_fin_contrat: string; lieu_Reparation: string; Motif: string; "station_départ": string; ds: string; date_ds: string; };
 
 function BddCard({ rows }: { rows: BddRow[] }) {
   if (rows.length === 0) return null;
