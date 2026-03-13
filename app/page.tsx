@@ -818,6 +818,145 @@ function FieldSelector({
   );
 }
 
+
+// ─── BDD Immobilisation Card ──────────────────────────────────────────────────
+
+type BddRow = { IMM: string; date: string; client: string; modele: string; ETAT: string; prestataire: string; commentaire: string; mois_restant: string; date_fin_contrat: string; lieu_Reparation: string; Motif: string; "station_départ": string; ds: string; date_ds: string; };
+
+function BddCard({ rows }: { rows: BddRow[] }) {
+  if (rows.length === 0) return null;
+
+  const etatStyle = (etat: string) => ({
+    "DISPONIBLE": "bg-[#1a7a4a] text-white border-[#1a7a4a]",
+    "INTERNE":    "bg-[#f4c430] text-[#5a3e00] border-[#e6b800]",
+    "EXTERNE":    "bg-red-600 text-white border-red-700",
+    "ANNULEE":    "bg-zinc-700 text-zinc-200 border-zinc-600",
+  } as Record<string,string>)[etat?.toUpperCase()] ?? "bg-zinc-700 text-zinc-200 border-zinc-600";
+
+  const GREEN_PRESTATAIRES = new Set(["M-AUTOMOTIV","CAC","BUGSHAN","STELLANTIS","SMEIA","BAMOTORS","JAMEEL"]);
+
+  const f = (label: string, val?: string) => val ? (
+    <div>
+      <div className="text-xs text-zinc-400 dark:text-zinc-500">{label}</div>
+      <div className="mt-0.5 text-sm font-semibold text-zinc-800 dark:text-zinc-100 truncate flex items-center gap-1.5">
+        {label === "Prestataire" && (
+          <span className={`inline-block h-2.5 w-2.5 rounded-full flex-shrink-0 ${GREEN_PRESTATAIRES.has(val.toUpperCase()) ? "bg-[#1a7a4a]" : "bg-[#f4c430]"}`} />
+        )}
+        {val}
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
+        <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+          Immobilisation BDD ({rows.length})
+        </span>
+        <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">Source Google Sheets</span>
+      </div>
+      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        {rows.map((row, i) => (
+          <div key={i} className="px-5 py-4">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{row.IMM}</span>
+              {row.ETAT && (
+                <span className={`rounded-md border px-1.5 py-0.5 text-xs font-medium ${etatStyle(row.ETAT)}`}>
+                  {row.ETAT}
+                </span>
+              )}
+              {row.date && <span className="text-xs text-zinc-400">{row.date}</span>}
+            </div>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+              {f("Prestataire", row.prestataire)}
+              {f("Réunion N-1", row["Reunion N-1"])}
+              {f("Commentaire", row.commentaire)}
+            </div>
+
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Import Assistance Card ───────────────────────────────────────────────────
+
+type ImportRow = { "Reference dossier": string; "Date Ouverture": string; "Evénement": string; "Souscripteur": string; "Bénéficiaire": string; "N° de tel": string; "Marque Véhicule": string; "Immatricule": string; "Prestation": string; "DatePrestation": string; "Lieu de Destination": string; "Ville de sinistre": string; };
+
+function ImportCard({ rows }: { rows: ImportRow[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (rows.length === 0) return null;
+  // Parse "DD/MM/YYYY HH:mm:ss" or "M/D/YYYY HH:mm" → sortable ISO string
+  const parseDate = (s: string) => {
+    if (!s) return "";
+    const [datePart, timePart] = s.split(" ");
+    const parts = datePart.split("/");
+    if (parts.length !== 3) return s;
+    const [a, b, c] = parts;
+    if (c.length === 4) {
+      const dateIso = `${c}-${b.padStart(2,"0")}-${a.padStart(2,"0")}`;
+      return timePart ? `${dateIso} ${timePart}` : dateIso;
+    }
+    return s;
+  };
+  // Sort descending by date
+  const sortedRows = [...rows].sort((a, b) =>
+    parseDate(b["DatePrestation"]).localeCompare(parseDate(a["DatePrestation"]))
+  );
+  // Keep only 1 row per distinct date, max 2 rows total
+  const seenDates: string[] = [];
+  const filteredRows: ImportRow[] = [];
+  for (const r of sortedRows) {
+    const d = parseDate(r["DatePrestation"]).split(" ")[0];
+    if (d && !seenDates.includes(d)) {
+      seenDates.push(d);
+      filteredRows.push(r);
+    }
+    if (filteredRows.length === 2) break;
+  }
+  const shown = filteredRows;
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
+        <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+        </svg>
+        <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+          Assistance Import ({filteredRows.length}/{rows.length})
+        </span>
+        <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">Source Google Sheets</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-zinc-100 dark:border-zinc-800">
+              {["Evénement","N° de tel","Date prestation","Lieu de destination"].map(h => (
+                <th key={h} className="px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
+            {shown.map((row, i) => (
+              <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+                <td className="px-4 py-2 text-zinc-700 dark:text-zinc-200">{row["Evénement"]}</td>
+                <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{row["N° de tel"]}</td>
+                <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{row["DatePrestation"]}</td>
+                <td className="px-4 py-2 text-zinc-500">{row["Lieu de Destination"]}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  );
+}
+
 // ─── Download icon ────────────────────────────────────────────────────────────
 
 function DlIcon({ spinning }: { spinning?: boolean }) {
@@ -891,10 +1030,25 @@ export default function Home() {
   const [vehicle, setVehicle]   = useState<ParcItem | null>(null);
   const [contracts, setContracts] = useState<CpItem[]>([]);
 
+
+  // ── Google Sheets ──────────────────────────────────────────────────────────
+  const [bddRows, setBddRows] = useState<BddRow[]>([]);
+  const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+
+  // ── Dark mode toggle ───────────────────────────────────────────────────────
+  const [dark, setDark] = useState(true);
+  useEffect(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved) setDark(saved === "dark");
+  }, []);
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  }, [dark]);
   const toggleExpand = (nds: string) => setExpandedCards(prev => {
     const n = new Set(prev); n.has(nds) ? n.delete(nds) : n.add(nds); return n;
   });
@@ -933,7 +1087,7 @@ export default function Home() {
         if (resolveJson.ok && resolveJson.mode === "suggest") {
           setSuggestions(resolveJson.suggestions ?? []);
           setShowSuggestions(true);
-          setData(null); setVehicle(null); setContracts([]);
+          setData(null); setVehicle(null); setContracts([]); setBddRows([]); setImportRows([]);
           return;
         }
         if (resolveJson.ok && resolveJson.mode === "data") {
@@ -947,15 +1101,28 @@ export default function Home() {
       const parcQs = new URLSearchParams({ imm: immVal });
       const cpQs   = new URLSearchParams({ imm: immVal, ww: immVal });
 
-      const [dsRes, parcRes, cpRes] = await Promise.all([
+      // For sheet queries: search by resolved IMM and also original WW input
+      // because the sheet may store the WW number as the vehicle identifier
+      const sheetImmQs    = new URLSearchParams({ imm: immVal });
+      const sheetWwQs     = rawVal !== immVal ? new URLSearchParams({ imm: rawVal }) : null;
+
+      const [dsRes, parcRes, cpRes, bddRes, importRes, bddWwRes, importWwRes] = await Promise.all([
         fetch(`/api/ds/history?${dsQs}`),
         fetch(`/api/parc?${parcQs}`),
         fetch(`/api/cp?${cpQs}`),
+        fetch(`/api/sheet?sheet=bdd&${sheetImmQs}`),
+        fetch(`/api/sheet?sheet=import&${sheetImmQs}`),
+        sheetWwQs ? fetch(`/api/sheet?sheet=bdd&${sheetWwQs}`) : Promise.resolve(null),
+        sheetWwQs ? fetch(`/api/sheet?sheet=import&${sheetWwQs}`) : Promise.resolve(null),
       ]);
 
-      const dsJson   = await dsRes.json()   as DsApiResponse;
-      const parcJson = await parcRes.json() as ParcApiResponse;
-      const cpJson   = await cpRes.json()   as CpApiResponse;
+      const dsJson     = await dsRes.json()     as DsApiResponse;
+      const parcJson   = await parcRes.json()   as ParcApiResponse;
+      const cpJson     = await cpRes.json()     as CpApiResponse;
+      const bddJson      = await bddRes.json();
+      const importJson   = await importRes.json();
+      const bddWwJson    = bddWwRes    ? await bddWwRes.json()    : { ok: false, items: [] };
+      const importWwJson = importWwRes ? await importWwRes.json() : { ok: false, items: [] };
 
       if (!dsRes.ok || !dsJson.ok) {
         setData(null);
@@ -970,8 +1137,20 @@ export default function Home() {
       if (cpRes.ok && cpJson.ok) setContracts(cpJson.items ?? []);
       else setContracts([]);
 
+      // Merge IMM results + WW results, deduplicate by reference/IMM
+      const mergeBdd = [
+        ...(bddJson.ok ? bddJson.items : []),
+        ...(bddWwJson.ok ? bddWwJson.items : []),
+      ].filter((r, i, arr) => arr.findIndex(x => x.IMM === r.IMM && x.date === r.date) === i);
+      const mergeImport = [
+        ...(importJson.ok ? importJson.items : []),
+        ...(importWwJson.ok ? importWwJson.items : []),
+      ].filter((r, i, arr) => arr.findIndex(x => x["Reference dossier"] === r["Reference dossier"] && x["DatePrestation"] === r["DatePrestation"]) === i);
+      setBddRows(mergeBdd);
+      setImportRows(mergeImport);
+
     } catch (e) {
-      setData(null); setVehicle(null); setContracts([]);
+      setData(null); setVehicle(null); setContracts([]); setBddRows([]); setImportRows([]);
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setLoading(false);
@@ -1035,6 +1214,17 @@ export default function Home() {
 >
   🔎 Articles
 </Link>
+
+            {/* Dark mode toggle */}
+            <button onClick={() => setDark(d => !d)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              title={dark ? "Passer en mode clair" : "Passer en mode sombre"}>
+              {dark
+                ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" strokeLinecap="round"/></svg>
+                : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              }
+              {dark ? "Clair" : "Sombre"}
+            </button>
 
             {/* PDF */}
             <button onClick={handlePdf} disabled={!data || exportingPdf}
@@ -1125,6 +1315,8 @@ export default function Home() {
 
         {/* CP Contracts */}
         {contracts.length > 0 && !loading && <div className="mt-3"><CpContractsBar items={contracts} /></div>}
+        {bddRows.length > 0 && !loading && <div className="mt-3"><BddCard rows={bddRows} /></div>}
+        {importRows.length > 0 && !loading && <div className="mt-3"><ImportCard rows={importRows} /></div>}
 
         {/* Results */}
         <div className="mt-4 space-y-3">
