@@ -5,12 +5,11 @@ import { sessionOptions, SessionData } from "@/lib/session";
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Allow login page, static assets, and debug route through
+  // Allow login page and static assets through
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon.ico") ||
-    pathname.startsWith("/api/debug-auth")
+    pathname.startsWith("/favicon.ico")
   ) {
     return NextResponse.next();
   }
@@ -19,6 +18,10 @@ export async function proxy(req: NextRequest) {
   const session = await getIronSession<SessionData>(req, res, sessionOptions);
 
   if (!session.isLoggedIn) {
+    // API routes → return 401 JSON instead of redirecting
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
     const loginUrl = new URL("/login", req.url);
     return NextResponse.redirect(loginUrl);
   }
