@@ -4,10 +4,15 @@ import { useState } from "react"
 
 type ArticleResult = {
   "N°DS": string
+  "CMD Num"?: string
+  "Code art"?: string
   "Année": number
   "Désignation Consomation ": string
   "Fournisseur"?: string
   "Prix": number
+  bc_prix?: number | null
+  bc_cmd?: string | null
+  price_source?: "bc" | "ds"
 }
 
 type ArticleApiResponse = {
@@ -25,6 +30,7 @@ export default function ArticlePage() {
   const [year, setYear] = useState<number | "all">(currentYear)
   const [results, setResults] = useState<ArticleResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [bcOnly, setBcOnly] = useState(false)
 
   async function search() {
 
@@ -47,9 +53,27 @@ export default function ArticlePage() {
     const res = await fetch(`/api/article?${params.toString()}`)
 
     const data: ArticleApiResponse = await res.json()
+    const items = data.items || []
 
-    setResults(data.items || [])
+    // Enrich each result with BC price using CMD Num + Code art
+    const enriched = await Promise.all(
+      items.map(async (r) => {
+        const cmdNum = r["CMD Num"]
+        const codeArt = r["Code art"]
+        if (cmdNum && codeArt) {
+          try {
+            const bcRes = await fetch(`/api/bc?cmd=${encodeURIComponent(cmdNum)}&code=${encodeURIComponent(codeArt)}`)
+            const bcData = await bcRes.json()
+            if (bcData.ok && bcData.item) {
+              return { ...r, bc_prix: bcData.item.PU, bc_cmd: cmdNum, price_source: "bc" as const }
+            }
+          } catch { /* ignore */ }
+        }
+        return { ...r, price_source: "ds" as const }
+      })
+    )
 
+    setResults(enriched)
     setLoading(false)
   }
 
@@ -100,23 +124,49 @@ export default function ArticlePage() {
 
         </div>
 
+        {/* BC only toggle */}
+        {results.length > 0 && (
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              onClick={() => setBcOnly(b => !b)}
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                bcOnly
+                  ? "border-emerald-500 bg-emerald-950/40 text-emerald-400"
+                  : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <span className={`inline-block h-2 w-2 rounded-full ${bcOnly ? "bg-emerald-400" : "bg-zinc-600"}`} />
+              {bcOnly ? "BC uniquement" : "Toutes les sources"}
+            </button>
+            <span className="text-xs text-zinc-500">
+              {bcOnly
+                ? `${results.filter(r => r.price_source === "bc").length} résultats BC`
+                : `${results.length} résultats`}
+            </span>
+          </div>
+        )}
+
       </div>
 
       {/* MOBILE */}
 
       <div className="md:hidden space-y-3">
 
-        {results.map((r, i) => (
+        {(bcOnly ? results.filter(r => r.price_source === "bc") : results).map((r, i) => (
 
           <div
             key={`${r["N°DS"]}-${i}`}
             className="border border-zinc-800 rounded-lg p-3 bg-zinc-950"
           >
 
-            <div className="text-xs text-zinc-500">DS</div>
-
-            <div className="font-semibold">
-              {r["N°DS"]}
+            <div className="flex items-center gap-1.5">
+              {r.price_source === "bc"
+                ? <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">BC</span>
+                : <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">DS</span>
+              }
+              <span className="font-semibold font-mono text-sm">
+                {r.price_source === "bc" ? r.bc_cmd : r["N°DS"]}
+              </span>
             </div>
 
             <div className="mt-1 text-sm">
@@ -128,8 +178,14 @@ export default function ArticlePage() {
               <span>{r["Fournisseur"] ?? "-"}</span>
             </div>
 
-            <div className="mt-2 font-semibold text-indigo-400">
-              {r["Prix"].toLocaleString()} MAD
+            <div className="mt-2 flex items-center gap-2">
+              {r.price_source === "bc"
+                ? <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">BC</span>
+                : <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">DS</span>
+              }
+              <span className="font-semibold text-indigo-400">
+                {(r.bc_prix ?? r["Prix"]).toLocaleString()} MAD
+              </span>
             </div>
 
           </div>
@@ -146,7 +202,7 @@ export default function ArticlePage() {
 
           <thead className="bg-zinc-900 border-b border-zinc-800">
             <tr>
-              <th className="p-3 text-left">DS</th>
+              <th className="p-3 text-left">N° Commande</th>
               <th className="p-3 text-left">Article</th>
               <th className="p-3 text-left">Année</th>
               <th className="p-3 text-left">Fournisseur</th>
@@ -156,14 +212,22 @@ export default function ArticlePage() {
 
           <tbody>
 
-            {results.map((r, i) => (
+            {(bcOnly ? results.filter(r => r.price_source === "bc") : results).map((r, i) => (
 
               <tr
                 key={`${r["N°DS"]}-${i}`}
                 className="border-b border-zinc-900 hover:bg-zinc-900"
               >
 
-                <td className="p-3">{r["N°DS"]}</td>
+                <td className="p-3">
+                  <span className="flex items-center gap-1.5">
+                    {r.price_source === "bc"
+                      ? <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">BC</span>
+                      : <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">DS</span>
+                    }
+                    <span className="font-mono">{r.price_source === "bc" ? r.bc_cmd : r["N°DS"]}</span>
+                  </span>
+                </td>
 
                 <td className="p-3">
                   {r["Désignation Consomation "]}
@@ -176,7 +240,13 @@ export default function ArticlePage() {
                 </td>
 
                 <td className="p-3 text-right font-semibold">
-                  {r["Prix"].toLocaleString()} MAD
+                  <span className="flex items-center justify-end gap-1.5">
+                    {r.price_source === "bc"
+                      ? <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">BC</span>
+                      : <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">DS</span>
+                    }
+                    {(r.bc_prix ?? r["Prix"]).toLocaleString()} MAD
+                  </span>
                 </td>
 
               </tr>

@@ -61,6 +61,7 @@ type Line = {
   mt_ht?: number | null;
 
   dernier_prix?: number | null;
+  price_source?: "bc" | "ds";
 };
 
 type DsHistoryItem = {
@@ -712,7 +713,17 @@ function LinesTable({ lines, orderedLineFields, totalMtHt, visibleLineFields }: 
                   NUM_LINE_KEYS.has(f.key) ? "text-right tabular-nums font-medium"
                   : f.key==="code_art" ? "font-mono text-xs font-medium text-zinc-700 dark:text-zinc-300"
                   : "text-zinc-600 dark:text-zinc-400"
-                }`}>{displayLineValue(l, f.key)}</td>
+                }`}>
+                  {f.key === "cmd_num" ? (
+                    <span className="flex items-center gap-1.5">
+                      {l.price_source === "bc"
+                        ? <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">BC</span>
+                        : <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">DS</span>
+                      }
+                      {displayLineValue(l, f.key)}
+                    </span>
+                  ) : displayLineValue(l, f.key)}
+                </td>
               ))}
             </tr>
           ))}

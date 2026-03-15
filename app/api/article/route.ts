@@ -110,6 +110,8 @@ export async function GET(request: Request) {
           _id: 0,
 
           "N°DS": 1,
+          "CMD Num": 1,
+          "Code art": 1,
 
           Année: 1,
 

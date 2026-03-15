@@ -223,6 +223,115 @@ export async function GET(req: Request) {
 
     { $sort: { "Date DS": -1 } },
     { $limit: limit },
+
+    // ── BC price lookup ────────────────────────────────────────────────────
+    // For each DS, enrich lines with PU from bc collection
+    // Match: bc["CMD Num"] == line.cmd_num AND bc["Code article"] == line.code_art
+    {
+      $lookup: {
+        from: "bc",
+        let: { ds_lines: "$lines" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $gt: [
+                  {
+                    $size: {
+                      $filter: {
+                        input: "$$ds_lines",
+                        as: "line",
+                        cond: {
+                          $and: [
+                            { $eq: ["$CMD Num", "$$line.cmd_num"] },
+                            { $eq: ["$Code article", "$$line.code_art"] },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                  0,
+                ],
+              },
+            },
+          },
+          { $project: { _id: 0, "CMD Num": 1, "Code article": 1, PU: 1 } },
+        ],
+        as: "bc_prices",
+      },
+    },
+
+    // Merge bc PU into each line
+    {
+      $addFields: {
+        lines: {
+          $map: {
+            input: "$lines",
+            as: "line",
+            in: {
+              $mergeObjects: [
+                "$$line",
+                {
+                  mt_ht: {
+                    $let: {
+                      vars: {
+                        bc_match: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: "$bc_prices",
+                                as: "bc",
+                                cond: {
+                                  $and: [
+                                    { $eq: ["$$bc.CMD Num", "$$line.cmd_num"] },
+                                    { $eq: ["$$bc.Code article", "$$line.code_art"] },
+                                  ],
+                                },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                      },
+                      // Use BC price if found, fall back to DS mt_ht
+                      in: { $ifNull: ["$$bc_match.PU", "$$line.mt_ht"] },
+                    },
+                  },
+                  // Flag so UI knows source of price
+                  price_source: {
+                    $let: {
+                      vars: {
+                        bc_match: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: "$bc_prices",
+                                as: "bc",
+                                cond: {
+                                  $and: [
+                                    { $eq: ["$$bc.CMD Num", "$$line.cmd_num"] },
+                                    { $eq: ["$$bc.Code article", "$$line.code_art"] },
+                                  ],
+                                },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                      },
+                      in: { $cond: [{ $ifNull: ["$$bc_match", false] }, "bc", "ds"] },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+
+    // Remove bc_prices from output
+    { $unset: "bc_prices" },
   ];
 
   const items = await col.aggregate(pipeline).toArray();
