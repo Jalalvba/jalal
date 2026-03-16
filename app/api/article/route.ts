@@ -119,14 +119,7 @@ export async function GET(request: Request) {
 
           Fournisseur: "$Founisseur",
 
-          /* Remove 20% margin */
-
-          Prix: {
-            $round: [
-              { $divide: ["$pu_numeric", 1.2] },
-              2
-            ]
-          }
+          Prix: { $round: ["$pu_numeric", 2] }
 
         }
       }
