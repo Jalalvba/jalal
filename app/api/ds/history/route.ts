@@ -19,28 +19,6 @@ function clampInt(v: string | null, def: number, min: number, max: number) {
   return Math.min(Math.max(Math.trunc(n), min), max);
 }
 
-const toDouble = (fieldExpr: string) => ({
-  $let: {
-    vars: { s: { $toString: fieldExpr } },
-    in: {
-      $convert: {
-        input: {
-          $replaceAll: {
-            input: {
-              $replaceAll: { input: "$$s", find: ",", replacement: "" },
-            },
-            find: " ",
-            replacement: "",
-          },
-        },
-        to: "double",
-        onError: null,
-        onNull: null,
-      },
-    },
-  },
-});
-
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
 
@@ -55,7 +33,7 @@ export async function GET(req: Request) {
   const limit = clampInt(searchParams.get("limit"), 200, 1, 2000);
   const { start, end } = parseYear(searchParams.get("year"));
 
-  const dbName = process.env.MONGODB_DB || "avis360";
+  const dbName = process.env.MONGODB_DB || "avis";
   const client = await clientPromise;
   const db = client.db(dbName);
   const col = db.collection("ds");
@@ -68,9 +46,13 @@ export async function GET(req: Request) {
 
     {
       $addFields: {
-        km_num: toDouble("$KM"),
-        mt_ht_num: toDouble("$Mt HT DS "),
-        pu_num: toDouble("$Prix Unitaire ds"),
+        km_num: {
+          $convert: {
+            input: { $replaceAll: { input: { $toString: "$KM" }, find: ",", replacement: "" } },
+            to: "double", onError: null, onNull: null
+          }
+        },
+
       },
     },
 
@@ -80,63 +62,24 @@ export async function GET(req: Request) {
       $group: {
         _id: "$N°DS",
 
-        nds: { $first: "$N°DS" },
-        societe: { $first: "$Societe" },
-        site: { $first: "$Site" },
-        site_ds: { $first: "$SITE DS" },
-        date_ds: { $first: "$Date DS" },
-        date_entree: { $first: "$Date d'entrèe" },
-        date_interv: { $first: "$Date interv" },
-        effectue_le: { $first: "$Effectue le" },
-        imm: { $first: "$Immatriculation" },
-        parc: { $first: "$Parc" },
-        type_parc: { $first: "$Type Parc" },
-        designation_veh: { $first: "$Désignation véhicule" },
-        marque: { $first: "$Marque" },
-        entite: { $first: "$ENTITE" },
-        code_entite: { $first: "$Code entité" },
-        entite_code: { $first: "$Entité" },
-        description: { $first: "$Description" },
-        type_ds: { $first: "$Type DS" },
-        type_de_ds: { $first: "$Type de DS" },
+        nds:          { $first: "$N°DS" },
+        date_ds:      { $first: "$Date DS" },
+        imm:          { $first: "$Immatriculation" },
+        entite:       { $first: "$ENTITE" },
+        description:  { $first: "$Description" },
+        fournisseur:  { $first: "$Founisseur" },
+        km_max:       { $max: "$km_num" },
+
 
         techniciens_raw: { $push: "$Technicein" },
 
-        user: { $first: "$User" },
-        facture_par: { $first: "$FACTURE PAR " },
-
-        client_final: { $first: "$Client Final" },
-        raison_social: { $first: "$Raison Social" },
-        client_ds: { $first: "$Client DS" },
-        code_client: { $first: "$Code Client " },
-        detenteur_ds: { $first: "$Detenteur DS" },
-        detenteur_parc: { $first: "$Dètenteur parc" },
-        locat_parc: { $first: "$Locat Parc" },
-        a_facture: { $first: "$A Facturè" },
-        statut_facture: { $first: "$Statut facture" },
-        n_facture: { $first: "$N° Facture" },
-        affectation: { $first: "$Affectation" },
-        ref_cp: { $first: "$ref CP" },
-        receptionne: { $first: "$Réceptionné" },
-        solde: { $first: "$Soldé" },
-        demande_satisfaite: { $first: "$Demande satisfaite" },
-        fournisseur: { $first: "$Founisseur" },
-
-        km_max: { $max: "$km_num" },
-        mt_total: { $sum: "$mt_ht_num" },
-
         lines: {
           $push: {
-            n_intervention: "$N° intervention",
-            code_art: "$Code art",
-            designation_art: "$Désignation article",
-            designation_conso: "$Désignation Consomation ",
-            qte: "$Qté",
-            mt_ht: "$mt_ht_num",
-            prix_unitaire: "$pu_num",
-            dernier_prix: "$Dernier Prix Achat NET",
+            cmd_num:          "$CMD Num",
+            code_art:         "$Code art",
+            designation_conso: "$Désignation Consomation",
+            qte:              "$Qté",
 
-            cmd_num: "$CMD Num" // ✅ per-line field
           },
         },
       },
@@ -168,56 +111,16 @@ export async function GET(req: Request) {
     {
       $project: {
         _id: 0,
-
-        "N°DS": "$nds",
-        Societe: "$societe",
-        Site: "$site",
-        "SITE DS": "$site_ds",
-
-        "Date DS": "$date_ds",
-        "Date entrée": "$date_entree",
-        "Date interv": "$date_interv",
-        "Effectué le": "$effectue_le",
-
+        "N°DS":        "$nds",
+        "Date DS":     "$date_ds",
         Immatriculation: "$imm",
-        Parc: "$parc",
-        "Type Parc": "$type_parc",
-        "Désignation véhicule": "$designation_veh",
-        Marque: "$marque",
+        ENTITE:        "$entite",
+        Description:   "$description",
+        Fournisseur:   "$fournisseur",
+        Techniciens:   "$techniciens",
+        KM:            "$km_max",
 
-        ENTITE: "$entite",
-        "Code entité": "$code_entite",
-        Entité: "$entite_code",
-
-        Description: "$description",
-        "Type DS": "$type_ds",
-        "Type de DS": "$type_de_ds",
-
-        Techniciens: "$techniciens",
-        User: "$user",
-        "Facturé par": "$facture_par",
-
-        "Client Final": "$client_final",
-        "Raison Social": "$raison_social",
-        "Client DS": "$client_ds",
-        "Code Client": "$code_client",
-        "Détenteur DS": "$detenteur_ds",
-        "Détenteur parc": "$detenteur_parc",
-        "Locat Parc": "$locat_parc",
-        "A Facturé": "$a_facture",
-        "Statut facture": "$statut_facture",
-        "N° Facture": "$n_facture",
-        Affectation: "$affectation",
-        "Ref CP": "$ref_cp",
-        Réceptionné: "$receptionne",
-        Soldé: "$solde",
-        "Demande satisfaite": "$demande_satisfaite",
-        Fournisseur: "$fournisseur",
-
-        KM: "$km_max",
-        "MT Total HT": "$mt_total",
-
-        lines: 1
+        lines: 1,
       },
     },
 
@@ -225,8 +128,6 @@ export async function GET(req: Request) {
     { $limit: limit },
 
     // ── BC price lookup ────────────────────────────────────────────────────
-    // For each DS, enrich lines with PU from bc collection
-    // Match: bc["CMD Num"] == line.cmd_num AND bc["Code article"] == line.code_art
     {
       $lookup: {
         from: "bc",
@@ -261,7 +162,6 @@ export async function GET(req: Request) {
       },
     },
 
-    // Merge bc PU into each line
     {
       $addFields: {
         lines: {
@@ -293,11 +193,9 @@ export async function GET(req: Request) {
                           ],
                         },
                       },
-                      // Use BC price if found, fall back to DS mt_ht
-                      in: { $ifNull: ["$$bc_match.PU", "$$line.mt_ht"] },
+                      in: "$$bc_match.PU",
                     },
                   },
-                  // Flag so UI knows source of price
                   price_source: {
                     $let: {
                       vars: {
@@ -330,7 +228,6 @@ export async function GET(req: Request) {
       },
     },
 
-    // Remove bc_prices from output
     { $unset: "bc_prices" },
   ];
 

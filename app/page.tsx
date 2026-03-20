@@ -46,81 +46,23 @@ function loadLineFields(): Set<keyof Line> {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Line = {
-  n_intervention?: string;
-
-  cmd_num?: string; // ✅ moved here
-
+  cmd_num?: string;
   code_art?: string;
-  designation_art?: string;
   designation_conso?: string;
-
   qte?: number;
-
-  prix_unitaire?: number | null;
-
   mt_ht?: number | null;
-
-  dernier_prix?: number | null;
   price_source?: "bc" | "ds";
 };
 
 type DsHistoryItem = {
   "N°DS": string;
-
-  Societe?: string;
-  Site?: string;
-  "SITE DS"?: string;
-
   "Date DS"?: string;
-  "Date entrée"?: string;
-  "Date interv"?: string;
-  "Effectué le"?: string;
-
   Immatriculation?: string;
-  Parc?: string;
-  "Type Parc"?: string;
-
-  "Désignation véhicule"?: string;
-  Marque?: string;
-
   ENTITE?: string;
-  "Code entité"?: string;
-  Entité?: string;
-
   Description?: string;
-  "Type DS"?: string;
-  "Type de DS"?: string;
-
-  Techniciens?: string[];
-
-  User?: string | null;
-  "Facturé par"?: string | null;
-
-  "Client Final"?: string;
-  "Raison Social"?: string;
-  "Client DS"?: string;
-
-  "Code Client"?: string;
-  "Détenteur DS"?: string;
-  "Détenteur parc"?: string;
-
-  "Locat Parc"?: string;
-  "A Facturé"?: string;
-  "Statut facture"?: string;
-
-  "N° Facture"?: string;
-  Affectation?: string;
-  "Ref CP"?: string;
-
-  Réceptionné?: string;
-  Soldé?: string;
-
-  "Demande satisfaite"?: string;
   Fournisseur?: string;
-
+  Techniciens?: string[];
   KM?: number;
-  "MT Total HT"?: number;
-
   lines?: Line[];
 };
 
@@ -137,19 +79,11 @@ type ParcItem = {
   ww?: string;
   vin?: string;
   brand?: string;
-  model?: string | number;
+  model?: string;
   vehicle_state?: string;
-  vehicle_type?: string;
   location_type?: string;
   tenant?: string;
-  received?: string;
-  received_date?: string;
   mce_date?: string;
-  sold?: string;
-  scrap?: string;
-  purchase_order?: string;
-  purchase_price_net?: number;
-  company?: string;
   client?: string;
 };
 
@@ -163,44 +97,19 @@ type ParcApiResponse = {
 };
 
 type CpItem = {
-  reference?: string;
-  nature?: string;
-  statut?: string;
+  gestionnaire?: string;
   ww?: string;
   imm?: string;
   vin?: string;
   marque?: string;
   model?: string;
   version?: string;
-  type_vehicle?: string;
   type_location?: string;
-  client?: string;
-  gestionnaire?: string;
-  duree?: string;
-  km_prevu?: number;
-  bon_commande?: string;
   mce_date?: string;
   date_debut_contrat?: string;
   date_fin_contrat?: string;
-  date_debut_facturation?: string;
-  etat_livraison?: string;
-  date_livraison?: string;
-  etat_restitution?: string;
-  etat_prorogation?: string;
-  avenant?: string;
-  vh_relais?: string;
   type?: string;
-  date_debut_rl?: string;
-  km_depart?: number;
-  dernier_km?: number;
-  date_dernier_km?: string;
-  total_relais?: number;
-  km_consomme?: number;
-  ecart_km?: number;
-  projection_km?: number;
-  ecart_pct?: number;
-  conducteur?: string;
-  intersociete?: string;
+  jockey?: string;
 };
 
 type CpApiResponse = {
@@ -218,103 +127,48 @@ type CardField = { key: keyof DsHistoryItem; label: string; group: string };
 type LineField  = { key: keyof Line; label: string };
 
 const VEHICLE_META_FIELDS: MetaField[] = [
-  { key: "imm",                label: "Immatriculation" },
-  { key: "ww",                 label: "Numéro WW" },
-  { key: "vin",                label: "VIN" },
-  { key: "brand",              label: "Marque" },
-  { key: "model",              label: "Modèle" },
-  { key: "company",            label: "Société" },
-  { key: "client",             label: "Client" },
-  { key: "vehicle_type",       label: "Type véhicule" },
-  { key: "vehicle_state",      label: "Etat véhicule" },
-  { key: "location_type",      label: "Type location" },
-  { key: "tenant",             label: "Locataire" },
-  { key: "received",           label: "Reçu" },
-  { key: "received_date",      label: "Date réception" },
-  { key: "mce_date",           label: "Date MCE" },
-  { key: "sold",               label: "Vendu" },
-  { key: "scrap",              label: "Epave" },
-  { key: "purchase_order",     label: "Bon de commande" },
-  { key: "purchase_price_net", label: "Prix achat net" },
+  { key: "imm",          label: "Immatriculation" },
+  { key: "ww",           label: "Numéro WW" },
+  { key: "vin",          label: "VIN" },
+  { key: "brand",        label: "Marque" },
+  { key: "model",        label: "Modèle" },
+  { key: "client",       label: "Client" },
+  { key: "vehicle_state",label: "Etat véhicule" },
+  { key: "location_type",label: "Type location" },
+  { key: "tenant",       label: "Locataire" },
+  { key: "mce_date",     label: "Date MCE" },
 ];
 
+// Used by PDF/DOCX export
+const PARC_MANDATORY: (keyof ParcItem)[] = ["imm","ww","vin","brand","model","vehicle_state","mce_date"];
+const PARC_EXTRA:     (keyof ParcItem)[] = ["client","location_type","tenant"];
+
 const CARD_FIELDS: CardField[] = [
-  { key: "N°DS", label: "N°DS", group: "Identification" },
-
-  { key: "Site", label: "Site", group: "Identification" },
-  { key: "SITE DS", label: "SITE DS", group: "Identification" },
-
-  { key: "Date DS", label: "Date DS", group: "Dates" },
-  { key: "Date entrée", label: "Date entrée", group: "Dates" },
-  { key: "Date interv", label: "Date interv", group: "Dates" },
-  { key: "Effectué le", label: "Effectué le", group: "Dates" },
-
-  { key: "ENTITE", label: "ENTITE", group: "Localisation" },
-  { key: "Code entité", label: "Code entité", group: "Localisation" },
-  { key: "Entité", label: "Entité", group: "Localisation" },
-
-  { key: "Description", label: "Description", group: "DS Info" },
-  { key: "Type DS", label: "Type DS", group: "DS Info" },
-  { key: "Type de DS", label: "Type de DS", group: "DS Info" },
-
-  { key: "KM", label: "KM", group: "DS Info" },
-  { key: "MT Total HT", label: "MT Total HT", group: "DS Info" },
-
-  { key: "Affectation", label: "Affectation", group: "DS Info" },
-
-  { key: "Techniciens", label: "Techniciens", group: "Intervenants" },
-  { key: "User", label: "User", group: "Intervenants" },
-  { key: "Facturé par", label: "Facturé par", group: "Intervenants" },
-
-  { key: "Fournisseur", label: "Fournisseur", group: "Intervenants" },
-
-  { key: "Client Final", label: "Client Final", group: "Facturation" },
-  { key: "Raison Social", label: "Raison Social", group: "Facturation" },
-  { key: "Client DS", label: "Client DS", group: "Facturation" },
-
-  { key: "Code Client", label: "Code Client", group: "Facturation" },
-  { key: "Détenteur DS", label: "Détenteur DS", group: "Facturation" },
-
-  { key: "A Facturé", label: "A Facturé", group: "Facturation" },
-  { key: "Statut facture", label: "Statut facture", group: "Facturation" },
-
-  { key: "N° Facture", label: "N° Facture", group: "Facturation" },
-
-  { key: "Ref CP", label: "Ref CP", group: "Facturation" },
-
-  { key: "Réceptionné", label: "Réceptionné", group: "Facturation" },
-  { key: "Soldé", label: "Soldé", group: "Facturation" },
-
-  { key: "Demande satisfaite", label: "Demande satisfaite", group: "Facturation" },
+  { key: "N°DS",         label: "N°DS",         group: "Identification" },
+  { key: "Date DS",      label: "Date DS",       group: "Identification" },
+  { key: "ENTITE",       label: "Entité",        group: "Localisation" },
+  { key: "Description",  label: "Description",   group: "DS Info" },
+  { key: "KM",           label: "KM",            group: "DS Info" },
+  { key: "Techniciens",  label: "Techniciens",   group: "Intervenants" },
+  { key: "Fournisseur",  label: "Fournisseur",   group: "Intervenants" },
 ];
 
 const LINE_FIELDS: LineField[] = [
-  { key: "n_intervention", label: "N° Interv." },
-
-  { key: "cmd_num", label: "CMD Num" },
-
-  { key: "code_art", label: "Code art" },
-  { key: "designation_art", label: "Désignation article" },
+  { key: "cmd_num",           label: "CMD Num" },
+  { key: "code_art",          label: "Code art" },
   { key: "designation_conso", label: "Désig. conso." },
-
-  { key: "qte", label: "Qté" },
-
-  { key: "prix_unitaire", label: "Prix unit." },
-
-  { key: "mt_ht", label: "Mt HT" },
-
-  { key: "dernier_prix", label: "Dernier prix" },
+  { key: "qte",               label: "Qté" },
+  { key: "mt_ht",             label: "Mt HT" },
 ];
 
 const DEFAULT_CARD_VISIBLE = new Set<keyof DsHistoryItem>([
-  "N°DS","Site","Date DS","ENTITE","KM","Description","Type DS","MT Total HT","Techniciens","Affectation",
+  "N°DS","Date DS","ENTITE","KM","Description","Techniciens","Fournisseur",
 ]);
-const DEFAULT_LINE_VISIBLE = new Set<keyof Line>(["code_art","designation_art","qte","mt_ht"]);
-const CARD_GROUPS = ["Identification","Dates","Localisation","DS Info","Intervenants","Facturation"];
-const TOP_BAR_KEYS = new Set(["Site","Date DS","Type DS","Affectation","MT Total HT","KM"]);
-// Always shown in card body regardless of user field preferences
+const DEFAULT_LINE_VISIBLE = new Set<keyof Line>(["cmd_num","designation_conso","qte","mt_ht"]);
+const CARD_GROUPS = ["Identification","Localisation","DS Info","Intervenants"];
+const TOP_BAR_KEYS = new Set(["Date DS","KM"]);
 const MANDATORY_CARD_KEYS = new Set<keyof DsHistoryItem>(["Description","Techniciens","ENTITE"]);
-const NUM_LINE_KEYS = new Set(["qte","mt_ht","prix_unitaire","dernier_prix"]);
+const NUM_LINE_KEYS = new Set(["qte","mt_ht"]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -334,15 +188,15 @@ function displayValue(item: DsHistoryItem, key: keyof DsHistoryItem): string {
   if (v == null) return "—";
   if (key === "Techniciens") return (v as string[]).join(", ") || "—";
   if (key === "KM") return fmtNum(v as number) + " km";
-  if (key === "MT Total HT") return fmtNum(v as number, 2) + " MAD";
-  if (["Date DS","Date entrée","Date interv","Effectué le"].includes(key as string)) return fmtDate(v as string);
+
+  if (key === "Date DS") return fmtDate(v as string);
   return String(v).trim() || "—";
 }
 
 function displayLineValue(line: Line, key: keyof Line): string {
   const v = line[key];
   if (v == null) return "—";
-  if (["mt_ht","prix_unitaire","dernier_prix"].includes(key)) return fmtNum(v as number, 2);
+  if (key === "mt_ht") return fmtNum(v as number, 2);
   if (key === "qte") return String(v);
   return String(v).trim() || "—";
 }
@@ -350,7 +204,7 @@ function displayLineValue(line: Line, key: keyof Line): string {
 function displayVehicleValue(vehicle: ParcItem, key: keyof ParcItem): string {
   const v = vehicle[key];
   if (v == null) return "—";
-  if (key === "purchase_price_net") return fmtNum(v as number, 2) + " MAD";
+  if (key === "mce_date") return fmtDate(v as string);
   return String(v).trim() || "—";
 }
 
@@ -460,125 +314,85 @@ async function downloadDocx(
   }
 }
 
-// ─── CP Contracts Bar ────────────────────────────────────────────────────────
+// ─── Vehicle Card (parc + cp merged) ─────────────────────────────────────────
 
-// ─── CP Contract Row (with expand/collapse) ──────────────────────────────────
-
-function CpContractRow({ cp }: { cp: CpItem }) {
+function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: CpItem[]; hasRl?: boolean }) {
   const [open, setOpen] = useState(false);
-  const statutStyle = ({
-    "Validé":   "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-800/40",
-    "Annulé":   "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800/40",
-    "Livré":    "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800/40",
-    "En cours": "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800/40",
-  } as Record<string,string>)[cp.statut ?? ""] ?? "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700";
+  const cp = contracts[0] ?? null;
+  const isRemplacement = contracts.some(c => c.type?.trim().toLowerCase() === "remplacement");
+  const isRed = hasRl || isRemplacement;
 
-  const f = (label: string, value?: string | number | null, bold = false) => (
+  const f = (label: string, val?: string | null) => (
     <div>
       <div className="text-xs text-zinc-400 dark:text-zinc-500">{label}</div>
-      <div className={`mt-0.5 truncate text-sm dark:text-zinc-100 ${bold ? "font-bold text-zinc-800" : "font-semibold text-zinc-700 dark:text-zinc-200"}`}>
-        {value != null && String(value).trim() !== "" ? String(value) : "—"}
+      <div className="mt-0.5 text-sm font-semibold text-zinc-800 dark:text-zinc-100 truncate">
+        {val?.trim() || "—"}
       </div>
     </div>
   );
-  const km = (v?: number | null) => v != null ? new Intl.NumberFormat("fr-FR").format(v) + " km" : null;
 
   return (
-    <div>
-      {/* ── MANDATORY: always visible ── */}
-      <div className="px-5 py-4 space-y-4">
-
-        {/* Row 1: Marque/Modèle · Client · Version · Fin contrat */}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
-          {f("Marque / Modèle", cp.marque && cp.model ? `${cp.marque} ${cp.model}` : (cp.marque ?? cp.model))}
-          {f("Client", cp.client, true)}
-          <div>
-            <div className="text-xs text-zinc-400 dark:text-zinc-500">Version</div>
-            <div className="mt-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 leading-tight line-clamp-2">{cp.version ?? "—"}</div>
-          </div>
-          {f("Fin contrat", cp.date_fin_contrat)}
-        </div>
-
-        {/* Row 2: VH relais · Type relais · Début RL */}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-          {f("VH relais", cp.vh_relais)}
-          {f("Type relais", cp.type)}
-          {f("Début RL", cp.date_debut_rl)}
-        </div>
-
+    <div className={`rounded-2xl border shadow-sm ${isRed ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}>
+      {/* Header */}
+      <div className={`flex items-center gap-2 border-b px-5 py-3 ${isRed ? "border-red-200 dark:border-red-800/50" : "border-zinc-100 dark:border-zinc-800"}`}>
+        <svg className={`h-4 w-4 ${isRed ? "text-red-500" : "text-zinc-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="1" y="8" width="22" height="10" rx="2"/>
+          <path d="M5 8V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2"/>
+          <circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>
+        </svg>
+        <span className={`text-xs font-semibold uppercase tracking-widest ${isRed ? "text-red-600 dark:text-red-400" : "text-zinc-400 dark:text-zinc-500"}`}>
+          {isRed && "⚠ "}Véhicule
+        </span>
+        <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">parc + cp</span>
       </div>
 
-      {/* ── EXTRA: visible only when expanded ── */}
-      {open && (
-        <div className="border-t border-zinc-100 px-5 py-4 space-y-4 dark:border-zinc-800">
+      {/* ── Priority row: always visible ── */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-5 py-4 sm:grid-cols-3 lg:grid-cols-6">
+        {f("Client",        parc.client)}
+        {f("IMM",           parc.imm)}
+        {f("WW",            parc.ww)}
+        {f("Etat véhicule", parc.vehicle_state)}
+        {f("Date MCE",      fmtDate(parc.mce_date ?? cp?.mce_date))}
+        {f("Fin contrat",   fmtDate(cp?.date_fin_contrat))}
+      </div>
 
-          {/* Row 3: Référence · Nature · Durée · WW · IMM · Gestionnaire */}
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-            <div>
-              <div className="text-xs text-zinc-400 dark:text-zinc-500">Référence</div>
-              <div className="mt-0.5 flex items-center gap-1.5">
-                <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{cp.reference ?? "—"}</span>
-                {cp.statut && <span className={`rounded-md border px-1.5 py-0.5 text-xs font-medium ${statutStyle}`}>{cp.statut}</span>}
-              </div>
-            </div>
-            {f("Nature", cp.nature)}
-            {f("Durée", cp.duree)}
-            {f("WW", cp.ww)}
-            {f("IMM", cp.imm)}
-          </div>
-
-          {/* Row 4: Type location · Type véhicule · Début contrat · Début facturation · KM prévu */}
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-            {f("Type location", cp.type_location)}
-            {f("Type véhicule", cp.type_vehicle)}
-            {f("Début contrat", cp.date_debut_contrat)}
-            {f("Début facturation", cp.date_debut_facturation)}
-            {f("KM prévu", km(cp.km_prevu))}
-          </div>
-
-          {/* Row 4b: Date MCE · Conducteur */}
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-            {f("Date MCE", cp.mce_date)}
-            {f("Conducteur", cp.conducteur?.trim() || "—")}
-          </div>
-
-          {/* Row 5: KM tracking */}
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
-            {f("KM départ", km(cp.km_depart))}
-            {f("Dernier KM", km(cp.dernier_km))}
-            {f("Date dernier KM", cp.date_dernier_km)}
-            {f("KM consommé", km(cp.km_consomme))}
-            {f("Projection KM", km(cp.projection_km))}
-            {f("Ecart%", cp.ecart_pct != null ? cp.ecart_pct + "%" : null)}
-          </div>
-
-          {/* Row 6: Relais details */}
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-            {f("Total relais KM", km(cp.total_relais))}
-            {f("Ecart KM", km(cp.ecart_km))}
-          </div>
-
-          {/* Row 7: Etat badges */}
-          <div className="flex flex-wrap gap-2">
-            {([
-              ["Livraison",    cp.etat_livraison,  cp.date_livraison],
-              ["Restitution",  cp.etat_restitution, null],
-              ["Prorogation",  cp.etat_prorogation, null],
-              ["Avenant",      cp.avenant,          null],
-              ["Intersociété", cp.intersociete,     null],
-            ] as [string, string|undefined, string|undefined][]).map(([label, val, date]) => (
-              <span key={label} className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-                <span className="text-zinc-400">{label}:</span>
-                <span className={`font-medium ${val === "Oui" ? "text-green-600 dark:text-green-400" : ""}`}>{val ?? "—"}</span>
-                {date && <span className="text-zinc-400 ml-1">{date}</span>}
-              </span>
-            ))}
-          </div>
-
+      {/* ── Version full width ── */}
+      {cp?.version && (
+        <div className="border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
+          <div className="text-xs text-zinc-400 dark:text-zinc-500">Version</div>
+          <div className="mt-0.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-snug">{cp.version}</div>
         </div>
       )}
 
-      {/* Toggle button */}
+      {/* ── Extra: expand/collapse ── */}
+      {open && (
+        <div className="border-t border-zinc-100 px-5 py-4 space-y-4 dark:border-zinc-800">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+            {f("Marque",         parc.brand)}
+            {f("Modèle",         parc.model)}
+            {f("VIN",            parc.vin)}
+            {f("Type location",  parc.location_type ?? cp?.type_location)}
+            {f("Locataire",      parc.tenant)}
+            {f("Gestionnaire",   cp?.gestionnaire)}
+            {f("Début contrat",  fmtDate(cp?.date_debut_contrat))}
+            {f("Type relais",    cp?.type)}
+            {f("Jockey",        cp?.jockey)}
+          </div>
+          {contracts.length > 1 && (
+            <div>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Autres contrats ({contracts.length - 1})</div>
+              <div className="space-y-2">
+                {contracts.slice(1).map((c, i) => (
+                  <div key={i} className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-xl border border-zinc-100 px-4 py-3 sm:grid-cols-4 dark:border-zinc-800">
+                    {f("IMM", c.imm)} {f("Fin contrat", fmtDate(c.date_fin_contrat))} {f("Type relais", c.type)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <button onClick={() => setOpen(o => !o)}
         className="flex w-full items-center justify-center gap-1.5 border-t border-zinc-100 py-2 text-xs font-medium text-zinc-400 transition hover:bg-zinc-50 hover:text-zinc-600 dark:border-zinc-800 dark:hover:bg-zinc-900 dark:hover:text-zinc-300">
         {open
@@ -589,104 +403,7 @@ function CpContractRow({ cp }: { cp: CpItem }) {
   );
 }
 
-const STATUT_STYLE: Record<string, string> = {
-  "Validé":   "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-800/40",
-  "Annulé":   "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800/40",
-  "En cours": "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800/40",
-};
 
-function CpContractsBar({ items }: { items: CpItem[] }) {
-  if (!items.length) return null;
-  const hasRemplacement = items.some(cp => cp.type?.trim().toLowerCase() === "remplacement");
-  return (
-    <div className={`rounded-2xl border shadow-sm ${hasRemplacement ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}>
-      {/* Header */}
-      <div className={`flex items-center gap-2 border-b px-5 py-3 ${hasRemplacement ? "border-red-200 dark:border-red-800/50" : "border-zinc-100 dark:border-zinc-800"}`}>
-        {hasRemplacement ? (
-          <svg className="h-4 w-4 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-        ) : (
-          <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <line x1="10" y1="9" x2="8" y2="9"/>
-          </svg>
-        )}
-        <span className={`text-xs font-semibold uppercase tracking-widest ${hasRemplacement ? "text-red-600 dark:text-red-400" : "text-zinc-400 dark:text-zinc-500"}`}>
-          {hasRemplacement && "⚠ "}Contrats CP ({items.length})
-        </span>
-        <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">Source collection cp</span>
-      </div>
-
-      {/* One card per contract */}
-      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-        {items.map((cp, i) => <CpContractRow key={i} cp={cp} />)}
-      </div>
-    </div>
-  );
-}
-
-// ─── Vehicle Meta Bar ─────────────────────────────────────────────────────────
-
-const PARC_MANDATORY: (keyof ParcItem)[] = ["imm","ww","vin","brand","model","vehicle_state","mce_date"];
-const PARC_EXTRA:     (keyof ParcItem)[] = ["company","client","vehicle_type","location_type","tenant","received","received_date","sold","scrap","purchase_order","purchase_price_net"];
-
-function VehicleMetaBar({ item }: { item: ParcItem }) {
-  const [open, setOpen] = useState(false);
-  const pf = (key: keyof ParcItem) => {
-    const f = VEHICLE_META_FIELDS.find(x => x.key === key);
-    return f ? { key, label: f.label } : { key, label: String(key) };
-  };
-  return (
-    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
-        <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="1" y="8" width="22" height="10" rx="2"/>
-          <path d="M5 8V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2"/>
-          <circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>
-        </svg>
-        <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Véhicule (parc)</span>
-        <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">Données fixes — source parc</span>
-      </div>
-      {/* Mandatory fields — always visible */}
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-5 py-4 sm:grid-cols-4">
-        {PARC_MANDATORY.map(key => {
-          const f = pf(key);
-          return (
-            <div key={String(key)}>
-              <div className="text-xs text-zinc-400 dark:text-zinc-500">{f.label}</div>
-              <div className="mt-0.5 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{displayVehicleValue(item, key)}</div>
-            </div>
-          );
-        })}
-      </div>
-      {/* Extra fields — shown when expanded */}
-      {open && (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-zinc-100 px-5 py-4 sm:grid-cols-4 dark:border-zinc-800">
-          {PARC_EXTRA.map(key => {
-            const f = pf(key);
-            return (
-              <div key={String(key)}>
-                <div className="text-xs text-zinc-400 dark:text-zinc-500">{f.label}</div>
-                <div className="mt-0.5 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{displayVehicleValue(item, key)}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      <button onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center justify-center gap-1.5 border-t border-zinc-100 py-2 text-xs font-medium text-zinc-400 transition hover:bg-zinc-50 hover:text-zinc-600 dark:border-zinc-800 dark:hover:bg-zinc-900 dark:hover:text-zinc-300">
-        {open
-          ? <><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 10l4-4 4 4" strokeLinecap="round"/></svg> Voir moins</>
-          : <><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6l4 4 4-4" strokeLinecap="round"/></svg> Voir plus · {PARC_EXTRA.length} champs</>}
-      </button>
-    </div>
-  );
-}
 
 // ─── Lines Table ──────────────────────────────────────────────────────────────
 
@@ -838,12 +555,25 @@ function FieldSelector({
 }
 
 
-// ─── BDD Immobilisation Card ──────────────────────────────────────────────────
+// ─── Sheet Card (BDD + RL merged) ────────────────────────────────────────────
 
 type BddRow = { IMM: string; date: string; client: string; modele: string; ETAT: string; prestataire: string; commentaire: string; "Reunion N-1": string; mois_restant: string; date_fin_contrat: string; lieu_Reparation: string; Motif: string; "station_départ": string; ds: string; date_ds: string; };
 
-function BddCard({ rows }: { rows: BddRow[] }) {
-  if (rows.length === 0) return null;
+type RlRow = {
+  Reference: string;
+  Date: string;
+  Client: string;
+  Immatriculation_a_remplacer: string;
+  "Modèle_a_remplacer": string;
+  Immatriculation_remplacement: string;
+  "Modèle_remplacement": string;
+  "Date début": string;
+  Motif: string;
+  "Téléphone": string;
+};
+
+function SheetCard({ bddRows, rlRows, importRows }: { bddRows: BddRow[]; rlRows: RlRow[]; importRows: ImportRow[] }) {
+  if (!bddRows.length && !rlRows.length && !importRows.length) return null;
 
   const etatStyle = (etat: string) => ({
     "DISPONIBLE": "bg-[#1a7a4a] text-white border-[#1a7a4a]",
@@ -866,22 +596,26 @@ function BddCard({ rows }: { rows: BddRow[] }) {
     </div>
   ) : null;
 
+  const hasRl = rlRows.length > 0;
+
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
-        <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <div className={`rounded-2xl border shadow-sm ${hasRl ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}>
+      {/* Header */}
+      <div className={`flex items-center gap-2 border-b px-5 py-3 ${hasRl ? "border-red-200 dark:border-red-800/50" : "border-zinc-100 dark:border-zinc-800"}`}>
+        <svg className={`h-4 w-4 ${hasRl ? "text-red-500" : "text-zinc-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
-        <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-          Immobilisation BDD ({rows.length})
+        <span className={`text-xs font-semibold uppercase tracking-widest ${hasRl ? "text-red-600 dark:text-red-400" : "text-zinc-400 dark:text-zinc-500"}`}>
+          {hasRl && "⚠ "}Immobilisation BDD {bddRows.length > 0 && `(${bddRows.length})`}
         </span>
         <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">Source Google Sheets</span>
       </div>
+
       <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-        {rows.map((row, i) => (
+        {/* BDD rows */}
+        {bddRows.map((row, i) => (
           <div key={i} className="px-5 py-4">
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{row.IMM}</span>
               {row.ETAT && (
                 <span className={`rounded-md border px-1.5 py-0.5 text-xs font-medium ${etatStyle(row.ETAT)}`}>
                   {row.ETAT}
@@ -894,87 +628,94 @@ function BddCard({ rows }: { rows: BddRow[] }) {
               {f("Réunion N-1", row["Reunion N-1"])}
               {f("Commentaire", row.commentaire)}
             </div>
-
           </div>
         ))}
+
+        {/* RL rows */}
+        {rlRows.map((row, i) => (
+          <div key={`rl-${i}`} className="px-5 py-4">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wide">Véhicule de remplacement</span>
+              <span className="text-xs font-mono text-zinc-500">{row.Reference}</span>
+              {row.Date && <span className="text-xs text-zinc-400">{row.Date}</span>}
+            </div>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+              {f("Téléphone",        row["Téléphone"])}
+              {f("IMM remplacement", row.Immatriculation_remplacement)}
+              {f("Modèle rempl.",    row["Modèle_remplacement"])}
+              {f("Début RL",         row["Date début"])}
+              {f("Motif",            row.Motif)}
+            </div>
+          </div>
+        ))}
+        {/* Import rows */}
+        {importRows.length > 0 && (() => {
+          const parseDate = (s: string): string => {
+            if (!s) return "";
+            // DD/MM/YYYY HH:mm:ss
+            const m = s.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+            if (m) {
+              const [, d, mo, y, h = "00", min = "00", sec = "00"] = m;
+              return `${y}-${mo.padStart(2,"0")}-${d.padStart(2,"0")}T${h.padStart(2,"0")}:${min}:${sec.padStart(2,"0")}`;
+            }
+            return s;
+          };
+          const sortedRows = [...importRows].sort((a, b) =>
+            parseDate(b["DatePrestation"]).localeCompare(parseDate(a["DatePrestation"]))
+          );
+          const seenDatetimes = new Set<string>();
+          const filteredRows: ImportRow[] = [];
+          for (const r of sortedRows) {
+            const dt = parseDate(r["DatePrestation"]).slice(0, 16); // YYYY-MM-DDTHH:mm
+            if (!seenDatetimes.has(dt)) { seenDatetimes.add(dt); filteredRows.push(r); }
+          }
+          return (
+            <div className="border-t border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-2 px-5 py-2">
+                <svg className="h-3.5 w-3.5 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+                </svg>
+                <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                  Assistance Import ({filteredRows.length}/{importRows.length})
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                      {["Evénement","N° de tel","Date prestation","Lieu de destination"].map(h => (
+                        <th key={h} className="px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
+                    {filteredRows.map((row, i) => (
+                      <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+                        <td className="px-4 py-2 text-zinc-700 dark:text-zinc-200">{row["Evénement"]}</td>
+                        <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{row["N° de tel"]}</td>
+                        <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{parseDate(row["DatePrestation"]).replace("T", " ").slice(0, 16)}</td>
+                        <td className="px-4 py-2 text-zinc-500">{row["Lieu de Destination"]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
 }
+
 
 // ─── Import Assistance Card ───────────────────────────────────────────────────
 
 type ImportRow = { "Reference dossier": string; "Date Ouverture": string; "Evénement": string; "Souscripteur": string; "Bénéficiaire": string; "N° de tel": string; "Marque Véhicule": string; "Immatricule": string; "Prestation": string; "DatePrestation": string; "Lieu de Destination": string; "Ville de sinistre": string; };
 
-function ImportCard({ rows }: { rows: ImportRow[] }) {
-  const [expanded, setExpanded] = useState(false);
-  if (rows.length === 0) return null;
-  // Parse "DD/MM/YYYY HH:mm:ss" or "M/D/YYYY HH:mm" → sortable ISO string
-  const parseDate = (s: string) => {
-    if (!s) return "";
-    const [datePart, timePart] = s.split(" ");
-    const parts = datePart.split("/");
-    if (parts.length !== 3) return s;
-    const [a, b, c] = parts;
-    if (c.length === 4) {
-      const dateIso = `${c}-${b.padStart(2,"0")}-${a.padStart(2,"0")}`;
-      return timePart ? `${dateIso} ${timePart}` : dateIso;
-    }
-    return s;
-  };
-  // Sort descending by date
-  const sortedRows = [...rows].sort((a, b) =>
-    parseDate(b["DatePrestation"]).localeCompare(parseDate(a["DatePrestation"]))
-  );
-  // Keep only 1 row per distinct date, max 2 rows total
-  const seenDates: string[] = [];
-  const filteredRows: ImportRow[] = [];
-  for (const r of sortedRows) {
-    const d = parseDate(r["DatePrestation"]).split(" ")[0];
-    if (d && !seenDates.includes(d)) {
-      seenDates.push(d);
-      filteredRows.push(r);
-    }
-    if (filteredRows.length === 2) break;
-  }
-  const shown = filteredRows;
+// ─── RL Card ──────────────────────────────────────────────────────────────────
 
-  return (
-    <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
-        <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
-        </svg>
-        <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-          Assistance Import ({filteredRows.length}/{rows.length})
-        </span>
-        <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">Source Google Sheets</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-zinc-100 dark:border-zinc-800">
-              {["Evénement","N° de tel","Date prestation","Lieu de destination"].map(h => (
-                <th key={h} className="px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500 whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
-            {shown.map((row, i) => (
-              <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
-                <td className="px-4 py-2 text-zinc-700 dark:text-zinc-200">{row["Evénement"]}</td>
-                <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{row["N° de tel"]}</td>
-                <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{row["DatePrestation"]}</td>
-                <td className="px-4 py-2 text-zinc-500">{row["Lieu de Destination"]}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
 
-    </div>
-  );
-}
 
 // ─── Download icon ────────────────────────────────────────────────────────────
 
@@ -1053,6 +794,7 @@ export default function Home() {
   // ── Google Sheets ──────────────────────────────────────────────────────────
   const [bddRows, setBddRows] = useState<BddRow[]>([]);
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
+  const [rlRows, setRlRows] = useState<RlRow[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -1106,7 +848,7 @@ export default function Home() {
         if (resolveJson.ok && resolveJson.mode === "suggest") {
           setSuggestions(resolveJson.suggestions ?? []);
           setShowSuggestions(true);
-          setData(null); setVehicle(null); setContracts([]); setBddRows([]); setImportRows([]);
+          setData(null); setVehicle(null); setContracts([]); setBddRows([]); setImportRows([]); setRlRows([]);
           return;
         }
         if (resolveJson.ok && resolveJson.mode === "data") {
@@ -1125,7 +867,7 @@ export default function Home() {
       const sheetImmQs    = new URLSearchParams({ imm: immVal });
       const sheetWwQs     = rawVal !== immVal ? new URLSearchParams({ imm: rawVal }) : null;
 
-      const [dsRes, parcRes, cpRes, bddRes, importRes, bddWwRes, importWwRes] = await Promise.all([
+      const [dsRes, parcRes, cpRes, bddRes, importRes, bddWwRes, importWwRes, rlRes, rlWwRes] = await Promise.all([
         fetch(`/api/ds/history?${dsQs}`),
         fetch(`/api/parc?${parcQs}`),
         fetch(`/api/cp?${cpQs}`),
@@ -1133,6 +875,8 @@ export default function Home() {
         fetch(`/api/sheet?sheet=import&${sheetImmQs}`),
         sheetWwQs ? fetch(`/api/sheet?sheet=bdd&${sheetWwQs}`) : Promise.resolve(null),
         sheetWwQs ? fetch(`/api/sheet?sheet=import&${sheetWwQs}`) : Promise.resolve(null),
+        fetch(`/api/sheet?sheet=rl&${sheetImmQs}`),
+        sheetWwQs ? fetch(`/api/sheet?sheet=rl&${sheetWwQs}`) : Promise.resolve(null),
       ]);
 
       const dsJson     = await dsRes.json()     as DsApiResponse;
@@ -1142,6 +886,8 @@ export default function Home() {
       const importJson   = await importRes.json();
       const bddWwJson    = bddWwRes    ? await bddWwRes.json()    : { ok: false, items: [] };
       const importWwJson = importWwRes ? await importWwRes.json() : { ok: false, items: [] };
+      const rlJson       = await rlRes.json();
+      const rlWwJson     = rlWwRes     ? await rlWwRes.json()     : { ok: false, items: [] };
 
       if (!dsRes.ok || !dsJson.ok) {
         setData(null);
@@ -1168,8 +914,17 @@ export default function Home() {
       setBddRows(mergeBdd);
       setImportRows(mergeImport);
 
+      const mergeRl = [
+        ...(rlJson.ok ? rlJson.items : []),
+        ...(rlWwJson.ok ? rlWwJson.items : []),
+      ].filter((r, i, arr) => arr.findIndex(x =>
+        x.Reference === r.Reference &&
+        x.Immatriculation_a_remplacer === r.Immatriculation_a_remplacer
+      ) === i);
+      setRlRows(mergeRl);
+
     } catch (e) {
-      setData(null); setVehicle(null); setContracts([]); setBddRows([]); setImportRows([]);
+      setData(null); setVehicle(null); setContracts([]); setBddRows([]); setImportRows([]); setRlRows([]);
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setLoading(false);
@@ -1263,7 +1018,7 @@ export default function Home() {
         </div>
 
         {/* Search */}
-        <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <div className={`mt-6 rounded-2xl border p-4 shadow-sm ${rlRows.length > 0 && !loading ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}>
           <div className="grid gap-3 sm:grid-cols-12 sm:items-end">
             <div className="sm:col-span-5" ref={searchRef}>
               <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Immatriculation / WW / VIN</label>
@@ -1330,12 +1085,8 @@ export default function Home() {
         </div>
 
         {/* Vehicle metadata (from parc) */}
-        {vehicle && !loading && <div className="mt-4"><VehicleMetaBar item={vehicle} /></div>}
-
-        {/* CP Contracts */}
-        {contracts.length > 0 && !loading && <div className="mt-3"><CpContractsBar items={contracts} /></div>}
-        {bddRows.length > 0 && !loading && <div className="mt-3"><BddCard rows={bddRows} /></div>}
-        {importRows.length > 0 && !loading && <div className="mt-3"><ImportCard rows={importRows} /></div>}
+        {vehicle && !loading && <div className="mt-4"><VehicleCard parc={vehicle} contracts={contracts} hasRl={rlRows.length > 0} /></div>}
+        {(bddRows.length > 0 || rlRows.length > 0 || importRows.length > 0) && !loading && <div className="mt-3"><SheetCard bddRows={bddRows} rlRows={rlRows} importRows={importRows} /></div>}
 
         {/* Results */}
         <div className="mt-4 space-y-3">
@@ -1378,33 +1129,31 @@ export default function Home() {
                 </div>
                 {/* RIGHT: MAD · Site · N°DS · Type DS · Affectation */}
                 <div className="flex flex-wrap items-center gap-2">
-                  {visibleCardFields.has("MT Total HT") && it["MT Total HT"] != null && (
-                    <span className="text-sm font-semibold tabular-nums">{fmtNum(it["MT Total HT"], 2)} MAD</span>
-                  )}
-                  {visibleCardFields.has("Site") && (
-                    <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">{it.Site ?? "—"}</span>
-                  )}
+                  {(() => {
+                    const bcTotal = it.lines?.filter(l => l.price_source === "bc" && l.mt_ht != null).reduce((s, l) => s + (l.mt_ht ?? 0), 0) ?? 0;
+                    return bcTotal > 0 ? (
+                      <span className="text-sm font-semibold tabular-nums">{fmtNum(bcTotal, 2)} MAD</span>
+                    ) : null;
+                  })()}
                   <span className="text-sm font-bold tracking-tight">{nds}</span>
-                  {visibleCardFields.has("Type DS") && it["Type DS"] && (
-                    <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium dark:bg-zinc-800 dark:text-zinc-300">{it["Type DS"]}</span>
-                  )}
-                  {visibleCardFields.has("Affectation") && it.Affectation && (
-                    <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">{it.Affectation}</span>
-                  )}
                 </div>
               </div>
 
               {/* All card fields — always visible */}
               {allCardFields.length > 0 && (
                 <div className="grid gap-x-6 gap-y-3 px-5 py-4 sm:grid-cols-3">
-                  {allCardFields.map(f => (
-                    <div key={f.key} className={f.key === "Description" ? "sm:col-span-3" : ""}>
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">{f.label}</div>
-                      <div className={`text-sm font-medium text-zinc-800 dark:text-zinc-200 ${f.key === "Description" ? "whitespace-pre-wrap" : "truncate"}`}>
-                        {displayValue(it, f.key)}
+                  {allCardFields.map(f => {
+                    const val = displayValue(it, f.key);
+                    if (val === "—") return null;
+                    return (
+                      <div key={f.key} className={f.key === "Description" ? "sm:col-span-3" : ""}>
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">{f.label}</div>
+                        <div className={`text-sm font-medium text-zinc-800 dark:text-zinc-200 ${f.key === "Description" ? "whitespace-pre-wrap" : "truncate"}`}>
+                          {val}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -1417,7 +1166,7 @@ export default function Home() {
                   <LinesTable
                     lines={it.lines}
                     orderedLineFields={orderedLineFields}
-                    totalMtHt={it["MT Total HT"]}
+                    totalMtHt={it.lines?.filter(l => l.price_source === "bc" && l.mt_ht != null).reduce((s, l) => s + (l.mt_ht ?? 0), 0) ?? 0}
                     visibleLineFields={visibleLineFields}
                   />
                 </div>
