@@ -49,7 +49,33 @@ The `avis360` database is separate from `avis` — `/api/query` uses it while mo
 
 - **`app/page.tsx`** (~1200 lines) — Main dashboard (DS history). Contains rich client-side state for field visibility, dark mode, search, card/line display toggling.
 - **`app/articles/page.tsx`** — Article price search with BC/DS toggle
+- **`app/suivi/page.tsx`** — BDD immobilization tracking dashboard (see Suivi section below)
 - **`app/login/page.tsx` + `actions.ts`** — iron-session auth
+
+### Suivi BDD Feature
+
+`app/suivi/page.tsx` is a fully client-side tracking dashboard that merges two data sources at runtime:
+
+- **Sheet rows** (`_source: "sheet"`): fetched from `/api/sheet?sheet=bdd` — read-only, only 9 fields are used (IMM, date, client, modele, ETAT, prestataire, commentaire, flag, "Reunion N-1")
+- **Draft rows** (`_source: "draft"`): stored in `avis.suivi_draft` MongoDB collection via `/api/suivi` (GET/POST) and `/api/suivi/[id]` (PATCH/DELETE)
+
+**Draft workflow**: Clicking ✏️ on a sheet row opens a modal pre-filled with that row's values. Saving POSTs to `/api/suivi` creating a new draft — the sheet row itself is never modified. Drafts appear at the top with a DRAFT badge and support inline tap-to-edit per field.
+
+**Cascading filters**: ETAT → prestataire → flag. Changing ETAT resets prestataire and flag to "TOUS". `visiblePrestataires` and `visibleFlags` are derived inline from `rows` (not stored in state) to always reflect the current filter context. `sheetPrestataires` (all unique prestataires) is kept separately for the modal form's select options.
+
+**Flag system**: `FLAG_COLOR` map drives badge colors on cards and active chip colors in the filter bar. Flag options: Urgent, Prêt, NTR, INST, REP, ESSAI.
+
+**Model**: `lib/models/suivi.ts` exports `SuiviDraft` interface and `SUIVI_FIELDS` array (used to drive form rendering). `ETAT_OPTIONS` is exported but unused in the page — ETAT values are derived dynamically from sheet data (`sheetEtats`).
+
+**PDF export**: Browser `window.open` + `window.print()` — pure HTML/CSS, no server call.
+
+### Auth Flow
+
+`lib/session.ts` defines `SessionData` and `sessionOptions` (7-day cookie, name `auth_session`). The `login/actions.ts` Server Action validates credentials and sets `session.isLoggedIn`.
+
+`proxy.ts` contains middleware-style auth guard logic but is **not active** — it must be renamed to `middleware.ts` at the repo root to be enforced by Next.js. Until then, API routes have no route-level auth protection.
+
+`next.config.ts` allows `192.168.11.110:3000` as a dev origin (local network access).
 
 ### Key Patterns
 

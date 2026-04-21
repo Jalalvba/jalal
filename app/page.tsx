@@ -989,6 +989,13 @@ export default function Home() {
   🔎 Articles
 </Link>
 
+<Link
+  href="/suivi"
+  className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-400"
+>
+  📋 Suivi
+</Link>
+
             {/* Dark mode toggle */}
             <button onClick={() => setDark(d => !d)}
               className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
