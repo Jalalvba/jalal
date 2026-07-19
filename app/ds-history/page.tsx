@@ -1,9 +1,10 @@
-// app/page.tsx
 "use client";
 import Link from "next/link";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { logout } from "@/app/login/actions";
+import { useDarkMode } from "@/hooks/useDarkMode";
 import type {
   Line,
   DsHistoryItem,
@@ -13,30 +14,27 @@ import type {
   CpItem,
   CpApiResponse,
 } from "@/lib/types";
+import type { RlRow } from "@/lib/googleSheetsRl";
+import type { ImportRow } from "@/lib/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/format";
 
-// ─── Cookie helpers ──────────────────────────────────────────────────────────
+// ─── Field-visibility persistence (localStorage, same pattern as the
+// dark-mode toggle — previously a hand-rolled document.cookie utility) ──────
 
-const COOKIE_CARD  = "ds_visible_card";
-const COOKIE_LINE  = "ds_visible_line";
-const COOKIE_DAYS  = 365;
+const STORAGE_CARD = "ds_visible_card";
+const STORAGE_LINE = "ds_visible_line";
 
-function cookieSet(name: string, value: string) {
-  const expires = new Date();
-  expires.setDate(expires.getDate() + COOKIE_DAYS);
-  document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
-}
-
-function cookieGet(name: string): string | null {
-  const match = document.cookie
-    .split("; ")
-    .find(row => row.startsWith(name + "="));
-  return match ? decodeURIComponent(match.split("=")[1]) : null;
+function storageSet(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore quota/availability errors
+  }
 }
 
 function loadCardFields(): Set<keyof DsHistoryItem> {
   try {
-    const raw = cookieGet(COOKIE_CARD);
+    const raw = localStorage.getItem(STORAGE_CARD);
     if (!raw) return DEFAULT_CARD_VISIBLE;
     const parsed = JSON.parse(raw) as string[];
     if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_CARD_VISIBLE;
@@ -46,7 +44,7 @@ function loadCardFields(): Set<keyof DsHistoryItem> {
 
 function loadLineFields(): Set<keyof Line> {
   try {
-    const raw = cookieGet(COOKIE_LINE);
+    const raw = localStorage.getItem(STORAGE_LINE);
     if (!raw) return DEFAULT_LINE_VISIBLE;
     const parsed = JSON.parse(raw) as string[];
     if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_LINE_VISIBLE;
@@ -390,11 +388,11 @@ function FieldSelector({
   if (!open) return null;
 
   function saveCard(s: Set<keyof DsHistoryItem>) {
-    cookieSet(COOKIE_CARD, JSON.stringify([...s]));
+    storageSet(STORAGE_CARD, JSON.stringify([...s]));
     setVisibleCardFields(s);
   }
   function saveLine(s: Set<keyof Line>) {
-    cookieSet(COOKIE_LINE, JSON.stringify([...s]));
+    storageSet(STORAGE_LINE, JSON.stringify([...s]));
     setVisibleLineFields(s);
   }
 
@@ -408,12 +406,23 @@ function FieldSelector({
     if (n.has(key)) n.delete(key); else n.add(key);
     saveLine(n);
   };
+  // Same corner-panel visual design as before, now driven by Radix Dialog so
+  // ESC and outside-click both dismiss (the old version only had the latter,
+  // via a manual full-screen click-catcher) and focus is trapped inside.
+  // No visible overlay (bg-transparent) — original never dimmed the page.
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-end" onClick={onClose}>
-      <div className="mr-4 mt-16 w-80 max-h-[80vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-950"
-           onClick={e => e.stopPropagation()}>
+    <DialogPrimitive.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50" />
+        <DialogPrimitive.Content
+          className="fixed inset-0 z-50 flex items-start justify-end outline-none"
+          aria-describedby={undefined}
+        >
+      <div className="mr-4 mt-16 w-80 max-h-[80vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-950">
         <div className="sticky top-0 flex items-center justify-between border-b border-zinc-100 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-          <span className="text-sm font-semibold">Champs visibles</span>
+          <DialogPrimitive.Title asChild>
+            <span className="text-sm font-semibold">Champs visibles</span>
+          </DialogPrimitive.Title>
           <div className="flex items-center gap-1">
             <button
               onClick={() => { saveCard(DEFAULT_CARD_VISIBLE); saveLine(DEFAULT_LINE_VISIBLE); }}
@@ -469,29 +478,23 @@ function FieldSelector({
           </div>
         </div>
       </div>
-    </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
 
 // ─── Sheet Card (BDD + RL merged) ────────────────────────────────────────────
 
-type BddRow = { IMM: string; date: string; client: string; modele: string; ETAT: string; prestataire: string; commentaire: string; "Reunion N-1": string; mois_restant: string; date_fin_contrat: string; lieu_Reparation: string; Motif: string; "station_départ": string; ds: string; date_ds: string; };
+// Narrower display-only shape than lib/types.ts's full BddRow (which has 22
+// fields incl. editable ones for the Suivi RL page) — /api/sheet?sheet=bdd
+// returns that full row, but this card only ever reads these 15 fields.
+// Renamed from the original "BddRow" to kill the naming collision with the
+// real, wider type.
+type SheetBddRow = { IMM: string; date: string; client: string; modele: string; ETAT: string; prestataire: string; commentaire: string; "Reunion N-1": string; mois_restant: string; date_fin_contrat: string; lieu_Reparation: string; Motif: string; "station_départ": string; ds: string; date_ds: string; };
 
-type RlRow = {
-  Reference: string;
-  Date: string;
-  Client: string;
-  Immatriculation_a_remplacer: string;
-  "Modèle_a_remplacer": string;
-  Immatriculation_remplacement: string;
-  "Modèle_remplacement": string;
-  "Date début": string;
-  Motif: string;
-  "Téléphone": string;
-};
-
-function SheetCard({ bddRows, rlRows, importRows }: { bddRows: BddRow[]; rlRows: RlRow[]; importRows: ImportRow[] }) {
+function SheetCard({ bddRows, rlRows, importRows }: { bddRows: SheetBddRow[]; rlRows: RlRow[]; importRows: ImportRow[] }) {
   if (!bddRows.length && !rlRows.length && !importRows.length) return null;
 
   const etatStyle = (etat: string) => ({
@@ -628,10 +631,6 @@ function SheetCard({ bddRows, rlRows, importRows }: { bddRows: BddRow[]; rlRows:
 }
 
 
-// ─── Import Assistance Card ───────────────────────────────────────────────────
-
-type ImportRow = { "Reference dossier": string; "Date Ouverture": string; "Evénement": string; "Souscripteur": string; "Bénéficiaire": string; "N° de tel": string; "Marque Véhicule": string; "Immatricule": string; "Prestation": string; "DatePrestation": string; "Lieu de Destination": string; "Ville de sinistre": string; };
-
 // ─── RL Card ──────────────────────────────────────────────────────────────────
 
 
@@ -711,7 +710,7 @@ export default function Home() {
 
 
   // ── Google Sheets ──────────────────────────────────────────────────────────
-  const [bddRows, setBddRows] = useState<BddRow[]>([]);
+  const [bddRows, setBddRows] = useState<SheetBddRow[]>([]);
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [rlRows, setRlRows] = useState<RlRow[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -719,15 +718,7 @@ export default function Home() {
   useEffect(() => setMounted(true), []);
 
   // ── Dark mode toggle ───────────────────────────────────────────────────────
-  const [dark, setDark] = useState(true);
-  useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved) setDark(saved === "dark");
-  }, []);
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("theme", dark ? "dark" : "light");
-  }, [dark]);
+  const { dark, toggle: toggleDark } = useDarkMode();
   const [exportingDocx, setExportingDocx] = useState(false);
   const [exportingPdf,  setExportingPdf]  = useState(false);
 
@@ -909,7 +900,7 @@ export default function Home() {
 </Link>
 
             {/* Dark mode toggle */}
-            <button onClick={() => setDark(d => !d)}
+            <button onClick={toggleDark}
               className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               title={dark ? "Passer en mode clair" : "Passer en mode sombre"}>
               {dark
