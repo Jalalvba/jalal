@@ -2,8 +2,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { logout } from "@/app/login/actions";
+import { useDarkMode } from "@/hooks/useDarkMode";
 
 function HomeIcon({ children }: { children: React.ReactNode }) {
   return (
@@ -52,15 +52,7 @@ function NavCard({
 }
 
 export default function Home() {
-  const [dark, setDark] = useState(true);
-  useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved) setDark(saved === "dark"); // eslint-disable-line react-hooks/set-state-in-effect
-  }, []);
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("theme", dark ? "dark" : "light");
-  }, [dark]);
+  const { dark, toggle: toggleDark } = useDarkMode();
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-black dark:text-zinc-50">
@@ -73,7 +65,7 @@ export default function Home() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setDark(d => !d)}
+              onClick={toggleDark}
               className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               title={dark ? "Passer en mode clair" : "Passer en mode sombre"}
             >
