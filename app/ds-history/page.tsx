@@ -878,6 +878,10 @@ export default function Home() {
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
+            <Link href="/" className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-zinc-400 transition hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 3L5 8l5 5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Accueil
+            </Link>
             <h1 className="text-2xl font-semibold tracking-tight">DS History</h1>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Recherche par immatriculation / WW / VIN</p>
           </div>

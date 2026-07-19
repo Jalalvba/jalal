@@ -80,3 +80,82 @@ export type CpApiResponse = {
   item: CpItem | null;
   error?: string;
 };
+
+// ─── BDD sheet (Google Sheets, tab "BDD", gid=868042157) ──────────────────────
+//
+// Confirmed by a live read of the real header row (all 22 columns, no
+// truncation — see conversation history). This is NOT a guess: it's the
+// actual row-1 content of the sheet as of the discovery pass. lib/googleSheetsBdd.ts
+// still builds rows dynamically from a fresh live header read at runtime —
+// this list exists for the UI layer (labels, field order, search) and the
+// editable-fields allowlist below, not as a substitute for that live read.
+
+export const BDD_HEADERS = [
+  "IMM",
+  "date",
+  "client",
+  "modele",
+  "ETAT",
+  "prestataire",
+  "flag",
+  "commentaire",
+  "Catégorie",
+  "Technicien",
+  "Reunion N-1",
+  "Parking",
+  "date_ds",
+  "ds",
+  "Part",
+  "Technicein_ds",
+  "Founisseur",
+  "mois_restant",
+  "date_fin_contrat",
+  "lieu_Reparation",
+  "Motif",
+  "station_départ",
+] as const;
+
+export type BddRow = {
+  _row: number;
+  IMM: string;
+  date: string;
+  client: string;
+  modele: string;
+  ETAT: string;
+  prestataire: string;
+  flag: string;
+  commentaire: string;
+  "Catégorie": string;
+  Technicien: string;
+  "Reunion N-1": string;
+  Parking: string;
+  date_ds: string;
+  ds: string;
+  Part: string;
+  Technicein_ds: string;
+  Founisseur: string;
+  mois_restant: number;
+  date_fin_contrat: string;
+  lieu_Reparation: string;
+  Motif: string;
+  "station_départ": string;
+};
+
+// Business-rule allowlist (not derived from the sheet — a deliberate policy:
+// only these 6 of the 22 real columns are writable from this app). Shared
+// between the server-side check in lib/googleSheetsBdd.ts and the UI's edit
+// form so both agree on the same set without duplicating the literal list.
+export const BDD_EDITABLE_FIELDS = [
+  "ETAT",
+  "prestataire",
+  "flag",
+  "Catégorie",
+  "commentaire",
+  "Technicien",
+] as const;
+
+export type BddEditableField = (typeof BDD_EDITABLE_FIELDS)[number];
+
+export type BddUpdateResult =
+  | { ok: true; written: string[] }
+  | { ok: false; error: string; rejectedFields: string[] };
