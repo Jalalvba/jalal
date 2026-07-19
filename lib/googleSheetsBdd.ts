@@ -1,5 +1,6 @@
 import { google, type sheets_v4 } from "googleapis";
 import { BDD_EDITABLE_FIELDS, type BddRow, type BddUpdateResult } from "@/lib/types";
+import { buildPlateVariants } from "@/lib/plateVariants";
 
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
@@ -94,8 +95,14 @@ function formatCellValue(header: string, raw: unknown): string | number {
 /**
  * Reads every non-empty row (first column non-blank) from the BDD tab, keyed
  * by whatever the live header row actually says — not a hardcoded field list.
+ *
+ * `immFilter`, when given, restricts the result to rows whose IMM column
+ * matches any WW-prefix/suffix variant of the given value (see
+ * lib/plateVariants.ts) — pushed down here so callers that only need one
+ * plate's rows (e.g. app/api/sheet's bdd branch) don't fetch the whole tab
+ * and filter redundantly on top.
  */
-export async function getSheetRows(): Promise<BddRow[]> {
+export async function getSheetRows(immFilter?: string): Promise<BddRow[]> {
   const sheets = getSheetsClient();
 
   const res = await sheets.spreadsheets.values.get({
@@ -108,12 +115,14 @@ export async function getSheetRows(): Promise<BddRow[]> {
   if (values.length === 0) return [];
 
   const headers = values[0].map((h) => String(h ?? "").trim());
+  const variants = immFilter ? new Set(buildPlateVariants(immFilter)) : null;
   const rows: BddRow[] = [];
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
     const firstCell = row[0];
     if (firstCell == null || String(firstCell).trim() === "") continue;
+    if (variants && !variants.has(String(firstCell).trim().toUpperCase())) continue;
 
     const record: Record<string, string | number> = {};
     headers.forEach((header, colIdx) => {
