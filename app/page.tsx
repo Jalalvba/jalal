@@ -3,6 +3,16 @@
 import Link from "next/link";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type {
+  Line,
+  DsHistoryItem,
+  DsApiResponse,
+  ParcItem,
+  ParcApiResponse,
+  CpItem,
+  CpApiResponse,
+} from "@/lib/types";
+import { fmtDate, fmtNum } from "@/lib/format";
 
 // ─── Cookie helpers ──────────────────────────────────────────────────────────
 
@@ -42,83 +52,6 @@ function loadLineFields(): Set<keyof Line> {
     return new Set(parsed as (keyof Line)[]);
   } catch { return DEFAULT_LINE_VISIBLE; }
 }
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type Line = {
-  cmd_num?: string;
-  code_art?: string;
-  designation_conso?: string;
-  qte?: number;
-  mt_ht?: number | null;
-  price_source?: "bc" | "ds";
-};
-
-type DsHistoryItem = {
-  "N°DS": string;
-  "Date DS"?: string;
-  Immatriculation?: string;
-  ENTITE?: string;
-  Description?: string;
-  Fournisseur?: string;
-  Techniciens?: string[];
-  KM?: number;
-  lines?: Line[];
-};
-
-type DsApiResponse = {
-  ok: boolean;
-  imm: string;
-  count: number;
-  items: DsHistoryItem[];
-  error?: string;
-};
-
-type ParcItem = {
-  imm?: string;
-  ww?: string;
-  vin?: string;
-  brand?: string;
-  model?: string;
-  vehicle_state?: string;
-  location_type?: string;
-  tenant?: string;
-  mce_date?: string;
-  client?: string;
-};
-
-type ParcApiResponse = {
-  ok: boolean;
-  query: string;
-  count: number;
-  items: ParcItem[];
-  item: ParcItem | null;
-  error?: string;
-};
-
-type CpItem = {
-  gestionnaire?: string;
-  ww?: string;
-  imm?: string;
-  vin?: string;
-  marque?: string;
-  model?: string;
-  version?: string;
-  type_location?: string;
-  mce_date?: string;
-  date_debut_contrat?: string;
-  date_fin_contrat?: string;
-  type?: string;
-  jockey?: string;
-};
-
-type CpApiResponse = {
-  ok: boolean;
-  count: number;
-  items: CpItem[];
-  item: CpItem | null;
-  error?: string;
-};
 
 // ─── Field definitions ────────────────────────────────────────────────────────
 
@@ -171,17 +104,6 @@ const MANDATORY_CARD_KEYS = new Set<keyof DsHistoryItem>(["Description","Technic
 const NUM_LINE_KEYS = new Set(["qte","mt_ht"]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmtDate(iso?: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? String(iso) : d.toISOString().slice(0, 10);
-}
-
-function fmtNum(v?: number | null, dec = 0): string {
-  if (v == null) return "—";
-  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(v);
-}
 
 function displayValue(item: DsHistoryItem, key: keyof DsHistoryItem): string {
   const v = item[key];

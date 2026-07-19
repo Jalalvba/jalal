@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { fmtDate, fmtNum } from "@/lib/format"
 
 type ArticleResult = {
   "CMD Num":             string
@@ -25,17 +26,6 @@ type ArticleApiResponse = {
   ok:     boolean
   count:  number
   items:  ArticleResult[]
-}
-
-function fmtDate(iso?: string | null): string {
-  if (!iso) return "—"
-  const d = new Date(iso)
-  return isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10)
-}
-
-function fmtNum(v?: number | null): string {
-  if (v == null) return "—"
-  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
 }
 
 export default function ArticlePage() {
@@ -183,7 +173,7 @@ export default function ArticlePage() {
                         {r["Description article"] || "—"}
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums font-semibold text-emerald-400 whitespace-nowrap">
-                        {fmtNum(r.PU)} MAD
+                        {fmtNum(r.PU, 2)} MAD
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums text-zinc-400">
                         {r["Qté"] || "—"}

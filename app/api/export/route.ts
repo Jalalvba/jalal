@@ -3,105 +3,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import type { Line, DsHistoryItem, ParcItem, CpItem } from "@/lib/types";
+import { fmtDate, fmtNum } from "@/lib/format";
 
-// ─── Types (mirror the frontend) ─────────────────────────────────────────────
-
-type Line = {
-  n_intervention?: string;
-  cmd_num?: string;
-  code_art?: string;
-  designation_art?: string;
-  designation_conso?: string;
-  qte?: number;
-  mt_ht?: number | null;
-  prix_unitaire?: number | null;
-  dernier_prix?: number | null;
-};
-
-type DsItem = {
-  "N°DS": string;
-  Societe?: string;
-  Site?: string;
-  "SITE DS"?: string;
-  "Date DS"?: string;
-  "Date entrée"?: string;
-  "Date interv"?: string;
-  "Effectué le"?: string;
-  Immatriculation?: string;
-  Parc?: string;
-  "Type Parc"?: string;
-  "Désignation véhicule"?: string;
-  Marque?: string;
-  ENTITE?: string;
-  "Code entité"?: string;
-  Entité?: string;
-  Description?: string;
-  "Type DS"?: string;
-  "Type de DS"?: string;
-  Techniciens?: string[];
-  User?: string | null;
-  "Facturé par"?: string | null;
-  "Client Final"?: string;
-  "Raison Social"?: string;
-  "Client DS"?: string;
-  "Code Client"?: string;
-  "Détenteur DS"?: string;
-  "Détenteur parc"?: string;
-  "Locat Parc"?: string;
-  "A Facturé"?: string;
-  "Statut facture"?: string;
-  "N° Facture"?: string;
-  Affectation?: string;
-  "Ref CP"?: string;
-  "CMD Num"?: string;
-  Réceptionné?: string;
-  Soldé?: string;
-  "Demande satisfaite"?: string;
-  Fournisseur?: string;
-  KM?: number;
-  "MT Total HT"?: number;
-  lines?: Line[];
-};
-
-// ✅ FIXED: keys match what /api/parc actually returns (camelCase projection)
-type ParcItem = {
-  id?: number;
-  company?: string;
-  client?: string;
-  brand?: string;
-  model?: string | number;
-  imm?: string;
-  ww?: string;
-  vin?: string;
-  vehicle_state?: string;
-  vehicle_type?: string;
-  location_type?: string;
-  tenant?: string;
-  received?: string;
-  received_date?: string;
-  mce_date?: string;
-  sold?: string;
-  scrap?: string;
-  purchase_order?: string;
-  purchase_price_net?: number;
-};
-
-// Mirrors the actual $project output of /api/cp/route.ts — no phantom fields.
-type CpItem = {
-  ww?: string;
-  imm?: string;
-  vin?: string;
-  marque?: string;
-  model?: string;
-  version?: string;
-  gestionnaire?: string;
-  type_location?: string;
-  mce_date?: string;
-  date_debut_contrat?: string;
-  date_fin_contrat?: string;
-  type?: string; // e.g. "Remplacement"
-  jockey?: string;
-};
+// DsItem is this route's name for the shared DsHistoryItem shape.
+type DsItem = DsHistoryItem;
 
 type ExportPayload = {
   imm: string;
@@ -129,36 +35,19 @@ type ExportPayload = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtDate(v?: string | null): string {
-  if (!v) return "—";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? String(v) : d.toISOString().slice(0, 10);
-}
-
-function fmtNum(v?: number | null, dec = 0): string {
-  if (v == null) return "—";
-  return new Intl.NumberFormat("fr-FR", {
-    minimumFractionDigits: dec,
-    maximumFractionDigits: dec,
-  }).format(v);
-}
-
 function getCardValue(item: DsItem, key: string): string {
   const v = (item as Record<string, unknown>)[key];
   if (v == null) return "—";
   if (key === "Techniciens") return (v as string[]).join(", ") || "—";
   if (key === "KM") return fmtNum(v as number) + " km";
-  if (key === "MT Total HT") return fmtNum(v as number, 2) + " MAD";
-  if (["Date DS", "Date entrée", "Date interv", "Effectué le"].includes(key))
-    return fmtDate(v as string);
+  if (key === "Date DS") return fmtDate(v as string);
   return String(v).trim() || "—";
 }
 
 function getLineValue(line: Line, key: string): string {
   const v = (line as Record<string, unknown>)[key];
   if (v == null) return "—";
-  if (["mt_ht", "prix_unitaire", "dernier_prix"].includes(key))
-    return fmtNum(v as number, 2);
+  if (key === "mt_ht") return fmtNum(v as number, 2);
   if (key === "qte") return String(v);
   return String(v).trim() || "—";
 }
@@ -167,8 +56,7 @@ function getVehicleValue(vehicle: ParcItem | null | undefined, key: string): str
   if (!vehicle) return "—";
   const v = (vehicle as Record<string, unknown>)[key];
   if (v == null) return "—";
-  // ✅ FIXED: key is now camelCase
-  if (key === "purchase_price_net") return fmtNum(v as number, 2) + " MAD";
+  if (key === "mce_date") return fmtDate(v as string);
   return String(v).trim() || "—";
 }
 
@@ -210,14 +98,13 @@ export async function POST(req: Request) {
     const NAVY  = c(30,  58,  95);
     const LIGHT = c(238, 243, 248);
     const ALT   = c(245, 248, 252);
-    const TOTAL = c(213, 232, 240);
     const BORD  = c(197, 211, 224);
     const GRAY  = c(136, 136, 136);
     const DARK  = c(34,  34,  34);
     const MID   = c(68,  68,  68);
     const WHITE = c(255, 255, 255);
 
-    const numKeys    = new Set(["qte","mt_ht","prix_unitaire","dernier_prix"]);
+    const numKeys    = new Set(["qte","mt_ht"]);
     const topSet     = new Set(topBarKeys);
     const MAND_DS    = new Set(["Description","Techniciens","ENTITE"]);
     const infoSet    = new Set(visibleCardFields.filter(k => k !== "N°DS" && !topSet.has(k)));
@@ -389,13 +276,7 @@ export async function POST(req: Request) {
         visibleCardFields.includes("Date DS") && it["Date DS"] ? fmtDate(it["Date DS"]) : "",
         visibleCardFields.includes("KM") && it.KM != null      ? fmtNum(it.KM) + " km"  : "",
       ].filter(Boolean).join("  ·  ");
-      const rStr = [
-        visibleCardFields.includes("MT Total HT") && it["MT Total HT"] != null ? fmtNum(it["MT Total HT"], 2) + " MAD" : "",
-        visibleCardFields.includes("Site") && it.Site          ? it.Site        : "",
-        visibleCardFields.includes("Type DS") && it["Type DS"] ? it["Type DS"]! : "",
-        visibleCardFields.includes("Affectation") && it.Affectation ? it.Affectation : "",
-        it["N°DS"],
-      ].filter(Boolean).join("  ·  ");
+      const rStr = it["N°DS"];
       drawText(lStr, ML + 5,    cy + 5, PW/2 - 10, fontB, 8,   WHITE, "left");
       drawText(rStr, ML + PW/2, cy + 5, PW/2 - 5,  fontR, 7.5, WHITE, "right");
       cy += 22;
@@ -436,15 +317,6 @@ export async function POST(req: Request) {
           cy += 12;
         });
 
-        if (lc > 1 && it["MT Total HT"] != null && visibleLineFields.includes("mt_ht")) {
-          fillRect(ML, cy, PW, 13, TOTAL);
-          visibleLineFields.forEach((k, i) => {
-            const v = k === "mt_ht" ? fmtNum(it["MT Total HT"]!, 2) : i === 0 ? "Total" : "";
-            drawText(v, ML + i*colW + 2, cy + 3,
-              colW - 4, fontB, 7, DARK, numKeys.has(k) ? "right" : "left");
-          });
-          cy += 13;
-        }
         cy += 2;
       }
 
@@ -564,7 +436,7 @@ export async function POST(req: Request) {
     labels: Record<string, string>,
     totalMtHt?: number | null
   ) {
-    const numKeys = new Set(["qte", "mt_ht", "prix_unitaire", "dernier_prix"]);
+    const numKeys = new Set(["qte", "mt_ht"]);
     const colW = Math.floor(PAGE_W / Math.max(fields.length, 1));
     const colWidths = fields.map((_, i) =>
       i === fields.length - 1 ? PAGE_W - colW * (fields.length - 1) : colW
@@ -783,14 +655,6 @@ export async function POST(req: Request) {
       topParts.push(fmtDate(it["Date DS"]));
     if (visibleCardFields.includes("KM") && it.KM != null)
       topParts.push(fmtNum(it.KM) + " km");
-    if (visibleCardFields.includes("MT Total HT") && it["MT Total HT"] != null)
-      topParts.push(fmtNum(it["MT Total HT"], 2) + " MAD");
-    if (visibleCardFields.includes("Site") && it.Site)
-      topParts.push(it.Site);
-    if (visibleCardFields.includes("Type DS") && it["Type DS"])
-      topParts.push(it["Type DS"]!);
-    if (visibleCardFields.includes("Affectation") && it.Affectation)
-      topParts.push(it.Affectation);
 
     children.push(
       new Paragraph({
@@ -829,7 +693,7 @@ export async function POST(req: Request) {
           ],
         })
       );
-      children.push(buildLinesTable(it.lines, visibleLineFields, lineFieldLabels, it["MT Total HT"]));
+      children.push(buildLinesTable(it.lines, visibleLineFields, lineFieldLabels));
     }
   });
 
