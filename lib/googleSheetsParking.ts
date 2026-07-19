@@ -71,11 +71,11 @@ async function getParkingSheetProps(
  * ascending by timestamp (oldest first, newest at the bottom) — matches the
  * original getParkingList()'s sort direction exactly.
  *
- * `meta` mirrors the original's `row.slice(6)` behavior verbatim: it starts
- * at the MOTIF column (the 7th) and runs through the *end* of the row,
- * which includes TIMESTAMP — so TIMESTAMP shows up a second time inside meta
- * (bare-dated, no time) in addition to its own dedicated `timestamp` field.
- * This looks redundant but is the real GAS behavior, ported as-is.
+ * The 9 read-only XLOOKUP columns (RL_REUNION, MOTIF, ETAT VÉHICULE, BDD,
+ * DATE_DS, DS, PARTS, TECHNICEIN, FOUNISSEUR) are extracted as their own
+ * named fields — same live column-map pattern getAtelierRows() uses — rather
+ * than being collapsed into one opaque joined string. DATE_DS is the only one
+ * that's ever a Sheets date serial; the rest are plain XLOOKUP text/numbers.
  */
 export async function getParkingRows(): Promise<ParkingRow[]> {
   const sheets = getSheetsClient();
@@ -96,7 +96,15 @@ export async function getParkingRows(): Promise<ParkingRow[]> {
   const modelCol = colMap["MODEL"] ?? 4;
   const clientCol = colMap["CLIENT"] ?? 5;
   const tsCol = colMap["TIMESTAMP"] ?? 15;
-  const metaStartIdx = (colMap["MOTIF"] ?? 7) - 1; // 0-based
+  const rlReunionCol = colMap["RL_REUNION"];
+  const motifCol = colMap["MOTIF"];
+  const etatVehiculeCol = colMap["ETAT VÉHICULE"];
+  const bddCol = colMap["BDD"];
+  const dateDsCol = colMap["DATE_DS"];
+  const dsCol = colMap["DS"];
+  const partsCol = colMap["PARTS"];
+  const techniceinCol = colMap["TECHNICEIN"];
+  const founisseurCol = colMap["FOUNISSEUR"];
 
   const rows: ParkingRow[] = [];
 
@@ -115,22 +123,17 @@ export async function getParkingRows(): Promise<ParkingRow[]> {
       rawDate = d.getTime();
     }
 
-    const metaParts: string[] = [];
-    for (let c = metaStartIdx; c < headers.length; c++) {
-      const header = headers[c];
-      const v = row[c];
-      if (v == null || v === "") continue;
-      if ((header === "DATE_DS" || header === "TIMESTAMP") && typeof v === "number") {
-        metaParts.push(fmtDateOnlyDash(serialToUTCDate(v)));
-      } else {
-        const s = String(v).trim();
-        if (s) metaParts.push(s);
-      }
-    }
-
-    const strOrEmpty = (col: number) => {
+    const strOrEmpty = (col: number | undefined) => {
+      if (!col) return "";
       const v = row[col - 1];
       return v != null ? String(v).trim() : "";
+    };
+
+    const dateOrEmpty = (col: number | undefined) => {
+      if (!col) return "";
+      const v = row[col - 1];
+      if (v == null || v === "") return "";
+      return typeof v === "number" ? fmtDateOnlyDash(serialToUTCDate(v)) : String(v).trim();
     };
 
     rows.push({
@@ -142,7 +145,15 @@ export async function getParkingRows(): Promise<ParkingRow[]> {
       marque: strOrEmpty(marqueCol),
       model: strOrEmpty(modelCol),
       client: strOrEmpty(clientCol),
-      meta: metaParts.join(" | "),
+      rlReunion: strOrEmpty(rlReunionCol),
+      motif: strOrEmpty(motifCol),
+      etatVehicule: strOrEmpty(etatVehiculeCol),
+      bdd: strOrEmpty(bddCol),
+      dateDs: dateOrEmpty(dateDsCol),
+      ds: strOrEmpty(dsCol),
+      parts: strOrEmpty(partsCol),
+      technicein: strOrEmpty(techniceinCol),
+      founisseur: strOrEmpty(founisseurCol),
     });
   }
 

@@ -7,6 +7,7 @@ import { PlateSearchInput } from "@/components/fleet/PlateSearchInput";
 import { PlateFilterInput } from "@/components/fleet/PlateFilterInput";
 import { AddResultsList } from "@/components/fleet/AddResultsList";
 import { RecordCard } from "@/components/fleet/RecordCard";
+import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
 import { useEditableState } from "@/hooks/useEditableState";
@@ -18,6 +19,21 @@ import {
   useDeleteParkingRow,
   useClearParkingAll,
 } from "@/hooks/useParkingRows";
+
+// ─── Read-only reference fields — the 9 sheet-side XLOOKUP columns, exact
+// header spelling (TECHNICEIN/FOUNISSEUR are sic, matching the real sheet) ──
+
+const READONLY_FIELDS: { key: keyof Pick<ParkingRow, "rlReunion" | "motif" | "etatVehicule" | "bdd" | "dateDs" | "ds" | "parts" | "technicein" | "founisseur">; label: string }[] = [
+  { key: "rlReunion", label: "RL_REUNION" },
+  { key: "motif", label: "MOTIF" },
+  { key: "etatVehicule", label: "ETAT VÉHICULE" },
+  { key: "bdd", label: "BDD" },
+  { key: "dateDs", label: "DATE_DS" },
+  { key: "ds", label: "DS" },
+  { key: "parts", label: "PARTS" },
+  { key: "technicein", label: "TECHNICEIN" },
+  { key: "founisseur", label: "FOUNISSEUR" },
+];
 
 // ─── Parking card (per row) ────────────────────────────────────────────────
 
@@ -51,6 +67,7 @@ function ParkingCard({
           className="h-auto py-2 text-[11px]"
         />
       </Field>
+      <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
     </RecordCard>
   );
 }

@@ -167,7 +167,9 @@ export type BddUpdateResult =
 // MOTIF, ETAT VÉHICULE, BDD, DATE_DS, DS, PARTS, TECHNICEIN, FOUNISSEUR,
 // TIMESTAMP. Only IMM, ACTION, TIMESTAMP are ever written by this app — the
 // rest are sheet-side XLOOKUP formulas, read-only display fields here (ported
-// from the AVIS Maroc GAS "Parking" system's code.gs + Parking.gs).
+// from the AVIS Maroc GAS "Parking" system's code.gs + Parking.gs). TECHNICEIN
+// and FOUNISSEUR are spelled exactly as the real header cells (sic) — not
+// typos introduced here.
 
 export type ParkingRow = {
   rowIndex: number;
@@ -178,7 +180,15 @@ export type ParkingRow = {
   marque: string;
   model: string;
   client: string;
-  meta: string;
+  rlReunion: string;
+  motif: string;
+  etatVehicule: string;
+  bdd: string;
+  dateDs: string;
+  ds: string;
+  parts: string;
+  technicein: string;
+  founisseur: string;
 };
 
 export type ParkingAddStatus = "added" | "updated";
@@ -201,7 +211,11 @@ export type ParkingAddResponse =
 // declaration (columns 9-14 are reshuffled), which is exactly why every read/
 // write here goes through a live column-name map rather than fixed indices.
 // No ACTION field exists on this tab (unlike PARKING) — the editable surface
-// is BESOIN PIÈCE, COMMENTAIRE, CATÉGORIE, TECHNICIEN instead.
+// is BESOIN PIÈCE, COMMENTAIRE, CATÉGORIE, TECHNICIEN instead. Also has the
+// same 9 read-only XLOOKUP columns as PARKING (DS, BDD, RL_REUNION, MOTIF,
+// ETAT VÉHICULE, DATE_DS, PARTS, FOUNISSEUR), plus TECHNICEIN_DS — a distinct
+// column from the editable TECHNICIEN field above (the DS record's technician,
+// not the assigned atelier technician).
 
 export type AtelierRow = {
   rowIndex: number;
@@ -215,6 +229,15 @@ export type AtelierRow = {
   categorie: string;
   technicien: string;
   besoinPiece: string;
+  rlReunion: string;
+  motif: string;
+  etatVehicule: string;
+  bdd: string;
+  dateDs: string;
+  ds: string;
+  parts: string;
+  techniceinDs: string;
+  founisseur: string;
 };
 
 // Deliberate allowlist (the original GAS updateCellFromWeb() accepts any

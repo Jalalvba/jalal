@@ -7,6 +7,7 @@ import { PlateSearchInput } from "@/components/fleet/PlateSearchInput";
 import { PlateFilterInput } from "@/components/fleet/PlateFilterInput";
 import { AddResultsList } from "@/components/fleet/AddResultsList";
 import { RecordCard } from "@/components/fleet/RecordCard";
+import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
 import { useEditableState } from "@/hooks/useEditableState";
@@ -52,6 +53,21 @@ const TECHNICIEN_OPTIONS = [
 
 const selectClass =
   "h-auto w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[11px] font-medium text-zinc-200 outline-none focus:border-amber-500";
+
+// ─── Read-only reference fields — same 9 XLOOKUP columns as Parking, plus
+// TECHNICEIN_DS (distinct from the editable TECHNICIEN above) ──────────────
+
+const READONLY_FIELDS: { key: keyof Pick<AtelierRow, "rlReunion" | "motif" | "etatVehicule" | "bdd" | "dateDs" | "ds" | "parts" | "techniceinDs" | "founisseur">; label: string }[] = [
+  { key: "rlReunion", label: "RL_REUNION" },
+  { key: "motif", label: "MOTIF" },
+  { key: "etatVehicule", label: "ETAT VÉHICULE" },
+  { key: "bdd", label: "BDD" },
+  { key: "dateDs", label: "DATE_DS" },
+  { key: "ds", label: "DS" },
+  { key: "parts", label: "PARTS" },
+  { key: "techniceinDs", label: "TECHNICEIN_DS" },
+  { key: "founisseur", label: "FOUNISSEUR" },
+];
 
 // ─── Atelier card (per row) ────────────────────────────────────────────────
 
@@ -138,6 +154,8 @@ function AtelierCard({
           />
         </Field>
       </div>
+
+      <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
     </RecordCard>
   );
 }

@@ -7,7 +7,7 @@ import type {
   ParkingAddResultItem,
 } from "@/lib/types";
 import { ATELIER_EDITABLE_FIELDS } from "@/lib/types";
-import { getSheetsClient, serialToUTCDate, nowToSerial, fmtDateTime } from "@/lib/googleSheetsClient";
+import { getSheetsClient, serialToUTCDate, nowToSerial, fmtDateTime, fmtDateOnlyDash } from "@/lib/googleSheetsClient";
 
 // Ported from the AVIS Maroc GAS "Atelier" system (code.gs + RebuildAtelier.gs).
 // Same spreadsheet as PARKING/BDD (TARGET_SHEET_ID in the source matches this
@@ -69,12 +69,13 @@ async function getAtelierSheetProps(
 // ─── getParkingList (ported as getAtelierRows) ────────────────────────────
 
 /**
- * Named fields only — no catch-all "meta" string. The original Atelier
- * getParkingList() reads the DS/BDD/RL_REUNION/MOTIF/ETAT VÉHICULE/DATE_DS/
- * PARTS/TECHNICEIN_DS/FOUNISSEUR formula columns into its row array but never
- * includes them in the object it returns, and its own UI never displays
- * them — ported as-is, not "improved" with a meta field Parking has and this
- * source doesn't.
+ * Named fields, same live column-map pattern as getParkingRows() — including
+ * the 9 read-only XLOOKUP columns (DS, BDD, RL_REUNION, MOTIF, ETAT VÉHICULE,
+ * DATE_DS, PARTS, TECHNICEIN_DS, FOUNISSEUR), which this originally left out
+ * entirely (the source GAS getParkingList() read them into its row array but
+ * never returned them, and its own UI never displayed them — now surfaced
+ * here to match what Parking's card shows). DATE_DS is the only one that's
+ * ever a Sheets date serial.
  *
  * Also drops the original's `suivi` field: it reads from colMap['SUIVI'],
  * but no "SUIVI" column exists anywhere in CFG_PARKING_SHEET.COLUMNS or the
@@ -102,11 +103,27 @@ export async function getAtelierRows(): Promise<AtelierRow[]> {
   const technicienCol = colMap["TECHNICIEN"];
   const besoinPieceCol = colMap["BESOIN PIÈCE"];
   const tsCol = colMap["TIMESTAMP"];
+  const rlReunionCol = colMap["RL_REUNION"];
+  const motifCol = colMap["MOTIF"];
+  const etatVehiculeCol = colMap["ETAT VÉHICULE"];
+  const bddCol = colMap["BDD"];
+  const dateDsCol = colMap["DATE_DS"];
+  const dsCol = colMap["DS"];
+  const partsCol = colMap["PARTS"];
+  const techniceinDsCol = colMap["TECHNICEIN_DS"];
+  const founisseurCol = colMap["FOUNISSEUR"];
 
   const strOrEmpty = (row: unknown[], col: number | undefined) => {
     if (!col) return "";
     const v = row[col - 1];
     return v != null ? String(v).trim() : "";
+  };
+
+  const dateOrEmpty = (row: unknown[], col: number | undefined) => {
+    if (!col) return "";
+    const v = row[col - 1];
+    if (v == null || v === "") return "";
+    return typeof v === "number" ? fmtDateOnlyDash(serialToUTCDate(v)) : String(v).trim();
   };
 
   const rows: AtelierRow[] = [];
@@ -138,6 +155,15 @@ export async function getAtelierRows(): Promise<AtelierRow[]> {
       categorie: strOrEmpty(row, categorieCol),
       technicien: strOrEmpty(row, technicienCol),
       besoinPiece: strOrEmpty(row, besoinPieceCol),
+      rlReunion: strOrEmpty(row, rlReunionCol),
+      motif: strOrEmpty(row, motifCol),
+      etatVehicule: strOrEmpty(row, etatVehiculeCol),
+      bdd: strOrEmpty(row, bddCol),
+      dateDs: dateOrEmpty(row, dateDsCol),
+      ds: strOrEmpty(row, dsCol),
+      parts: strOrEmpty(row, partsCol),
+      techniceinDs: strOrEmpty(row, techniceinDsCol),
+      founisseur: strOrEmpty(row, founisseurCol),
     });
   }
 
