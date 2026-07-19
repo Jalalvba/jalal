@@ -192,3 +192,35 @@ export type ParkingAddResultItem = {
 export type ParkingAddResponse =
   | { ok: true; results: ParkingAddResultItem[] }
   | { ok: false; error: string };
+
+// ─── ATELIER sheet (Google Sheets, tab "ATELIER", same spreadsheet) ───────────
+//
+// Ported from the AVIS Maroc GAS "Atelier" system (code.gs + RebuildAtelier.gs).
+// Live header row confirmed by a spreadsheets.values.get() read — its column
+// *order* drifts from the reference source's CFG_PARKING_SHEET.COLUMNS
+// declaration (columns 9-14 are reshuffled), which is exactly why every read/
+// write here goes through a live column-name map rather than fixed indices.
+// No ACTION field exists on this tab (unlike PARKING) — the editable surface
+// is BESOIN PIÈCE, COMMENTAIRE, CATÉGORIE, TECHNICIEN instead.
+
+export type AtelierRow = {
+  rowIndex: number;
+  imm: string;
+  timestamp: string;
+  rawDate: number;
+  marque: string;
+  model: string;
+  client: string;
+  commentaire: string;
+  categorie: string;
+  technicien: string;
+  besoinPiece: string;
+};
+
+// Deliberate allowlist (the original GAS updateCellFromWeb() accepts any
+// column name, including the read-only XLOOKUP columns — an unrestricted
+// endpoint isn't something worth reproducing). Matches BDD_EDITABLE_FIELDS'
+// precedent of a named, checked allowlist rather than free-form column access.
+export const ATELIER_EDITABLE_FIELDS = ["COMMENTAIRE", "CATÉGORIE", "TECHNICIEN", "BESOIN PIÈCE"] as const;
+
+export type AtelierEditableField = (typeof ATELIER_EDITABLE_FIELDS)[number];
