@@ -13,7 +13,12 @@ export default async function LoginPage({
         <h1 className="text-2xl font-semibold text-white mb-1">Sign in</h1>
         <p className="text-gray-400 text-sm mb-8">AVIS Fleet Management</p>
 
-        {error && (
+        {error === "locked" && (
+          <p className="text-red-400 text-sm mb-4 bg-red-950 border border-red-800 rounded-lg px-4 py-2">
+            Too many failed attempts. Please try again in a few minutes.
+          </p>
+        )}
+        {error && error !== "locked" && (
           <p className="text-red-400 text-sm mb-4 bg-red-950 border border-red-800 rounded-lg px-4 py-2">
             Invalid username or password.
           </p>

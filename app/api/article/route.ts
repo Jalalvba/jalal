@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import clientPromise from "@/lib/mongo";
+import { getCollection } from "@/lib/mongo";
+import { escapeRegex } from "@/lib/regex";
+import type { Document } from "mongodb";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -17,17 +19,14 @@ export async function GET(request: Request) {
   }
 
   try {
-    const dbName = process.env.MONGODB_DB || "avis";
-    const client = await clientPromise;
-    const db     = client.db(dbName);
-    const col    = db.collection("bc");
+    const col = await getCollection("bc");
 
     const words = article.split(/\s+/).filter(Boolean);
     const wordFilters = words.map((w) => ({
-      "Description article": { $regex: w, $options: "i" },
+      "Description article": { $regex: escapeRegex(w), $options: "i" },
     }));
 
-    const pipeline: any[] = [
+    const pipeline: Document[] = [
       {
         $match: {
           $and: [
@@ -168,8 +167,8 @@ export async function GET(request: Request) {
       pipeline.push({
         $match: {
           $or: [
-            { Marque: { $regex: brand, $options: "i" } },
-            { Modele: { $regex: brand, $options: "i" } },
+            { Marque: { $regex: escapeRegex(brand), $options: "i" } },
+            { Modele: { $regex: escapeRegex(brand), $options: "i" } },
           ],
         },
       });

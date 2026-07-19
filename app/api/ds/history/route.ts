@@ -1,6 +1,6 @@
 // app/api/ds/history/route.ts
 import { NextResponse } from "next/server";
-import clientPromise from "@/lib/mongo";
+import { getCollection } from "@/lib/mongo";
 import type { Document } from "mongodb";
 
 function parseYear(yearStr: string | null): { start?: Date; end?: Date } {
@@ -32,11 +32,6 @@ export async function GET(req: Request) {
 
   const limit = clampInt(searchParams.get("limit"), 200, 1, 2000);
   const { start, end } = parseYear(searchParams.get("year"));
-
-  const dbName = process.env.MONGODB_DB || "avis";
-  const client = await clientPromise;
-  const db = client.db(dbName);
-  const col = db.collection("ds");
 
   const match: Record<string, unknown> = { Immatriculation: imm };
   if (start && end) match["Date DS"] = { $gte: start, $lt: end };
@@ -231,12 +226,20 @@ export async function GET(req: Request) {
     { $unset: "bc_prices" },
   ];
 
-  const items = await col.aggregate(pipeline).toArray();
+  try {
+    const col = await getCollection("ds");
+    const items = await col.aggregate(pipeline).toArray();
 
-  return NextResponse.json({
-    ok: true,
-    imm,
-    count: items.length,
-    items,
-  });
+    return NextResponse.json({
+      ok: true,
+      imm,
+      count: items.length,
+      items,
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : "Query failed" },
+      { status: 500 }
+    );
+  }
 }

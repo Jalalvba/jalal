@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { logout } from "@/app/login/actions";
 import type {
   Line,
   DsHistoryItem,
@@ -100,7 +101,6 @@ const DEFAULT_CARD_VISIBLE = new Set<keyof DsHistoryItem>([
 const DEFAULT_LINE_VISIBLE = new Set<keyof Line>(["cmd_num","designation_conso","qte","mt_ht"]);
 const CARD_GROUPS = ["Identification","Localisation","DS Info","Intervenants"];
 const TOP_BAR_KEYS = new Set(["Date DS","KM"]);
-const MANDATORY_CARD_KEYS = new Set<keyof DsHistoryItem>(["Description","Techniciens","ENTITE"]);
 const NUM_LINE_KEYS = new Set(["qte","mt_ht"]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -120,13 +120,6 @@ function displayLineValue(line: Line, key: keyof Line): string {
   if (v == null) return "—";
   if (key === "mt_ht") return fmtNum(v as number, 2);
   if (key === "qte") return String(v);
-  return String(v).trim() || "—";
-}
-
-function displayVehicleValue(vehicle: ParcItem, key: keyof ParcItem): string {
-  const v = vehicle[key];
-  if (v == null) return "—";
-  if (key === "mce_date") return fmtDate(v as string);
   return String(v).trim() || "—";
 }
 
@@ -406,10 +399,14 @@ function FieldSelector({
   }
 
   const toggleCard = (key: keyof DsHistoryItem) => {
-    const n = new Set(visibleCardFields); n.has(key) ? n.delete(key) : n.add(key); saveCard(n);
+    const n = new Set(visibleCardFields);
+    if (n.has(key)) n.delete(key); else n.add(key);
+    saveCard(n);
   };
   const toggleLine = (key: keyof Line) => {
-    const n = new Set(visibleLineFields); n.has(key) ? n.delete(key) : n.add(key); saveLine(n);
+    const n = new Set(visibleLineFields);
+    if (n.has(key)) n.delete(key); else n.add(key);
+    saveLine(n);
   };
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end" onClick={onClose}>
@@ -720,7 +717,6 @@ export default function Home() {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
   // ── Dark mode toggle ───────────────────────────────────────────────────────
   const [dark, setDark] = useState(true);
@@ -732,9 +728,6 @@ export default function Home() {
     document.documentElement.classList.toggle("dark", dark);
     localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
-  const toggleExpand = (nds: string) => setExpandedCards(prev => {
-    const n = new Set(prev); n.has(nds) ? n.delete(nds) : n.add(nds); return n;
-  });
   const [exportingDocx, setExportingDocx] = useState(false);
   const [exportingPdf,  setExportingPdf]  = useState(false);
 
@@ -922,6 +915,16 @@ export default function Home() {
               {dark ? "Clair" : "Sombre"}
             </button>
 
+            {/* Logout */}
+            <form action={logout}>
+              <button type="submit"
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                title="Se déconnecter">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Déconnexion
+              </button>
+            </form>
+
             {/* PDF */}
             <button onClick={handlePdf} disabled={!data || exportingPdf}
               className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-400">
@@ -1029,7 +1032,6 @@ export default function Home() {
 
           {data && !loading && data.items.map(it => {
             const nds = it["N°DS"];
-            const isExpanded = expandedCards.has(nds);
 
             // All card fields always visible (no collapse for DS cards)
             const allCardFields = orderedCardFields;

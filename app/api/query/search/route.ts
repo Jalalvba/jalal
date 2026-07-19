@@ -3,7 +3,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import clientPromise from "@/lib/mongo";
+import { getCollection } from "@/lib/mongo";
+import { escapeRegex } from "@/lib/regex";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -14,13 +15,9 @@ export async function GET(req: Request) {
   }
 
   try {
-    const client = await clientPromise;
-    const dbName = process.env.MONGODB_DB || "avis360";
-    const db     = client.db(dbName);
-    const col    = db.collection("parc");
+    const col = await getCollection("parc");
 
-    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = { $regex: "^" + escaped, $options: "i" };
+    const regex = { $regex: "^" + escapeRegex(q), $options: "i" };
 
     const docs = await col
       .find({ $or: [{ Immatriculation: regex }, { "Numéro WW": regex }, { VIN: regex }] })

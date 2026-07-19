@@ -30,7 +30,6 @@ type ExportPayload = {
 
   // parc field grouping sent from frontend
   parcMandatoryKeys?: string[];
-  parcExtraKeys?: string[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -77,7 +76,18 @@ const PAGE_W = 9360; // A4 content width in DXA with 1" margins
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-export async function POST(req: Request) {
+export async function POST(req: Request): Promise<NextResponse> {
+  try {
+    return await generateExport(req);
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : "Export failed" },
+      { status: 500 }
+    );
+  }
+}
+
+async function generateExport(req: Request): Promise<NextResponse> {
   const { searchParams } = new URL(req.url);
   const format = searchParams.get("format") ?? "docx"; // "pdf" or "docx"
 
@@ -88,7 +98,7 @@ export async function POST(req: Request) {
       items, count, visibleCardFields, visibleLineFields,
       vehicleMetaFields, cardFieldLabels, lineFieldLabels,
       topBarKeys, vehicle, imm, contracts,
-      parcMandatoryKeys, parcExtraKeys,
+      parcMandatoryKeys,
     } = payload;
 
     const { PDFDocument, rgb, StandardFonts } = await import("pdf-lib");
@@ -113,7 +123,6 @@ export async function POST(req: Request) {
     const immat      = (vehicle?.imm ?? imm ?? "—").toString();
     const now        = new Date().toLocaleDateString("fr-FR");
     const mandParcF  = vehicleMetaFields.filter(f => (parcMandatoryKeys ?? []).includes(f.key));
-    const extraParcF = vehicleMetaFields.filter(f => (parcExtraKeys    ?? []).includes(f.key));
 
     const pdfDoc = await PDFDocument.create();
     const fontR  = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -369,8 +378,6 @@ export async function POST(req: Request) {
 
   const cellBorder = { style: BorderStyle.SINGLE, size: 1, color: COLORS.border };
   const borders = { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder };
-  const noBorder = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
-  const noBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
 
   function labelValueRow(label: string, value: string, shade?: string) {
     return new TableRow({
@@ -538,7 +545,6 @@ export async function POST(req: Request) {
     vehicle,
     imm,
     parcMandatoryKeys,
-    parcExtraKeys,
   } = payload;
 
   const firstDs = items?.[0];
