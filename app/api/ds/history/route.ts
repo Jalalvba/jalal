@@ -43,7 +43,13 @@ export async function GET(req: Request) {
       $addFields: {
         km_num: {
           $convert: {
-            input: { $replaceAll: { input: { $toString: "$KM" }, find: ",", replacement: "" } },
+            input: {
+              $replaceAll: {
+                input: { $replaceAll: { input: { $toString: "$KM" }, find: ",", replacement: "" } },
+                find: " ",
+                replacement: "",
+              },
+            },
             to: "double", onError: null, onNull: null
           }
         },

@@ -548,7 +548,6 @@ async function generateExport(req: Request): Promise<NextResponse> {
   } = payload;
 
   const firstDs = items?.[0];
-  // ✅ FIXED: vehicle.imm instead of vehicle.Immatriculation
   const immat = (vehicle?.imm ?? firstDs?.Immatriculation ?? imm ?? "—").toString();
   const now = new Date().toLocaleDateString("fr-FR");
   const topSet = new Set(topBarKeys);

@@ -16,8 +16,6 @@ const client = new MongoClient(uri);
 const clientPromise =
   global._mongo ?? (global._mongo = client.connect());
 
-export default clientPromise;
-
 export async function getCollection<T extends Document = Document>(
   name: string
 ): Promise<Collection<T>> {

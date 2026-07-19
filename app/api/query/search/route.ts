@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   const q = searchParams.get("q")?.trim();
 
   if (!q || q.length < 2) {
-    return NextResponse.json({ results: [] });
+    return NextResponse.json({ ok: true, results: [] });
   }
 
   try {
@@ -31,8 +31,11 @@ export async function GET(req: Request) {
       label: [d["Immatriculation"], d["Marque"], d["Modèle"]].filter(Boolean).join(" — "),
     }));
 
-    return NextResponse.json({ results });
+    return NextResponse.json({ ok: true, results });
   } catch (e) {
-    return NextResponse.json({ results: [], error: String(e) }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : "Query failed", results: [] },
+      { status: 500 }
+    );
   }
 }

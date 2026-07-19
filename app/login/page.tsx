@@ -10,24 +10,24 @@ export default async function LoginPage({
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950">
       <div className="w-full max-w-sm bg-gray-900 rounded-2xl p-8 shadow-xl border border-gray-800">
-        <h1 className="text-2xl font-semibold text-white mb-1">Sign in</h1>
-        <p className="text-gray-400 text-sm mb-8">AVIS Fleet Management</p>
+        <h1 className="text-2xl font-semibold text-white mb-1">Connexion</h1>
+        <p className="text-gray-400 text-sm mb-8">AVIS Maroc — Gestion de flotte</p>
 
         {error === "locked" && (
           <p className="text-red-400 text-sm mb-4 bg-red-950 border border-red-800 rounded-lg px-4 py-2">
-            Too many failed attempts. Please try again in a few minutes.
+            Trop de tentatives échouées. Veuillez réessayer dans quelques minutes.
           </p>
         )}
         {error && error !== "locked" && (
           <p className="text-red-400 text-sm mb-4 bg-red-950 border border-red-800 rounded-lg px-4 py-2">
-            Invalid username or password.
+            Nom d&apos;utilisateur ou mot de passe incorrect.
           </p>
         )}
 
         <form action={login} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <label htmlFor="username" className="text-sm text-gray-400">
-              Username
+              Nom d&apos;utilisateur
             </label>
             <input
               id="username"
@@ -41,7 +41,7 @@ export default async function LoginPage({
 
           <div className="flex flex-col gap-1">
             <label htmlFor="password" className="text-sm text-gray-400">
-              Password
+              Mot de passe
             </label>
             <input
               id="password"
@@ -57,7 +57,7 @@ export default async function LoginPage({
             type="submit"
             className="mt-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg px-4 py-2.5 text-sm transition"
           >
-            Sign in
+            Se connecter
           </button>
         </form>
       </div>
