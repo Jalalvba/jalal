@@ -159,3 +159,36 @@ export type BddEditableField = (typeof BDD_EDITABLE_FIELDS)[number];
 export type BddUpdateResult =
   | { ok: true; written: string[] }
   | { ok: false; error: string; rejectedFields: string[] };
+
+// ─── PARKING sheet (Google Sheets, tab "PARKING") ─────────────────────────────
+//
+// Column layout confirmed by a live spreadsheets.values.get() read of the real
+// header row (gid=1215781154): IMM, ACTION, MARQUE, MODEL, CLIENT, RL_REUNION,
+// MOTIF, ETAT VÉHICULE, BDD, DATE_DS, DS, PARTS, TECHNICEIN, FOUNISSEUR,
+// TIMESTAMP. Only IMM, ACTION, TIMESTAMP are ever written by this app — the
+// rest are sheet-side XLOOKUP formulas, read-only display fields here (ported
+// from the AVIS Maroc GAS "Parking" system's code.gs + Parking.gs).
+
+export type ParkingRow = {
+  rowIndex: number;
+  imm: string;
+  timestamp: string;
+  rawDate: number;
+  action: string;
+  marque: string;
+  model: string;
+  client: string;
+  meta: string;
+};
+
+export type ParkingAddStatus = "added" | "updated";
+
+export type ParkingAddResultItem = {
+  imm: string;
+  status: ParkingAddStatus;
+  inParc: boolean;
+};
+
+export type ParkingAddResponse =
+  | { ok: true; results: ParkingAddResultItem[] }
+  | { ok: false; error: string };

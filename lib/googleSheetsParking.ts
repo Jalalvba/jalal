@@ -1,0 +1,463 @@
+import { google, type sheets_v4 } from "googleapis";
+import { getCollection } from "@/lib/mongo";
+import type { ParkingRow, ParkingAddResponse, ParkingAddResultItem } from "@/lib/types";
+
+// Ported from the AVIS Maroc GAS "Parking" system (code.gs + Parking.gs).
+// Tab name, column layout and XLOOKUP formulas confirmed by a live read of
+// the real spreadsheet (gid=1215781154) — not a guess.
+
+const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
+if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
+
+const keyB64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64;
+if (!keyB64) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_KEY_B64 in .env.local");
+
+const PARKING_TAB = "PARKING";
+const DATA_START_ROW = 2;
+
+declare global {
+  // Shared with lib/googleSheetsBdd.ts — same global slot, same singleton.
+  var _sheetsClient: sheets_v4.Sheets | undefined;
+}
+
+function getSheetsClient(): sheets_v4.Sheets {
+  if (global._sheetsClient) return global._sheetsClient;
+
+  const key = JSON.parse(Buffer.from(keyB64!, "base64").toString("utf8"));
+  const auth = new google.auth.JWT({
+    email: key.client_email,
+    key: key.private_key,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
+
+  global._sheetsClient = google.sheets({ version: "v4", auth });
+  return global._sheetsClient;
+}
+
+function columnIndexToLetter(oneBasedIndex: number): string {
+  let n = oneBasedIndex;
+  let letters = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letters = String.fromCharCode(65 + rem) + letters;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letters;
+}
+
+/** Live header row → column-name lookup, never hardcoded indices. */
+async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId!,
+    range: `'${PARKING_TAB}'!A1:O1`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+  const row = res.data.values?.[0] ?? [];
+  return row.map((h) => String(h ?? "").trim().toUpperCase());
+}
+
+function buildColMap(headers: string[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  headers.forEach((h, i) => {
+    if (h) map[h] = i + 1; // 1-based
+  });
+  return map;
+}
+
+async function getParkingSheetProps(
+  sheets: sheets_v4.Sheets
+): Promise<{ sheetId: number; rowCount: number }> {
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId: spreadsheetId!,
+    fields: "sheets.properties",
+  });
+  const props = res.data.sheets?.find((s) => s.properties?.title === PARKING_TAB)?.properties;
+  if (!props || props.sheetId == null) {
+    throw new Error(`Sheet tab '${PARKING_TAB}' not found`);
+  }
+  return { sheetId: props.sheetId, rowCount: props.gridProperties?.rowCount ?? 0 };
+}
+
+// ─── Sheets serial date/time helpers (UTC-based, matches lib/googleSheetsBdd.ts) ─
+
+const SHEETS_EPOCH_MS = Date.UTC(1899, 11, 30);
+
+function serialToUTCDate(serial: number): Date {
+  const wholeDays = Math.floor(serial);
+  const fractionalMs = Math.round((serial - wholeDays) * 86400000);
+  return new Date(SHEETS_EPOCH_MS + wholeDays * 86400000 + fractionalMs);
+}
+
+function nowToSerial(): number {
+  return (Date.now() - SHEETS_EPOCH_MS) / 86400000;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function fmtDateOnly(d: Date): string {
+  return `${pad2(d.getUTCDate())}-${pad2(d.getUTCMonth() + 1)}-${d.getUTCFullYear()}`;
+}
+
+function fmtDateTime(d: Date): string {
+  return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad2(
+    d.getUTCHours()
+  )}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`;
+}
+
+// ─── getParkingList ────────────────────────────────────────────────────────
+
+/**
+ * Reads every non-empty row (IMM non-blank) from the PARKING tab, sorted
+ * ascending by timestamp (oldest first, newest at the bottom) — matches the
+ * original getParkingList()'s sort direction exactly.
+ *
+ * `meta` mirrors the original's `row.slice(6)` behavior verbatim: it starts
+ * at the MOTIF column (the 7th) and runs through the *end* of the row,
+ * which includes TIMESTAMP — so TIMESTAMP shows up a second time inside meta
+ * (bare-dated, no time) in addition to its own dedicated `timestamp` field.
+ * This looks redundant but is the real GAS behavior, ported as-is.
+ */
+export async function getParkingRows(): Promise<ParkingRow[]> {
+  const sheets = getSheetsClient();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId!,
+    range: `'${PARKING_TAB}'!A1:O`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+
+  const values = res.data.values ?? [];
+  if (values.length === 0) return [];
+
+  const headers = values[0].map((h) => String(h ?? "").trim().toUpperCase());
+  const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
+  const actionCol = colMap["ACTION"] ?? 2;
+  const marqueCol = colMap["MARQUE"] ?? 3;
+  const modelCol = colMap["MODEL"] ?? 4;
+  const clientCol = colMap["CLIENT"] ?? 5;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const metaStartIdx = (colMap["MOTIF"] ?? 7) - 1; // 0-based
+
+  const rows: ParkingRow[] = [];
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const immRaw = row[immCol - 1];
+    const imm = immRaw != null ? String(immRaw).trim().toUpperCase() : "";
+    if (!imm) continue;
+
+    const tsRaw = row[tsCol - 1];
+    let timestamp = "";
+    let rawDate = 0;
+    if (typeof tsRaw === "number") {
+      const d = serialToUTCDate(tsRaw);
+      timestamp = fmtDateTime(d);
+      rawDate = d.getTime();
+    }
+
+    const metaParts: string[] = [];
+    for (let c = metaStartIdx; c < headers.length; c++) {
+      const header = headers[c];
+      const v = row[c];
+      if (v == null || v === "") continue;
+      if ((header === "DATE_DS" || header === "TIMESTAMP") && typeof v === "number") {
+        metaParts.push(fmtDateOnly(serialToUTCDate(v)));
+      } else {
+        const s = String(v).trim();
+        if (s) metaParts.push(s);
+      }
+    }
+
+    const strOrEmpty = (col: number) => {
+      const v = row[col - 1];
+      return v != null ? String(v).trim() : "";
+    };
+
+    rows.push({
+      rowIndex: i + 1,
+      imm,
+      timestamp,
+      rawDate,
+      action: strOrEmpty(actionCol),
+      marque: strOrEmpty(marqueCol),
+      model: strOrEmpty(modelCol),
+      client: strOrEmpty(clientCol),
+      meta: metaParts.join(" | "),
+    });
+  }
+
+  rows.sort((a, b) => a.rawDate - b.rawDate);
+  return rows;
+}
+
+// ─── getIMMList ────────────────────────────────────────────────────────────
+
+/**
+ * The original GAS system keeps a Sheets "IMM" tab that's just a mirror of
+ * the Sheets "parc" tab's Immatriculation column (see syncIMMTab() in the
+ * source code.gs — it literally copies parc → IMM). This app already has
+ * "parc" migrated to MongoDB (the same collection /api/parc and DS History's
+ * autocomplete already query), so this reads that directly instead of
+ * maintaining a redundant Sheets mirror this app has no other use for.
+ */
+export async function getIMMList(): Promise<string[]> {
+  const col = await getCollection("parc");
+  const docs = await col
+    .find({}, { projection: { Immatriculation: 1, _id: 0 } })
+    .toArray();
+
+  const set = new Set<string>();
+  for (const d of docs) {
+    const v = String((d as Record<string, unknown>)["Immatriculation"] ?? "")
+      .trim()
+      .toUpperCase();
+    if (v) set.add(v);
+  }
+  return [...set];
+}
+
+// ─── resolveIMM_ ───────────────────────────────────────────────────────────
+
+/**
+ * Exact port of resolveIMM_(): exact match first; otherwise strip
+ * non-alphanumeric characters from both the token and every known plate and
+ * auto-resolve only if the stripped token is a prefix of EXACTLY ONE
+ * stripped known plate. Any other outcome (zero or multiple matches) leaves
+ * the token as typed (uppercased).
+ */
+export function resolveIMM(token: string, immList: string[]): string {
+  const t = (token ?? "").trim().toUpperCase();
+  if (!t) return "";
+  if (immList.includes(t)) return t;
+
+  const stripped = t.replace(/[^A-Z0-9]/g, "");
+  if (!stripped) return t;
+
+  const matches = immList.filter((imm) => imm.replace(/[^A-Z0-9]/g, "").startsWith(stripped));
+  return matches.length === 1 ? matches[0] : t;
+}
+
+// ─── addIMMsFromWeb ────────────────────────────────────────────────────────
+
+// XLOOKUP formulas, verbatim from Parking.gs's CFG_PARKING_SHEET.FORMULAS —
+// semicolon argument separators are this spreadsheet's locale, not a typo.
+const FORMULAS: Record<string, string> = {
+  MARQUE: '=XLOOKUP(A{ROW};parc!F:F;parc!D:D;"";0;1)',
+  MODEL: '=XLOOKUP(A{ROW};parc!F:F;parc!E:E;"";0;1)',
+  CLIENT: '=XLOOKUP(A{ROW};parc!F:F;parc!C:C;"";0;1)',
+  RL_REUNION: '=XLOOKUP(A{ROW};RL_reunion!A:A;RL_reunion!B:B;"";0;1)',
+  MOTIF: '=XLOOKUP(A{ROW};RL!D:D;RL!S:S;"sans RL";0;1)',
+  "ETAT VÉHICULE": '=XLOOKUP(A{ROW};parc!F:F;parc!I:I;"";0;1)',
+  BDD: '=XLOOKUP(A{ROW};BDD!A:A;BDD!H:H;"";0;1)',
+  DATE_DS: '=XLOOKUP(A{ROW};ds!D:D;ds!A:A;"";0;-1)',
+  DS: '=XLOOKUP(A{ROW};ds!D:D;ds!C:C;"";0;-1)',
+  PARTS: '=XLOOKUP(A{ROW};ds!D:D;ds!G:G;"";0;-1)',
+  TECHNICEIN: '=XLOOKUP(A{ROW};ds!D:D;ds!E:E;"";0;-1)',
+  FOUNISSEUR: '=XLOOKUP(A{ROW};ds!D:D;ds!F:F;"";0;-1)',
+};
+
+/**
+ * Exact port of addIMMsFromWeb(): comma-separated tokens, each resolved via
+ * resolveIMM(). A plate already present in PARKING just gets its TIMESTAMP
+ * bumped to now (moves it to the bottom of the sorted list) instead of
+ * inserting a new row. A genuinely new plate goes into the first available
+ * empty IMM row; if none remain, the sheet is grown by exactly as many rows
+ * as still needed (via appendDimension) — the original used a fixed
+ * AUTO_EXPAND=100-row batch since it was minimizing Apps Script round-trips;
+ * this port grows by the exact shortfall since a single API call already
+ * does the job.
+ *
+ * New rows also get the 12 XLOOKUP formulas seeded into their formula
+ * columns — original GAS rows keep their formulas from a previous
+ * occupant (clearContent() on delete never touches the formula columns,
+ * relying on XLOOKUP's own "not found" default to blank them out), but a
+ * *brand-new* row created by growing the sheet has never had a formula
+ * written into it, so this always (re)writes them to stay correct in both
+ * cases.
+ */
+export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
+  const tokens = (rawInput ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t !== "");
+
+  if (tokens.length === 0) {
+    return { ok: false, error: "Aucune immatriculation saisie." };
+  }
+
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
+
+  const dataRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId!,
+    range: `'${PARKING_TAB}'!A2:O`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+  const dataRows = dataRes.data.values ?? [];
+
+  const existingSet = new Set<string>();
+  const plateToRow = new Map<string, number>();
+  const emptyRows: number[] = [];
+
+  dataRows.forEach((row, i) => {
+    const rowNum = DATA_START_ROW + i;
+    const raw = row[immCol - 1];
+    const val = raw != null ? String(raw).trim().toUpperCase() : "";
+    if (val) {
+      existingSet.add(val);
+      plateToRow.set(val, rowNum);
+    } else {
+      emptyRows.push(rowNum);
+    }
+  });
+
+  // Upper-bound estimate (duplicates consume zero, but this only ever
+  // over-provisions, never under) — matches ensureEmptyRows_(sheet, tokens.length).
+  const needed = tokens.length;
+  if (emptyRows.length < needed) {
+    const props = await getParkingSheetProps(sheets);
+    const lastKnownRow = DATA_START_ROW + dataRows.length - 1;
+    const shortfall = needed - emptyRows.length;
+    const startNewRow = Math.max(props.rowCount, lastKnownRow) + 1;
+    const gridShortfall = startNewRow + shortfall - 1 - props.rowCount;
+    if (gridShortfall > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId!,
+        requestBody: {
+          requests: [{ appendDimension: { sheetId: props.sheetId, dimension: "ROWS", length: gridShortfall } }],
+        },
+      });
+    }
+    for (let r = startNewRow; r < startNewRow + shortfall; r++) emptyRows.push(r);
+  }
+
+  const immList = await getIMMList();
+  const results: ParkingAddResultItem[] = [];
+  const nowSerial = nowToSerial();
+  const writes: { range: string; values: (string | number)[][] }[] = [];
+  let emptyIdx = 0;
+
+  for (const token of tokens) {
+    const resolved = resolveIMM(token, immList) || token.trim().toUpperCase();
+    const inParc = immList.includes(resolved);
+    const duplicate = existingSet.has(resolved);
+
+    if (duplicate) {
+      const targetRow = plateToRow.get(resolved)!;
+      writes.push({
+        range: `'${PARKING_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
+        values: [[nowSerial]],
+      });
+      results.push({ imm: resolved, status: "updated", inParc });
+      continue;
+    }
+
+    const targetRow = emptyRows[emptyIdx++];
+    if (targetRow == null) break; // shouldn't happen given the expansion above
+
+    writes.push({
+      range: `'${PARKING_TAB}'!${columnIndexToLetter(immCol)}${targetRow}`,
+      values: [[resolved]],
+    });
+    writes.push({
+      range: `'${PARKING_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
+      values: [[nowSerial]],
+    });
+
+    for (const [field, template] of Object.entries(FORMULAS)) {
+      const col = colMap[field];
+      if (!col) continue;
+      writes.push({
+        range: `'${PARKING_TAB}'!${columnIndexToLetter(col)}${targetRow}`,
+        values: [[template.replace(/\{ROW\}/g, String(targetRow))]],
+      });
+    }
+
+    existingSet.add(resolved);
+    plateToRow.set(resolved, targetRow);
+    results.push({ imm: resolved, status: "added", inParc });
+  }
+
+  if (writes.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: spreadsheetId!,
+      requestBody: { valueInputOption: "USER_ENTERED", data: writes },
+    });
+  }
+
+  return { ok: true, results };
+}
+
+// ─── updateActionFromWeb ───────────────────────────────────────────────────
+
+export async function updateAction(rowIndex: number, action: string): Promise<void> {
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const actionCol = colMap["ACTION"] ?? 2;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: spreadsheetId!,
+    requestBody: {
+      valueInputOption: "USER_ENTERED",
+      data: [
+        { range: `'${PARKING_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`, values: [[action.trim()]] },
+        { range: `'${PARKING_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`, values: [[nowToSerial()]] },
+      ],
+    },
+  });
+}
+
+// ─── deleteIMMFromWeb ──────────────────────────────────────────────────────
+
+/** Clears IMM, TIMESTAMP, ACTION only — the row itself and its formula
+ *  columns are left in place, exactly like the original (XLOOKUP's own
+ *  "not found" default blanks the formula columns once IMM is empty). */
+export async function deletePlate(rowIndex: number): Promise<void> {
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
+  const actionCol = colMap["ACTION"] ?? 2;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
+
+  await sheets.spreadsheets.values.batchClear({
+    spreadsheetId: spreadsheetId!,
+    requestBody: {
+      ranges: [
+        `'${PARKING_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+        `'${PARKING_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`,
+        `'${PARKING_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`,
+      ],
+    },
+  });
+}
+
+// ─── clearParkingFromWeb ───────────────────────────────────────────────────
+
+export async function clearAll(): Promise<void> {
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
+  const actionCol = colMap["ACTION"] ?? 2;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
+
+  const props = await getParkingSheetProps(sheets);
+  const lastRow = props.rowCount;
+  if (lastRow < DATA_START_ROW) return;
+
+  const colRange = (col: number) =>
+    `'${PARKING_TAB}'!${columnIndexToLetter(col)}${DATA_START_ROW}:${columnIndexToLetter(col)}${lastRow}`;
+
+  await sheets.spreadsheets.values.batchClear({
+    spreadsheetId: spreadsheetId!,
+    requestBody: { ranges: [colRange(immCol), colRange(tsCol), colRange(actionCol)] },
+  });
+}
