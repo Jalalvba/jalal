@@ -30,6 +30,12 @@ export function useBddRows() {
     queryKey: ROWS_KEY,
     queryFn: () => fetchJson<{ ok: true; rows: BddRow[] }>("/api/bdd"),
     select: (data) => data.rows,
+    // Original page always kicked off a silent background fetchFresh() on
+    // mount even when painting instantly from a fresh localStorage cache —
+    // staleTime: 0 (overriding the 30s default) reproduces that unconditional
+    // refetch-on-mount instead of skipping it when the persisted cache is
+    // still within the global staleTime window.
+    staleTime: 0,
   });
 }
 
@@ -44,4 +50,18 @@ export function useUpdateBddRow() {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
+}
+
+/**
+ * Matches the original page's handleRowSaved(): patch the just-saved fields
+ * into the cached rows immediately (instant UI feedback) rather than waiting
+ * for the invalidated query's refetch to land.
+ */
+export function useOptimisticBddUpdate() {
+  const queryClient = useQueryClient();
+  return (row: number, updates: Partial<BddRow>) => {
+    queryClient.setQueryData<{ ok: true; rows: BddRow[] }>(ROWS_KEY, (old) =>
+      old ? { ...old, rows: old.rows.map((r) => (r._row === row ? { ...r, ...updates } : r)) } : old
+    );
+  };
 }

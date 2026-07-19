@@ -39,8 +39,9 @@ export function ListPageHeader({
   countClassName: string;
   count: number;
   onRefresh: () => void;
-  onClearAll: () => void;
-  clearAllTitle: string;
+  /** Omit entirely to hide the "Vider" button — Suivi RL has no clear-all concept. */
+  onClearAll?: () => void;
+  clearAllTitle?: string;
   clearAllDescription?: string;
   children?: React.ReactNode;
 }) {
@@ -60,21 +61,23 @@ export function ListPageHeader({
           <Button type="button" variant="ghost" size="icon" onClick={onRefresh} title="Actualiser">
             <RotateCw className="h-4 w-4" />
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button type="button" variant="ghost" size="icon" className="hover:bg-red-500/10 hover:text-red-400" title="Vider">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogTitle>{clearAllTitle}</AlertDialogTitle>
-              <AlertDialogDescription>{clearAllDescription}</AlertDialogDescription>
-              <AlertDialogFooter>
-                <AlertDialogCancel />
-                <AlertDialogAction onClick={onClearAll}>Vider</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {onClearAll && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" className="hover:bg-red-500/10 hover:text-red-400" title="Vider">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogTitle>{clearAllTitle}</AlertDialogTitle>
+                <AlertDialogDescription>{clearAllDescription}</AlertDialogDescription>
+                <AlertDialogFooter>
+                  <AlertDialogCancel />
+                  <AlertDialogAction onClick={onClearAll}>Vider</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <form action={logout}>
             <Button type="submit" variant="ghost" size="icon" title="Déconnexion">
               <Power className="h-4 w-4" />

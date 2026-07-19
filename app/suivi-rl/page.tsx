@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useMemo, useState } from "react";
 import { BDD_HEADERS, type BddRow } from "@/lib/types";
-import { logout } from "@/app/login/actions";
+import { ListPageHeader } from "@/components/fleet/ListPageHeader";
+import { Field } from "@/components/fleet/Field";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useEditableState } from "@/hooks/useEditableState";
+import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate } from "@/hooks/useBddRows";
 
 // ─── Dropdown option lists — exact, given verbatim, not invented ──────────────
 
@@ -68,40 +75,12 @@ function prestataireDotClass(val: string): string | null {
   return null;
 }
 
-// ─── optimistic cache (localStorage-backed) ────────────────────────────────
-
-const CACHE_KEY = "suivi_rl_bdd_rows_v1";
-const CACHE_TS_KEY = "suivi_rl_bdd_rows_v1_ts";
-
-function loadCachedRows(): BddRow[] | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as BddRow[]) : null;
-  } catch {
-    return null;
-  }
-}
-function saveCachedRows(rows: BddRow[]) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(rows));
-    localStorage.setItem(CACHE_TS_KEY, String(Date.now()));
-  } catch {
-    // ignore quota/availability errors
-  }
-}
-function cacheAgeLabel(): string {
-  try {
-    const ts = localStorage.getItem(CACHE_TS_KEY);
-    if (!ts) return "";
-    const minutes = Math.round((Date.now() - Number(ts)) / 60000);
-    if (minutes < 1) return "à l'instant";
-    if (minutes < 60) return `il y a ${minutes}m`;
-    return `il y a ${Math.floor(minutes / 60)}h`;
-  } catch {
-    return "";
-  }
+function formatAge(dataUpdatedAt: number): string {
+  if (!dataUpdatedAt) return "";
+  const minutes = Math.round((Date.now() - dataUpdatedAt) / 60000);
+  if (minutes < 1) return "à l'instant";
+  if (minutes < 60) return `il y a ${minutes}m`;
+  return `il y a ${Math.floor(minutes / 60)}h`;
 }
 
 // ─── Edit form ──────────────────────────────────────────────────────────────
@@ -127,16 +106,7 @@ function editableValuesFromRow(row: BddRow): EditableValues {
 }
 
 const fieldControlClass =
-  "w-full bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-100 px-2 py-1.5 outline-none focus:border-amber-500";
-
-function EditField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-[9px] uppercase font-bold text-zinc-500">{label}</label>
-      {children}
-    </div>
-  );
-}
+  "h-auto w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-amber-500";
 
 const DISPLAY_HEADERS = BDD_HEADERS.filter(
   (h) => h !== "IMM" && h !== "date" && h !== "prestataire" && h !== "flag" && h !== "ETAT"
@@ -153,64 +123,39 @@ function BddCard({
   onToggleExpand: () => void;
   onSaved: (updatedFields: EditableValues) => void;
 }) {
-  const [form, setForm] = useState<EditableValues>(() => editableValuesFromRow(row));
-  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useEditableState(editableValuesFromRow(row), [row, expanded]);
+  const updateMutation = useUpdateBddRow();
   const [saveMsg, setSaveMsg] = useState("");
-
-  useEffect(() => {
-    setForm(editableValuesFromRow(row));
-    setSaveMsg("");
-  }, [row, expanded]);
 
   const flagStyle = FLAG_STYLE[row.flag] ?? null;
   const dot = prestataireDotClass(row.prestataire);
 
   async function handleSave() {
-    setSaving(true);
     setSaveMsg("");
     try {
-      const res = await fetch("/api/bdd/update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ row: row._row, updates: form }),
-      });
-      const json = await res.json();
-      if (!json.ok) {
-        setSaveMsg(`❌ ${json.error ?? "Échec de l'enregistrement"}`);
-        return;
-      }
+      await updateMutation.mutateAsync({ row: row._row, updates: form });
       onSaved(form);
       setSaveMsg("✓ Enregistré");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (e) {
       setSaveMsg(`❌ ${e instanceof Error ? e.message : "Erreur réseau"}`);
-    } finally {
-      setSaving(false);
     }
   }
 
   return (
-    <div
-      className={`rounded-xl border border-zinc-800 bg-zinc-900 p-3 ${
-        flagStyle ? `border-l-4 ${flagStyle.border}` : ""
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2 mb-2">
+    <Card className={flagStyle ? `border-l-4 ${flagStyle.border}` : ""}>
+      <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono font-semibold text-amber-400 text-sm">{row.IMM}</span>
+          <span className="font-mono text-sm font-semibold text-amber-400">{row.IMM}</span>
           {(row.date || row.prestataire) && (
             <span className="font-mono text-xs text-zinc-500">
               {[row.date, row.prestataire].filter(Boolean).join(" · ")}
             </span>
           )}
-          {row.flag && flagStyle && (
-            <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${flagStyle.badge}`}>
-              {row.flag}
-            </span>
-          )}
+          {row.flag && flagStyle && <Badge className={flagStyle.badge}>{row.flag}</Badge>}
         </div>
         <span
-          className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0 ${
+          className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
             row.ETAT?.toUpperCase() === "EXTERNE" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400"
           }`}
         >
@@ -218,14 +163,14 @@ function BddCard({
         </span>
       </div>
 
-      <div className="flex flex-col gap-1 mb-2">
+      <div className="mb-2 flex flex-col gap-1">
         {DISPLAY_HEADERS.map((h) => {
           const val = row[h];
           const str = val == null ? "" : String(val);
           if (!str.trim()) return null;
           return (
-            <div key={h} className="text-xs text-zinc-300 leading-snug whitespace-pre-line">
-              <span className="text-zinc-500 uppercase text-[9px] font-bold mr-1">{h}:</span>
+            <div key={h} className="whitespace-pre-line text-xs leading-snug text-zinc-300">
+              <span className="mr-1 text-[9px] font-bold uppercase text-zinc-500">{h}:</span>
               {str}
             </div>
           );
@@ -233,25 +178,22 @@ function BddCard({
       </div>
 
       {row.prestataire && (
-        <div className="flex items-center gap-1.5 text-xs text-zinc-400 mb-2">
-          {dot && <span className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${dot}`} />}
+        <div className="mb-2 flex items-center gap-1.5 text-xs text-zinc-400">
+          {dot && <span className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />}
           {row.prestataire}
         </div>
       )}
 
-      <button
-        onClick={onToggleExpand}
-        className="text-xs text-zinc-400 border border-zinc-700 rounded px-2 py-1 hover:bg-zinc-800"
-      >
+      <Button type="button" variant="secondary" size="sm" onClick={onToggleExpand}>
         {expanded ? "✕ Fermer" : "✎ Modifier"}
-      </button>
+      </Button>
 
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-dashed border-zinc-800 flex flex-col gap-2">
-          <EditField label="État">
+        <div className="mt-3 flex flex-col gap-2 border-t border-dashed border-zinc-800 pt-3">
+          <Field label="État">
             <select
               value={form.ETAT}
-              onChange={(e) => setForm((f) => ({ ...f, ETAT: e.target.value }))}
+              onChange={(e) => setForm({ ...form, ETAT: e.target.value })}
               className={fieldControlClass}
             >
               <option value="">— Aucun —</option>
@@ -261,26 +203,26 @@ function BddCard({
                 </option>
               ))}
             </select>
-          </EditField>
+          </Field>
 
-          <EditField label="Prestataire">
-            <input
+          <Field label="Prestataire">
+            <Input
               list="prestataire-options"
               value={form.prestataire}
-              onChange={(e) => setForm((f) => ({ ...f, prestataire: e.target.value }))}
-              className={fieldControlClass}
+              onChange={(e) => setForm({ ...form, prestataire: e.target.value })}
+              className="h-auto bg-zinc-800 py-1.5 text-xs focus:border-amber-500"
             />
             <datalist id="prestataire-options">
               {PRESTATAIRE_OPTIONS.map((o) => (
                 <option key={o} value={o} />
               ))}
             </datalist>
-          </EditField>
+          </Field>
 
-          <EditField label="Flag">
+          <Field label="Flag">
             <select
               value={form.flag}
-              onChange={(e) => setForm((f) => ({ ...f, flag: e.target.value }))}
+              onChange={(e) => setForm({ ...form, flag: e.target.value })}
               className={fieldControlClass}
             >
               <option value="">— Aucun —</option>
@@ -290,12 +232,12 @@ function BddCard({
                 </option>
               ))}
             </select>
-          </EditField>
+          </Field>
 
-          <EditField label="Catégorie">
+          <Field label="Catégorie">
             <select
               value={form["Catégorie"]}
-              onChange={(e) => setForm((f) => ({ ...f, "Catégorie": e.target.value }))}
+              onChange={(e) => setForm({ ...form, "Catégorie": e.target.value })}
               className={fieldControlClass}
             >
               <option value="">— Aucun —</option>
@@ -305,12 +247,12 @@ function BddCard({
                 </option>
               ))}
             </select>
-          </EditField>
+          </Field>
 
-          <EditField label="Technicien">
+          <Field label="Technicien">
             <select
               value={form.Technicien}
-              onChange={(e) => setForm((f) => ({ ...f, Technicien: e.target.value }))}
+              onChange={(e) => setForm({ ...form, Technicien: e.target.value })}
               className={fieldControlClass}
             >
               <option value="">— Aucun —</option>
@@ -320,48 +262,33 @@ function BddCard({
                 </option>
               ))}
             </select>
-          </EditField>
+          </Field>
 
-          <EditField label="Commentaire">
+          <Field label="Commentaire">
             <textarea
               value={form.commentaire}
-              onChange={(e) => setForm((f) => ({ ...f, commentaire: e.target.value }))}
+              onChange={(e) => setForm({ ...form, commentaire: e.target.value })}
               className={`${fieldControlClass} min-h-[60px] resize-none`}
             />
-          </EditField>
+          </Field>
 
-          <div className="flex items-center gap-2 mt-1">
-            <button
+          <div className="mt-1 flex items-center gap-2">
+            <Button
+              type="button"
               onClick={handleSave}
-              disabled={saving}
-              className="flex-1 bg-amber-500 text-zinc-950 text-xs font-bold rounded px-3 py-1.5 disabled:opacity-50"
+              disabled={updateMutation.isPending}
+              className="h-10 flex-1 bg-amber-500 text-xs font-bold text-zinc-950 hover:bg-amber-400"
             >
-              {saving ? "Enregistrement…" : "Enregistrer"}
-            </button>
-            <button
-              onClick={onToggleExpand}
-              className="text-xs text-zinc-400 border border-zinc-700 rounded px-3 py-1.5"
-            >
+              {updateMutation.isPending ? "Enregistrement…" : "Enregistrer"}
+            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={onToggleExpand}>
               Annuler
-            </button>
+            </Button>
           </div>
-          {saveMsg && <div className="text-xs mt-1">{saveMsg}</div>}
+          {saveMsg && <div className="mt-1 text-xs">{saveMsg}</div>}
         </div>
       )}
-    </div>
-  );
-}
-
-function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-full border whitespace-nowrap ${
-        active ? "bg-amber-500/10 border-amber-500 text-amber-400" : "bg-zinc-900 border-zinc-800 text-zinc-400"
-      }`}
-    >
-      {label}
-    </button>
+    </Card>
   );
 }
 
@@ -369,48 +296,18 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
 
 type Fleet = "TOUS" | "INTERNE" | "EXTERNE";
 
+const EMPTY_ROWS: BddRow[] = [];
+
 export default function SuiviRlPage() {
-  const [rows, setRows] = useState<BddRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const rowsQuery = useBddRows();
+  const applyOptimisticUpdate = useOptimisticBddUpdate();
+
+  const rows = rowsQuery.data ?? EMPTY_ROWS;
   const [search, setSearch] = useState("");
   const [activeFleet, setActiveFleet] = useState<Fleet>("INTERNE");
   const [activePrestataire, setActivePrestataire] = useState("TOUS");
   const [activeFlag, setActiveFlag] = useState("TOUS");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-  const [updatedLabel, setUpdatedLabel] = useState("");
-
-  async function fetchFresh(silent: boolean) {
-    try {
-      const res = await fetch("/api/bdd");
-      const json = await res.json();
-      if (!json.ok) {
-        if (!silent) setError(json.error ?? "Erreur de chargement");
-        return;
-      }
-      setRows(json.rows);
-      saveCachedRows(json.rows);
-      setUpdatedLabel("à l'instant");
-      setError("");
-    } catch (e) {
-      if (!silent) setError(e instanceof Error ? e.message : "Erreur réseau");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    const cached = loadCachedRows();
-    if (cached && cached.length > 0) {
-      setRows(cached);
-      setLoading(false);
-      const age = cacheAgeLabel();
-      setUpdatedLabel(age ? `cache · ${age}` : "");
-      fetchFresh(true);
-    } else {
-      fetchFresh(false);
-    }
-  }, []);
 
   function toggleExpand(rowNum: number) {
     setExpandedRows((prev) => {
@@ -422,11 +319,7 @@ export default function SuiviRlPage() {
   }
 
   function handleRowSaved(rowNum: number, updatedFields: EditableValues) {
-    setRows((prev) => {
-      const next = prev.map((r) => (r._row === rowNum ? { ...r, ...updatedFields } : r));
-      saveCachedRows(next);
-      return next;
-    });
+    applyOptimisticUpdate(rowNum, updatedFields);
   }
 
   const fleetFiltered = useMemo(() => {
@@ -472,79 +365,91 @@ export default function SuiviRlPage() {
     setActiveFlag("TOUS");
   }
 
+  // Original page only surfaced fetch errors when it had nothing cached to
+  // show (fetchFresh(silent=false) on a cold load); a background refresh
+  // failing while stale cached rows were already on screen stayed silent.
+  // Mirrored here by only showing the banner when there are no rows to show.
+  const displayError = rows.length === 0 && rowsQuery.error instanceof Error ? rowsQuery.error.message : "";
+  const updatedLabel = rowsQuery.dataUpdatedAt
+    ? `${rowsQuery.isFetching ? "cache · " : ""}${formatAge(rowsQuery.dataUpdatedAt)}`
+    : "";
+
   return (
     <div className="min-h-screen bg-black text-zinc-50">
-      <div className="sticky top-0 z-20 bg-black/95 backdrop-blur border-b border-zinc-800 px-3 py-2">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Link href="/" className="text-zinc-500 hover:text-zinc-300 transition" title="Accueil">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 3L5 8l5 5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </Link>
-            <div className="font-mono font-semibold text-sm text-amber-400">
-              AVIS <span className="text-zinc-500 font-normal text-[10px] ml-1">Suivi RL</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">
-              {searched.length}
-            </span>
-            <button
-              onClick={() => {
-                setLoading(true);
-                fetchFresh(false);
-              }}
-              className="text-zinc-400 border border-zinc-700 rounded px-2 py-1 text-xs"
-            >
-              ⟳
-            </button>
-            <form action={logout}>
-              <button type="submit" className="text-zinc-400 border border-zinc-700 rounded px-2 py-1 text-xs" title="Déconnexion">
-                ⏻
-              </button>
-            </form>
-          </div>
-        </div>
-
-        <input
+      <ListPageHeader
+        title="AVIS"
+        subtitle="Suivi RL"
+        accentClassName="text-amber-400"
+        countClassName="border-amber-500/20 bg-amber-500/10 text-amber-400"
+        count={searched.length}
+        onRefresh={() => rowsQuery.refetch()}
+      >
+        <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Recherche globale…"
-          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-100 px-3 py-2 outline-none focus:border-amber-500"
+          className="bg-zinc-900"
         />
 
-        <div className="flex items-center gap-1.5 mt-2 overflow-x-auto">
-          <span className="text-[9px] uppercase font-bold text-zinc-500 mr-1 flex-shrink-0">Flotte</span>
-          {(["TOUS", "INTERNE", "EXTERNE"] as const).map((f) => (
-            <Chip key={f} label={f} active={activeFleet === f} onClick={() => selectFleet(f)} />
-          ))}
+        <div className="mt-2 flex items-center gap-1.5 overflow-x-auto">
+          <span className="mr-1 flex-shrink-0 text-[9px] font-bold uppercase text-zinc-500">Flotte</span>
+          <ToggleGroup
+            type="single"
+            value={activeFleet}
+            onValueChange={(v) => v && selectFleet(v as Fleet)}
+          >
+            {(["TOUS", "INTERNE", "EXTERNE"] as const).map((f) => (
+              <ToggleGroupItem key={f} value={f}>
+                {f}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </div>
-        <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto">
-          <Chip label="TOUS" active={activePrestataire === "TOUS"} onClick={() => selectPrestataire("TOUS")} />
-          {visiblePrestataires.map((p) => (
-            <Chip key={p} label={p} active={activePrestataire === p} onClick={() => selectPrestataire(p)} />
-          ))}
+        <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
+          <ToggleGroup
+            type="single"
+            value={activePrestataire}
+            onValueChange={(v) => v && selectPrestataire(v)}
+          >
+            <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
+            {visiblePrestataires.map((p) => (
+              <ToggleGroupItem key={p} value={p}>
+                {p}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </div>
         {visibleFlags.length > 0 && (
-          <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto">
-            <Chip label="TOUS" active={activeFlag === "TOUS"} onClick={() => setActiveFlag("TOUS")} />
-            {visibleFlags.map((f) => (
-              <Chip key={f} label={f} active={activeFlag === f} onClick={() => setActiveFlag(f)} />
-            ))}
+          <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
+            <ToggleGroup
+              type="single"
+              value={activeFlag}
+              onValueChange={(v) => v && setActiveFlag(v)}
+            >
+              <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
+              {visibleFlags.map((f) => (
+                <ToggleGroupItem key={f} value={f}>
+                  {f}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
           </div>
         )}
-      </div>
+      </ListPageHeader>
 
       <div className="px-3 py-3">
-        {error && (
-          <div className="rounded-lg border border-red-900/40 bg-red-950/30 text-red-300 text-sm px-3 py-2 mb-3">
-            {error}
+        {displayError && (
+          <div className="mb-3 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-300">
+            {displayError}
           </div>
         )}
 
-        {loading && rows.length === 0 && <div className="text-center text-zinc-500 text-sm py-16">Chargement…</div>}
+        {rowsQuery.isPending && (
+          <div className="py-16 text-center text-sm text-zinc-500">Chargement…</div>
+        )}
 
-        {!loading && searched.length === 0 && !error && (
-          <div className="text-center text-zinc-500 text-sm py-16">Aucun véhicule</div>
+        {!rowsQuery.isPending && searched.length === 0 && !displayError && (
+          <div className="py-16 text-center text-sm text-zinc-500">Aucun véhicule</div>
         )}
 
         <div className="flex flex-col gap-2">
@@ -559,7 +464,7 @@ export default function SuiviRlPage() {
           ))}
         </div>
 
-        {updatedLabel && <div className="text-center text-[9px] font-mono text-zinc-600 mt-4">Sync: {updatedLabel}</div>}
+        {updatedLabel && <div className="mt-4 text-center font-mono text-[9px] text-zinc-600">Sync: {updatedLabel}</div>}
       </div>
     </div>
   );
