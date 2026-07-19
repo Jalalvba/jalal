@@ -86,25 +86,21 @@ type ParcItem = {
   purchase_price_net?: number;
 };
 
+// Mirrors the actual $project output of /api/cp/route.ts — no phantom fields.
 type CpItem = {
-  reference?: string;
-  nature?: string;
-  statut?: string;
   ww?: string;
   imm?: string;
+  vin?: string;
   marque?: string;
   model?: string;
   version?: string;
-  client?: string;
   gestionnaire?: string;
-  duree?: string | number;
+  type_location?: string;
+  mce_date?: string;
   date_debut_contrat?: string;
   date_fin_contrat?: string;
-  date_debut_rl?: string;
-  vh_relais?: string;
-  type?: string; // type relais
-  type_location?: string;
-  type_vehicle?: string;
+  type?: string; // e.g. "Remplacement"
+  jockey?: string;
 };
 
 type ExportPayload = {
@@ -343,21 +339,21 @@ export async function POST(req: Request) {
         needPage(90);
         const cpY = cy;
         fillRect(ML, cy, PW, 16, NAVY);
-        const refStr = sanitize(`${cp.reference ?? "—"}  ${cp.statut ?? ""}`);
+        const refStr = sanitize(`${cp.ww ?? cp.imm ?? "—"}${cp.type ? "  ·  " + cp.type : ""}`);
         drawText(refStr, ML + 5, cy + 4, PW - 10, fontB, 8, WHITE);
         cy += 20;
         const CW4 = Math.floor(PW / 4);
         const CW3 = Math.floor(PW / 3);
         const row1: [string,string][] = [
           ["Marque / Modele", cp.marque && cp.model ? `${cp.marque} ${cp.model}` : (cp.marque ?? cp.model ?? "—")],
-          ["Client",          cp.client ?? "—"],
           ["Version",         cp.version ?? "—"],
+          ["Gestionnaire",    cp.gestionnaire ?? "—"],
           ["Fin contrat",     cp.date_fin_contrat ?? "—"],
         ];
         const row2: [string,string][] = [
-          ["VH relais",   cp.vh_relais ?? "—"],
-          ["Type relais", cp.type ?? "—"],
-          ["Debut RL",    cp.date_debut_rl ?? "—"],
+          ["Type location", cp.type_location ?? "—"],
+          ["Debut contrat", cp.date_debut_contrat ?? "—"],
+          ["Jockey",        cp.jockey ?? "—"],
         ];
         row1.forEach(([label, val], i) => {
           const x = ML + i * CW4;
@@ -739,7 +735,7 @@ export async function POST(req: Request) {
       })
     );
     contracts.forEach(cp => {
-      const refLine = [cp.reference ?? "—", cp.statut ?? ""].filter(Boolean).join("  |  ");
+      const refLine = [cp.ww ?? cp.imm ?? "—", cp.type ?? ""].filter(Boolean).join("  |  ");
       children.push(
         new Paragraph({
           spacing: { before: 160, after: 40 },
@@ -748,12 +744,12 @@ export async function POST(req: Request) {
       );
       const cpFields: [string, string][] = [
         ["Marque / Modele", cp.marque && cp.model ? `${cp.marque} ${cp.model}` : (cp.marque ?? cp.model ?? "—")],
-        ["Client",          cp.client ?? "—"],
         ["Version",         cp.version ?? "—"],
+        ["Gestionnaire",    cp.gestionnaire ?? "—"],
         ["Fin contrat",     cp.date_fin_contrat ?? "—"],
-        ["VH relais",       cp.vh_relais ?? "—"],
-        ["Type relais",     cp.type ?? "—"],
-        ["Debut RL",        cp.date_debut_rl ?? "—"],
+        ["Type location",   cp.type_location ?? "—"],
+        ["Debut contrat",   cp.date_debut_contrat ?? "—"],
+        ["Jockey",          cp.jockey ?? "—"],
       ];
       children.push(
         new Table({
