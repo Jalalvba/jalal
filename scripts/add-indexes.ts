@@ -74,7 +74,7 @@ async function main() {
     await timeQuery("ds: match Immatriculation + sort \"Date DS\" desc (mirrors /api/ds/history)", () =>
       db.collection("ds").find({ Immatriculation: sampleDs?.["Immatriculation"] }).sort({ "Date DS": -1 }).toArray()
     );
-    await timeQuery("bc: match \"CMD Num\" + \"Code article\" (mirrors /api/bc)", () =>
+    await timeQuery("bc: match \"CMD Num\" + \"Code article\" (mirrors the $lookup inside /api/ds/history)", () =>
       db.collection("bc")
         .find({ "CMD Num": sampleBc?.["CMD Num"], "Code article": sampleBc?.["Code article"] })
         .toArray()
@@ -91,7 +91,7 @@ async function main() {
   await runTimings();
 
   console.log("\n=== Creating indexes ===");
-  const specs: { col: string; key: Record<string, 1 | -1>; name: string }[] = [
+  const specs: { col: string; key: Record<string, 1 | -1>; name: string; expireAfterSeconds?: number }[] = [
     { col: "ds", key: { Immatriculation: 1, "Date DS": -1 }, name: "immatriculation_date_ds" },
     { col: "bc", key: { "CMD Num": 1, "Code article": 1 }, name: "cmd_num_code_article" },
     { col: "parc", key: { Immatriculation: 1 }, name: "immatriculation" },
@@ -99,19 +99,25 @@ async function main() {
     { col: "parc", key: { "N° de chassis": 1 }, name: "n_de_chassis" },
     { col: "cp", key: { IMM: 1 }, name: "imm" },
     { col: "cp", key: { WW: 1 }, name: "ww" },
+    // TTL index for lib/rateLimit.ts's fixed-window counters — expireAfterSeconds: 0
+    // means each document expires exactly at its own `expiresAt` value, so old
+    // rate-limit windows clean themselves up with no manual maintenance.
+    { col: "rate_limits", key: { expiresAt: 1 }, name: "expires_at_ttl", expireAfterSeconds: 0 },
   ];
 
   for (const spec of specs) {
     const start = Date.now();
-    const name = await db.collection(spec.col).createIndex(spec.key, { name: spec.name });
+    const options: { name: string; expireAfterSeconds?: number } = { name: spec.name };
+    if (spec.expireAfterSeconds != null) options.expireAfterSeconds = spec.expireAfterSeconds;
+    const name = await db.collection(spec.col).createIndex(spec.key, options);
     console.log(`  ${spec.col}.createIndex(${JSON.stringify(spec.key)}) -> "${name}" (${Date.now() - start}ms)`);
   }
 
   console.log("\n=== Verifying via .indexes() ===");
-  for (const col of ["ds", "bc", "parc", "cp"]) {
+  for (const col of ["ds", "bc", "parc", "cp", "rate_limits"]) {
     const idx = await db.collection(col).indexes();
     console.log(`  ${col}:`);
-    idx.forEach((i) => console.log(`    ${JSON.stringify(i.key)} (${i.name})`));
+    idx.forEach((i) => console.log(`    ${JSON.stringify(i.key)} (${i.name})${i.expireAfterSeconds != null ? ` TTL=${i.expireAfterSeconds}s` : ""}`));
   }
 
   console.log("\n=== AFTER indexes ===");

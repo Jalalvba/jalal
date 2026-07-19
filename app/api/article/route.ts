@@ -1,9 +1,26 @@
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo";
 import { escapeRegex } from "@/lib/regex";
+import { checkRateLimit, clientIp } from "@/lib/rateLimit";
 import type { Document } from "mongodb";
 
+const RATE_LIMIT = 20;
+const RATE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
 export async function GET(request: Request) {
+  const { allowed, retryAfterSeconds } = await checkRateLimit(
+    "article",
+    clientIp(request),
+    RATE_LIMIT,
+    RATE_WINDOW_MS
+  );
+  if (!allowed) {
+    return NextResponse.json(
+      { ok: false, error: `Trop de requêtes. Réessayez dans ${retryAfterSeconds}s.` },
+      { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
 
   const article   = searchParams.get("article")?.trim() || "";

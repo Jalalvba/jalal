@@ -5,6 +5,10 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import type { Line, DsHistoryItem, ParcItem, CpItem } from "@/lib/types";
 import { fmtDate, fmtNum } from "@/lib/format";
+import { checkRateLimit, clientIp } from "@/lib/rateLimit";
+
+const RATE_LIMIT = 20;
+const RATE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
 // DsItem is this route's name for the shared DsHistoryItem shape.
 type DsItem = DsHistoryItem;
@@ -77,6 +81,19 @@ const PAGE_W = 9360; // A4 content width in DXA with 1" margins
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: Request): Promise<NextResponse> {
+  const { allowed, retryAfterSeconds } = await checkRateLimit(
+    "export",
+    clientIp(req),
+    RATE_LIMIT,
+    RATE_WINDOW_MS
+  );
+  if (!allowed) {
+    return NextResponse.json(
+      { ok: false, error: `Trop de requêtes. Réessayez dans ${retryAfterSeconds}s.` },
+      { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } }
+    );
+  }
+
   try {
     return await generateExport(req);
   } catch (e) {
