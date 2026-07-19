@@ -1,5 +1,5 @@
-import { google, type sheets_v4 } from "googleapis";
 import { buildPlateVariants } from "@/lib/plateVariants";
+import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash } from "@/lib/googleSheetsClient";
 
 // Reads the "RL" tab (véhicule de remplacement / replacement-vehicle data)
 // via the authenticated service-account Sheets API — replacing the
@@ -9,9 +9,6 @@ import { buildPlateVariants } from "@/lib/plateVariants";
 
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
-
-const keyB64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64;
-if (!keyB64) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_KEY_B64 in .env.local");
 
 const RL_TAB_NAME = "RL";
 
@@ -39,36 +36,6 @@ export type RlRow = Record<(typeof RL_COLUMNS)[number], string>;
 // doesn't provide, so they're converted explicitly here instead of being
 // left as raw numbers like "46222".
 const DATE_LIKE_COLUMNS = new Set<(typeof RL_COLUMNS)[number]>(["Date", "Date début"]);
-
-function serialToDDMMYYYY(serial: number): string {
-  const epochMs = Date.UTC(1899, 11, 30);
-  const ms = epochMs + Math.round(serial) * 86400000;
-  const d = new Date(ms);
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
-
-declare global {
-  // Shared with lib/googleSheetsBdd.ts, lib/googleSheetsParking.ts, and
-  // lib/googleSheetsAtelier.ts — same global slot, same singleton.
-  var _sheetsClient: sheets_v4.Sheets | undefined;
-}
-
-function getSheetsClient(): sheets_v4.Sheets {
-  if (global._sheetsClient) return global._sheetsClient;
-
-  const key = JSON.parse(Buffer.from(keyB64!, "base64").toString("utf8"));
-  const auth = new google.auth.JWT({
-    email: key.client_email,
-    key: key.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
-  global._sheetsClient = google.sheets({ version: "v4", auth });
-  return global._sheetsClient;
-}
 
 /**
  * Reads every non-empty row from the RL tab, projected down to
@@ -108,7 +75,7 @@ export async function getRlRows(immFilter?: string): Promise<RlRow[]> {
       const idx = colIndexByName.get(col);
       const v = idx != null ? row[idx] : undefined;
       if (v != null && DATE_LIKE_COLUMNS.has(col) && typeof v === "number") {
-        record[col] = serialToDDMMYYYY(v);
+        record[col] = fmtDateOnlySlash(serialToUTCDate(v));
       } else {
         record[col] = v != null ? String(v) : "";
       }

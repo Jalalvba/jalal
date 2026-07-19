@@ -1,12 +1,10 @@
-import { google, type sheets_v4 } from "googleapis";
+import { type sheets_v4 } from "googleapis";
 import { BDD_EDITABLE_FIELDS, type BddRow, type BddUpdateResult } from "@/lib/types";
 import { buildPlateVariants } from "@/lib/plateVariants";
+import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash } from "@/lib/googleSheetsClient";
 
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
-
-const keyB64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64;
-if (!keyB64) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_KEY_B64 in .env.local");
 
 // Confirmed by a live spreadsheets.get() call against gid=868042157 — not a guess.
 const BDD_TAB_NAME = "BDD";
@@ -15,30 +13,6 @@ const editableFieldSet = new Set<string>(BDD_EDITABLE_FIELDS);
 // Wide enough that a realistic header row can never be truncated (verified up
 // to column BZ during discovery), without hardcoding the sheet's real width.
 const HEADER_SCAN_WIDTH = "CZ";
-
-declare global {
-  // Needed to prevent creating a new client on every hot-reload in dev
-  var _sheetsClient: sheets_v4.Sheets | undefined;
-}
-
-function getSheetsClient(): sheets_v4.Sheets {
-  if (global._sheetsClient) return global._sheetsClient;
-
-  const key = JSON.parse(Buffer.from(keyB64!, "base64").toString("utf8"));
-  // Uses googleapis' own re-exported auth.JWT (not the standalone
-  // google-auth-library package) so the auth client and google.sheets() agree
-  // on the same class instance — googleapis bundles its own pinned version of
-  // google-auth-library internally, which is structurally incompatible with
-  // the separately-installed top-level package despite near-identical versions.
-  const auth = new google.auth.JWT({
-    email: key.client_email,
-    key: key.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
-  global._sheetsClient = google.sheets({ version: "v4", auth });
-  return global._sheetsClient;
-}
 
 function columnIndexToLetter(oneBasedIndex: number): string {
   let n = oneBasedIndex;
@@ -72,20 +46,10 @@ async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
  */
 const DATE_LIKE_HEADERS = new Set(["date", "date_ds", "date_fin_contrat"]);
 
-function serialDateToDDMMYYYY(serial: number): string {
-  const epochMs = Date.UTC(1899, 11, 30); // Sheets' date epoch
-  const ms = epochMs + Math.round(serial) * 86400000;
-  const d = new Date(ms);
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
-
 function formatCellValue(header: string, raw: unknown): string | number {
   if (raw == null) return "";
   if (DATE_LIKE_HEADERS.has(header) && typeof raw === "number") {
-    return serialDateToDDMMYYYY(raw);
+    return fmtDateOnlySlash(serialToUTCDate(raw));
   }
   // Everything else (including mois_restant's real number, and dates that are
   // already plain dd/mm/yyyy text in the sheet) passes through as-is.

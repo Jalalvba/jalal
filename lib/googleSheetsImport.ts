@@ -1,5 +1,5 @@
-import { google, type sheets_v4 } from "googleapis";
 import { buildPlateVariants } from "@/lib/plateVariants";
+import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, fmtDateTime } from "@/lib/googleSheetsClient";
 
 // Reads the "Import" tab (Assistance import events) via the authenticated
 // service-account Sheets API. Tab name, column layout, and the fact that
@@ -18,9 +18,6 @@ import { buildPlateVariants } from "@/lib/plateVariants";
 
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
-
-const keyB64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64;
-if (!keyB64) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_KEY_B64 in .env.local");
 
 const IMPORT_TAB_NAME = "Import";
 const IMM_COL_LETTER = "H"; // "Immatricule" — confirmed live, not a guess
@@ -42,27 +39,6 @@ const IMPORT_COLUMNS = [
 
 export type ImportRow = Record<(typeof IMPORT_COLUMNS)[number], string>;
 
-declare global {
-  // Shared with lib/googleSheetsBdd.ts, lib/googleSheetsParking.ts,
-  // lib/googleSheetsAtelier.ts, and lib/googleSheetsRl.ts — same global
-  // slot, same singleton.
-  var _sheetsClient: sheets_v4.Sheets | undefined;
-}
-
-function getSheetsClient(): sheets_v4.Sheets {
-  if (global._sheetsClient) return global._sheetsClient;
-
-  const key = JSON.parse(Buffer.from(keyB64!, "base64").toString("utf8"));
-  const auth = new google.auth.JWT({
-    email: key.client_email,
-    key: key.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
-  global._sheetsClient = google.sheets({ version: "v4", auth });
-  return global._sheetsClient;
-}
-
 // "Date Ouverture" is a date-only serial (no fractional part in the sample
 // data); "DatePrestation" is a fractional datetime serial. The old gviz
 // endpoint pre-formatted both via its "formatted value" field — the
@@ -72,26 +48,6 @@ function getSheetsClient(): sheets_v4.Sheets {
 // regex expects.
 const DATE_ONLY_COLUMNS = new Set<(typeof IMPORT_COLUMNS)[number]>(["Date Ouverture"]);
 const DATE_TIME_COLUMNS = new Set<(typeof IMPORT_COLUMNS)[number]>(["DatePrestation"]);
-
-const SHEETS_EPOCH_MS = Date.UTC(1899, 11, 30);
-
-function serialToUTCDate(serial: number): Date {
-  const wholeDays = Math.floor(serial);
-  const fractionalMs = Math.round((serial - wholeDays) * 86400000);
-  return new Date(SHEETS_EPOCH_MS + wholeDays * 86400000 + fractionalMs);
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-function fmtDateSlash(d: Date): string {
-  return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
-}
-
-function fmtDateTimeSlash(d: Date): string {
-  return `${fmtDateSlash(d)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`;
-}
 
 /**
  * Targeted lookup — requires a plate/WW value, matched via the same
@@ -138,9 +94,9 @@ export async function getImportRows(immFilter: string): Promise<ImportRow[]> {
     IMPORT_COLUMNS.forEach((col, idx) => {
       const v = row[idx];
       if (v != null && typeof v === "number" && DATE_ONLY_COLUMNS.has(col)) {
-        record[col] = fmtDateSlash(serialToUTCDate(v));
+        record[col] = fmtDateOnlySlash(serialToUTCDate(v));
       } else if (v != null && typeof v === "number" && DATE_TIME_COLUMNS.has(col)) {
-        record[col] = fmtDateTimeSlash(serialToUTCDate(v));
+        record[col] = fmtDateTime(serialToUTCDate(v));
       } else {
         record[col] = v != null ? String(v) : "";
       }

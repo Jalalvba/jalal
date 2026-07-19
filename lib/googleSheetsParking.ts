@@ -1,6 +1,13 @@
-import { google, type sheets_v4 } from "googleapis";
+import { type sheets_v4 } from "googleapis";
 import { getCollection } from "@/lib/mongo";
 import type { ParkingRow, ParkingAddResponse, ParkingAddResultItem } from "@/lib/types";
+import {
+  getSheetsClient,
+  serialToUTCDate,
+  nowToSerial,
+  fmtDateOnlyDash,
+  fmtDateTime,
+} from "@/lib/googleSheetsClient";
 
 // Ported from the AVIS Maroc GAS "Parking" system (code.gs + Parking.gs).
 // Tab name, column layout and XLOOKUP formulas confirmed by a live read of
@@ -9,30 +16,8 @@ import type { ParkingRow, ParkingAddResponse, ParkingAddResultItem } from "@/lib
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 
-const keyB64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64;
-if (!keyB64) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_KEY_B64 in .env.local");
-
 const PARKING_TAB = "PARKING";
 const DATA_START_ROW = 2;
-
-declare global {
-  // Shared with lib/googleSheetsBdd.ts — same global slot, same singleton.
-  var _sheetsClient: sheets_v4.Sheets | undefined;
-}
-
-function getSheetsClient(): sheets_v4.Sheets {
-  if (global._sheetsClient) return global._sheetsClient;
-
-  const key = JSON.parse(Buffer.from(keyB64!, "base64").toString("utf8"));
-  const auth = new google.auth.JWT({
-    email: key.client_email,
-    key: key.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
-  global._sheetsClient = google.sheets({ version: "v4", auth });
-  return global._sheetsClient;
-}
 
 function columnIndexToLetter(oneBasedIndex: number): string {
   let n = oneBasedIndex;
@@ -78,33 +63,6 @@ async function getParkingSheetProps(
   return { sheetId: props.sheetId, rowCount: props.gridProperties?.rowCount ?? 0 };
 }
 
-// ─── Sheets serial date/time helpers (UTC-based, matches lib/googleSheetsBdd.ts) ─
-
-const SHEETS_EPOCH_MS = Date.UTC(1899, 11, 30);
-
-function serialToUTCDate(serial: number): Date {
-  const wholeDays = Math.floor(serial);
-  const fractionalMs = Math.round((serial - wholeDays) * 86400000);
-  return new Date(SHEETS_EPOCH_MS + wholeDays * 86400000 + fractionalMs);
-}
-
-function nowToSerial(): number {
-  return (Date.now() - SHEETS_EPOCH_MS) / 86400000;
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-function fmtDateOnly(d: Date): string {
-  return `${pad2(d.getUTCDate())}-${pad2(d.getUTCMonth() + 1)}-${d.getUTCFullYear()}`;
-}
-
-function fmtDateTime(d: Date): string {
-  return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad2(
-    d.getUTCHours()
-  )}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`;
-}
 
 // ─── getParkingList ────────────────────────────────────────────────────────
 
@@ -163,7 +121,7 @@ export async function getParkingRows(): Promise<ParkingRow[]> {
       const v = row[c];
       if (v == null || v === "") continue;
       if ((header === "DATE_DS" || header === "TIMESTAMP") && typeof v === "number") {
-        metaParts.push(fmtDateOnly(serialToUTCDate(v)));
+        metaParts.push(fmtDateOnlyDash(serialToUTCDate(v)));
       } else {
         const s = String(v).trim();
         if (s) metaParts.push(s);

@@ -1,4 +1,4 @@
-import { google, type sheets_v4 } from "googleapis";
+import { type sheets_v4 } from "googleapis";
 import { getIMMList, resolveIMM } from "@/lib/googleSheetsParking";
 import type {
   AtelierRow,
@@ -7,6 +7,7 @@ import type {
   ParkingAddResultItem,
 } from "@/lib/types";
 import { ATELIER_EDITABLE_FIELDS } from "@/lib/types";
+import { getSheetsClient, serialToUTCDate, nowToSerial, fmtDateTime } from "@/lib/googleSheetsClient";
 
 // Ported from the AVIS Maroc GAS "Atelier" system (code.gs + RebuildAtelier.gs).
 // Same spreadsheet as PARKING/BDD (TARGET_SHEET_ID in the source matches this
@@ -17,32 +18,9 @@ import { ATELIER_EDITABLE_FIELDS } from "@/lib/types";
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 
-const keyB64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64;
-if (!keyB64) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_KEY_B64 in .env.local");
-
 const ATELIER_TAB = "ATELIER";
 const DATA_START_ROW = 2;
 const HEADER_RANGE_WIDTH = "S"; // 18 real columns, generous margin
-
-declare global {
-  // Shared with lib/googleSheetsBdd.ts and lib/googleSheetsParking.ts — same
-  // global slot, same singleton.
-  var _sheetsClient: sheets_v4.Sheets | undefined;
-}
-
-function getSheetsClient(): sheets_v4.Sheets {
-  if (global._sheetsClient) return global._sheetsClient;
-
-  const key = JSON.parse(Buffer.from(keyB64!, "base64").toString("utf8"));
-  const auth = new google.auth.JWT({
-    email: key.client_email,
-    key: key.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
-  global._sheetsClient = google.sheets({ version: "v4", auth });
-  return global._sheetsClient;
-}
 
 function columnIndexToLetter(oneBasedIndex: number): string {
   let n = oneBasedIndex;
@@ -87,29 +65,6 @@ async function getAtelierSheetProps(
   return { sheetId: props.sheetId, rowCount: props.gridProperties?.rowCount ?? 0 };
 }
 
-// ─── Sheets serial date/time helpers (UTC-based, same as the other lib/googleSheets*.ts) ─
-
-const SHEETS_EPOCH_MS = Date.UTC(1899, 11, 30);
-
-function serialToUTCDate(serial: number): Date {
-  const wholeDays = Math.floor(serial);
-  const fractionalMs = Math.round((serial - wholeDays) * 86400000);
-  return new Date(SHEETS_EPOCH_MS + wholeDays * 86400000 + fractionalMs);
-}
-
-function nowToSerial(): number {
-  return (Date.now() - SHEETS_EPOCH_MS) / 86400000;
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-function fmtDateTime(d: Date): string {
-  return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad2(
-    d.getUTCHours()
-  )}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`;
-}
 
 // ─── getParkingList (ported as getAtelierRows) ────────────────────────────
 
