@@ -1,15 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Pencil } from "lucide-react";
 import { BDD_HEADERS, type BddRow } from "@/lib/types";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
-import { Field } from "@/components/fleet/Field";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useEditableState } from "@/hooks/useEditableState";
+import { InlineEditSelect, type InlineEditTriggerState } from "@/components/fleet/InlineEditSelect";
+import { InlineEditText } from "@/components/fleet/InlineEditText";
+import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
+import { cn } from "@/components/ui/utils";
 import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate } from "@/hooks/useBddRows";
 
 // ─── Dropdown option lists — exact, given verbatim, not invented ──────────────
@@ -83,209 +85,200 @@ function formatAge(dataUpdatedAt: number): string {
   return `il y a ${Math.floor(minutes / 60)}h`;
 }
 
-// ─── Edit form ──────────────────────────────────────────────────────────────
+// Server allowlist (lib/types.ts's BDD_EDITABLE_FIELDS) is unchanged — this
+// page just commits one of these 6 keys at a time now instead of bundling
+// all 6 into one form submit.
+type FieldKey = "ETAT" | "prestataire" | "flag" | "Catégorie" | "commentaire" | "Technicien";
 
-type EditableValues = {
-  ETAT: string;
-  prestataire: string;
-  flag: string;
-  "Catégorie": string;
-  commentaire: string;
-  Technicien: string;
-};
-
-function editableValuesFromRow(row: BddRow): EditableValues {
-  return {
-    ETAT: row.ETAT ?? "",
-    prestataire: row.prestataire ?? "",
-    flag: row.flag ?? "",
-    "Catégorie": row["Catégorie"] ?? "",
-    commentaire: row.commentaire ?? "",
-    Technicien: row.Technicien ?? "",
-  };
-}
-
-const fieldControlClass =
-  "h-auto w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-amber-500";
-
-const DISPLAY_HEADERS = BDD_HEADERS.filter(
-  (h) => h !== "IMM" && h !== "date" && h !== "prestataire" && h !== "flag" && h !== "ETAT"
+// Everything shown once, either as one of the always-visible editable rows
+// below or promoted into the client/modele subtitle — the remainder is
+// read-only reference data, rendered dimmer/unlabeled-background to read as
+// clearly non-interactive.
+const READONLY_HEADERS = BDD_HEADERS.filter(
+  (h) =>
+    h !== "IMM" &&
+    h !== "date" &&
+    h !== "client" &&
+    h !== "modele" &&
+    h !== "ETAT" &&
+    h !== "prestataire" &&
+    h !== "flag" &&
+    h !== "commentaire" &&
+    h !== "Catégorie" &&
+    h !== "Technicien"
 );
 
-function BddCard({
-  row,
-  expanded,
-  onToggleExpand,
-  onSaved,
+// ─── Shared trigger look for the "labeled row" editable fields (Catégorie,
+// Technicien, Prestataire) — a faint background + pencil affordance marks
+// these as tappable, distinct from the plain read-only rows below them. ────
+
+function FieldRowTrigger({
+  label,
+  value,
+  placeholder,
+  pending,
+  justSaved,
+  error,
+  onOpen,
+  dot,
 }: {
-  row: BddRow;
-  expanded: boolean;
-  onToggleExpand: () => void;
-  onSaved: (updatedFields: EditableValues) => void;
+  label: string;
+  value: string;
+  placeholder: string;
+  pending: boolean;
+  justSaved: boolean;
+  error: string;
+  onOpen: () => void;
+  dot?: string | null;
 }) {
-  const [form, setForm] = useEditableState(editableValuesFromRow(row), [row, expanded]);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={pending}
+        className={cn(
+          "flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition disabled:opacity-60",
+          justSaved
+            ? "border-emerald-500/60 bg-emerald-500/5"
+            : error
+              ? "border-red-500/60 bg-red-500/5"
+              : "border-zinc-800 bg-zinc-800/50 active:bg-zinc-800"
+        )}
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="flex-shrink-0 text-[9px] font-bold uppercase text-zinc-500">{label}</span>
+          {dot && <span className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />}
+          <span className={cn("truncate", value ? "text-zinc-200" : "italic text-zinc-600")}>{value || placeholder}</span>
+        </span>
+        <Pencil className="h-3 w-3 flex-shrink-0 text-zinc-600" />
+      </button>
+      {error && <div className="mt-1 text-[10px] text-red-400">{error}</div>}
+    </div>
+  );
+}
+
+// ─── Card ───────────────────────────────────────────────────────────────────
+
+function BddCard({ row }: { row: BddRow }) {
   const updateMutation = useUpdateBddRow();
-  const [saveMsg, setSaveMsg] = useState("");
+  const applyOptimisticUpdate = useOptimisticBddUpdate();
+
+  function commitField(field: FieldKey) {
+    return async (value: string) => {
+      await updateMutation.mutateAsync({ row: row._row, updates: { [field]: value } });
+      applyOptimisticUpdate(row._row, { [field]: value } as Partial<BddRow>);
+    };
+  }
 
   const flagStyle = FLAG_STYLE[row.flag] ?? null;
   const dot = prestataireDotClass(row.prestataire);
-
-  async function handleSave() {
-    setSaveMsg("");
-    try {
-      await updateMutation.mutateAsync({ row: row._row, updates: form });
-      onSaved(form);
-      setSaveMsg("✓ Enregistré");
-      setTimeout(() => setSaveMsg(""), 2000);
-    } catch (e) {
-      setSaveMsg(`❌ ${e instanceof Error ? e.message : "Erreur réseau"}`);
-    }
-  }
+  const populatedReadonly = READONLY_HEADERS.filter((h) => String(row[h] ?? "").trim());
 
   return (
     <Card className={flagStyle ? `border-l-4 ${flagStyle.border}` : ""}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="font-mono text-sm font-semibold text-amber-400">{row.IMM}</span>
-          {(row.date || row.prestataire) && (
-            <span className="font-mono text-xs text-zinc-500">
-              {[row.date, row.prestataire].filter(Boolean).join(" · ")}
-            </span>
+          {row.date && <span className="font-mono text-xs text-zinc-500">{row.date}</span>}
+          <InlineEditSelect
+            value={row.flag}
+            options={FLAG_OPTIONS}
+            label="Flag"
+            onCommit={commitField("flag")}
+            renderTrigger={({ value, pending, justSaved, onOpen }: InlineEditTriggerState) => (
+              <button
+                type="button"
+                onClick={onOpen}
+                disabled={pending}
+                className="flex min-h-8 items-center py-1 disabled:opacity-60"
+              >
+                {value && FLAG_STYLE[value] ? (
+                  <Badge className={cn(FLAG_STYLE[value].badge, justSaved && "ring-2 ring-emerald-400")}>{value}</Badge>
+                ) : (
+                  <span
+                    className={cn(
+                      "rounded-md border border-dashed border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-500",
+                      justSaved && "ring-2 ring-emerald-400"
+                    )}
+                  >
+                    + Flag
+                  </span>
+                )}
+              </button>
+            )}
+          />
+        </div>
+        <InlineEditSelect
+          value={row.ETAT}
+          options={ETAT_OPTIONS}
+          label="État"
+          onCommit={commitField("ETAT")}
+          renderTrigger={({ value, pending, justSaved, onOpen }: InlineEditTriggerState) => (
+            <button
+              type="button"
+              onClick={onOpen}
+              disabled={pending}
+              className={cn(
+                "flex min-h-8 flex-shrink-0 items-center rounded px-2 py-1 text-[9px] font-bold uppercase transition disabled:opacity-60",
+                value?.toUpperCase() === "EXTERNE" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400",
+                justSaved && "ring-2 ring-emerald-400"
+              )}
+            >
+              {value || "—"}
+            </button>
           )}
-          {row.flag && flagStyle && <Badge className={flagStyle.badge}>{row.flag}</Badge>}
-        </div>
-        <span
-          className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
-            row.ETAT?.toUpperCase() === "EXTERNE" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400"
-          }`}
-        >
-          {row.ETAT || "—"}
-        </span>
+        />
       </div>
 
-      <div className="mb-2 flex flex-col gap-1">
-        {DISPLAY_HEADERS.map((h) => {
-          const val = row[h];
-          const str = val == null ? "" : String(val);
-          if (!str.trim()) return null;
-          return (
-            <div key={h} className="whitespace-pre-line text-xs leading-snug text-zinc-300">
-              <span className="mr-1 text-[9px] font-bold uppercase text-zinc-500">{h}:</span>
-              {str}
-            </div>
-          );
-        })}
-      </div>
-
-      {row.prestataire && (
-        <div className="mb-2 flex items-center gap-1.5 text-xs text-zinc-400">
-          {dot && <span className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />}
-          {row.prestataire}
-        </div>
+      {(row.client || row.modele) && (
+        <div className="mb-2 truncate text-xs text-zinc-400">{[row.client, row.modele].filter(Boolean).join(" · ")}</div>
       )}
 
-      <Button type="button" variant="secondary" size="sm" onClick={onToggleExpand}>
-        {expanded ? "✕ Fermer" : "✎ Modifier"}
-      </Button>
+      <div className="flex flex-col gap-2">
+        <InlineEditSelect
+          value={row["Catégorie"]}
+          options={CATEGORIE_OPTIONS}
+          label="Catégorie"
+          onCommit={commitField("Catégorie")}
+          renderTrigger={(state) => (
+            <FieldRowTrigger label="Catégorie" placeholder="— Choisir —" {...state} />
+          )}
+        />
+        <InlineEditSelect
+          value={row.Technicien}
+          options={TECHNICIEN_OPTIONS}
+          label="Technicien"
+          onCommit={commitField("Technicien")}
+          renderTrigger={(state) => (
+            <FieldRowTrigger label="Technicien" placeholder="— Choisir —" {...state} />
+          )}
+        />
+        <InlineEditCombobox
+          value={row.prestataire}
+          options={PRESTATAIRE_OPTIONS}
+          onCommit={commitField("prestataire")}
+          placeholder="Prestataire…"
+          renderTrigger={(state) => (
+            <FieldRowTrigger label="Prestataire" placeholder="— Aucun —" dot={dot} {...state} />
+          )}
+        />
+        <InlineEditText
+          value={row.commentaire}
+          resyncDeps={[row._row, row.commentaire]}
+          onCommit={commitField("commentaire")}
+          placeholder="Commentaire…"
+        />
+      </div>
 
-      {expanded && (
-        <div className="mt-3 flex flex-col gap-2 border-t border-dashed border-zinc-800 pt-3">
-          <Field label="État">
-            <select
-              value={form.ETAT}
-              onChange={(e) => setForm({ ...form, ETAT: e.target.value })}
-              className={fieldControlClass}
-            >
-              <option value="">— Aucun —</option>
-              {ETAT_OPTIONS.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Prestataire">
-            <Input
-              list="prestataire-options"
-              value={form.prestataire}
-              onChange={(e) => setForm({ ...form, prestataire: e.target.value })}
-              className="h-auto bg-zinc-800 py-1.5 text-xs focus:border-amber-500"
-            />
-            <datalist id="prestataire-options">
-              {PRESTATAIRE_OPTIONS.map((o) => (
-                <option key={o} value={o} />
-              ))}
-            </datalist>
-          </Field>
-
-          <Field label="Flag">
-            <select
-              value={form.flag}
-              onChange={(e) => setForm({ ...form, flag: e.target.value })}
-              className={fieldControlClass}
-            >
-              <option value="">— Aucun —</option>
-              {FLAG_OPTIONS.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Catégorie">
-            <select
-              value={form["Catégorie"]}
-              onChange={(e) => setForm({ ...form, "Catégorie": e.target.value })}
-              className={fieldControlClass}
-            >
-              <option value="">— Aucun —</option>
-              {CATEGORIE_OPTIONS.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Technicien">
-            <select
-              value={form.Technicien}
-              onChange={(e) => setForm({ ...form, Technicien: e.target.value })}
-              className={fieldControlClass}
-            >
-              <option value="">— Aucun —</option>
-              {TECHNICIEN_OPTIONS.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Commentaire">
-            <textarea
-              value={form.commentaire}
-              onChange={(e) => setForm({ ...form, commentaire: e.target.value })}
-              className={`${fieldControlClass} min-h-[60px] resize-none`}
-            />
-          </Field>
-
-          <div className="mt-1 flex items-center gap-2">
-            <Button
-              type="button"
-              onClick={handleSave}
-              disabled={updateMutation.isPending}
-              className="h-10 flex-1 bg-amber-500 text-xs font-bold text-zinc-950 hover:bg-amber-400"
-            >
-              {updateMutation.isPending ? "Enregistrement…" : "Enregistrer"}
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={onToggleExpand}>
-              Annuler
-            </Button>
-          </div>
-          {saveMsg && <div className="mt-1 text-xs">{saveMsg}</div>}
+      {populatedReadonly.length > 0 && (
+        <div className="mt-2 flex flex-col gap-1 border-t border-zinc-800/60 pt-2">
+          {populatedReadonly.map((h) => (
+            <div key={h} className="whitespace-pre-line text-[11px] leading-snug text-zinc-500">
+              <span className="mr-1 text-[9px] font-bold uppercase text-zinc-600">{h}:</span>
+              {String(row[h])}
+            </div>
+          ))}
         </div>
       )}
     </Card>
@@ -300,27 +293,12 @@ const EMPTY_ROWS: BddRow[] = [];
 
 export default function SuiviRlPage() {
   const rowsQuery = useBddRows();
-  const applyOptimisticUpdate = useOptimisticBddUpdate();
 
   const rows = rowsQuery.data ?? EMPTY_ROWS;
   const [search, setSearch] = useState("");
   const [activeFleet, setActiveFleet] = useState<Fleet>("INTERNE");
   const [activePrestataire, setActivePrestataire] = useState("TOUS");
   const [activeFlag, setActiveFlag] = useState("TOUS");
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-
-  function toggleExpand(rowNum: number) {
-    setExpandedRows((prev) => {
-      const n = new Set(prev);
-      if (n.has(rowNum)) n.delete(rowNum);
-      else n.add(rowNum);
-      return n;
-    });
-  }
-
-  function handleRowSaved(rowNum: number, updatedFields: EditableValues) {
-    applyOptimisticUpdate(rowNum, updatedFields);
-  }
 
   const fleetFiltered = useMemo(() => {
     if (activeFleet === "TOUS") {
@@ -454,13 +432,7 @@ export default function SuiviRlPage() {
 
         <div className="flex flex-col gap-2">
           {searched.map((row) => (
-            <BddCard
-              key={row._row}
-              row={row}
-              expanded={expandedRows.has(row._row)}
-              onToggleExpand={() => toggleExpand(row._row)}
-              onSaved={(updated) => handleRowSaved(row._row, updated)}
-            />
+            <BddCard key={row._row} row={row} />
           ))}
         </div>
 

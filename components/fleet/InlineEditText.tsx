@@ -1,0 +1,46 @@
+"use client";
+
+import { useEditableState } from "@/hooks/useEditableState";
+import { useInlineFieldCommit } from "@/hooks/useInlineFieldCommit";
+import { cn } from "@/components/ui/utils";
+
+/**
+ * Always-editable free text (Commentaire) — no tap-to-reveal step, no save
+ * button. Commits on blur only if the value actually changed.
+ */
+export function InlineEditText({
+  value,
+  resyncDeps,
+  onCommit,
+  placeholder,
+}: {
+  value: string;
+  resyncDeps: React.DependencyList;
+  onCommit: (value: string) => Promise<void>;
+  placeholder?: string;
+}) {
+  const [local, setLocal] = useEditableState(value, resyncDeps);
+  const { pending, justSaved, error, commit } = useInlineFieldCommit(onCommit);
+
+  function handleBlur() {
+    if (local !== value) commit(local);
+  }
+
+  return (
+    <div>
+      <textarea
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={handleBlur}
+        placeholder={placeholder}
+        disabled={pending}
+        rows={2}
+        className={cn(
+          "w-full resize-none rounded-lg border bg-zinc-800/50 px-2.5 py-2 text-xs leading-snug text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 disabled:opacity-60",
+          justSaved ? "border-emerald-500/60" : error ? "border-red-500/60" : "border-zinc-700 focus:border-amber-500"
+        )}
+      />
+      {error && <div className="mt-1 text-[10px] text-red-400">{error}</div>}
+    </div>
+  );
+}
