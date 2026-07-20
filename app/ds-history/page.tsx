@@ -660,8 +660,6 @@ function DlIcon({ spinning }: { spinning?: boolean }) {
 
 export default function Home() {
   const [imm, setImm] = useState("48070-B-7");
-  const [year, setYear] = useState<string>("");
-  const [limit, setLimit] = useState(200);
 
   // Smart search suggestions
   const [suggestions, setSuggestions]         = useState<SearchResult[]>([]);
@@ -747,11 +745,6 @@ export default function Home() {
     setVisibleLineFields(loadLineFields());
   }, []);
 
-  const years = useMemo(() => {
-    const now = new Date().getUTCFullYear();
-    return Array.from({ length: 8 }, (_, i) => String(now - i));
-  }, []);
-
   async function fetchAll(nextImm?: string) {
     const rawVal = (nextImm ?? imm).trim();
     if (!rawVal) return;
@@ -779,8 +772,7 @@ export default function Home() {
         }
       }
 
-      const dsQs   = new URLSearchParams({ imm: immVal, limit: String(limit) });
-      if (year) dsQs.set("year", year);
+      const dsQs   = new URLSearchParams({ imm: immVal });
       const parcQs = new URLSearchParams({ imm: immVal });
       const cpQs   = new URLSearchParams({ imm: immVal, ww: immVal });
 
@@ -956,7 +948,7 @@ export default function Home() {
         {/* Search */}
         <div className={`mt-6 rounded-2xl border p-4 shadow-sm ${rlRows.length > 0 && !loading ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}>
           <div className="grid gap-3 sm:grid-cols-12 sm:items-end">
-            <div className="sm:col-span-5" ref={searchRef}>
+            <div className="sm:col-span-10" ref={searchRef}>
               <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Immatriculation / WW</label>
               <Combobox
                 value={imm}
@@ -979,19 +971,6 @@ export default function Home() {
                   }
                 }}
               />
-            </div>
-            <div className="sm:col-span-3">
-              <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Année (optionnel)</label>
-              <select value={year} onChange={e => setYear(e.target.value)}
-                className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:focus:border-zinc-600">
-                <option value="">Toutes les années</option>
-                {years.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Limite</label>
-              <input type="number" value={limit} onChange={e => setLimit(Number(e.target.value))} min={1} max={2000}
-                className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:focus:border-zinc-600" />
             </div>
             <div className="sm:col-span-2">
               <button onClick={() => fetchAll()} disabled={loading || !imm.trim()}
