@@ -299,6 +299,8 @@ export default function SuiviRlPage() {
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeFleet, setActiveFleet] = useState<Fleet>("INTERNE");
+  const [activePrestataire, setActivePrestataire] = useState("TOUS");
+  const [activeFlag, setActiveFlag] = useState("TOUS");
 
   const fleetFiltered = useMemo(() => {
     if (activeFleet === "TOUS") {
@@ -307,23 +309,51 @@ export default function SuiviRlPage() {
     return rows.filter((r) => r.ETAT?.toUpperCase() === activeFleet);
   }, [rows, activeFleet]);
 
+  const visiblePrestataires = useMemo(
+    () => [...new Set(fleetFiltered.map((r) => r.prestataire).filter(Boolean))].sort(),
+    [fleetFiltered]
+  );
+
+  const prestataireFiltered = useMemo(
+    () => (activePrestataire === "TOUS" ? fleetFiltered : fleetFiltered.filter((r) => r.prestataire === activePrestataire)),
+    [fleetFiltered, activePrestataire]
+  );
+
+  const visibleFlags = useMemo(
+    () => [...new Set(prestataireFiltered.map((r) => r.flag).filter(Boolean))].sort(),
+    [prestataireFiltered]
+  );
+
+  const flagFiltered = useMemo(
+    () => (activeFlag === "TOUS" ? prestataireFiltered : prestataireFiltered.filter((r) => r.flag === activeFlag)),
+    [prestataireFiltered, activeFlag]
+  );
+
   // Plate-only search, standardized on the same shared autocomplete pattern
   // as Parking/Atelier — client/modele/prestataire/commentaire free-text
-  // matching was removed by explicit product decision.
+  // matching was removed by explicit product decision. Applies as the final
+  // stage on top of the Flotte/Prestataire/Flag chip cascade above, which
+  // operate independently of the plate search.
   const immList = useMemo(
-    () => [...new Set(fleetFiltered.map((r) => r.IMM).filter(Boolean))],
-    [fleetFiltered]
+    () => [...new Set(flagFiltered.map((r) => r.IMM).filter(Boolean))],
+    [flagFiltered]
   );
   const { suggestions } = usePlateAutocomplete(search, immList);
 
   const searched = useMemo(() => {
     const term = search.trim().toUpperCase();
-    if (!term) return fleetFiltered;
-    return fleetFiltered.filter((r) => String(r.IMM ?? "").toUpperCase().includes(term));
-  }, [fleetFiltered, search]);
+    if (!term) return flagFiltered;
+    return flagFiltered.filter((r) => String(r.IMM ?? "").toUpperCase().includes(term));
+  }, [flagFiltered, search]);
 
   function selectFleet(f: Fleet) {
     setActiveFleet(f);
+    setActivePrestataire("TOUS");
+    setActiveFlag("TOUS");
+  }
+  function selectPrestataire(p: string) {
+    setActivePrestataire(p);
+    setActiveFlag("TOUS");
   }
 
   // Original page only surfaced fetch errors when it had nothing cached to
@@ -370,6 +400,36 @@ export default function SuiviRlPage() {
             ))}
           </ToggleGroup>
         </div>
+        <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
+          <ToggleGroup
+            type="single"
+            value={activePrestataire}
+            onValueChange={(v) => v && selectPrestataire(v)}
+          >
+            <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
+            {visiblePrestataires.map((p) => (
+              <ToggleGroupItem key={p} value={p}>
+                {p}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+        {visibleFlags.length > 0 && (
+          <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
+            <ToggleGroup
+              type="single"
+              value={activeFlag}
+              onValueChange={(v) => v && setActiveFlag(v)}
+            >
+              <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
+              {visibleFlags.map((f) => (
+                <ToggleGroupItem key={f} value={f}>
+                  {f}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+        )}
       </ListPageHeader>
 
       <div className="px-3 py-3">
