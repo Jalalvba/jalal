@@ -6,8 +6,9 @@ import { BDD_HEADERS, type BddRow } from "@/lib/types";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { usePlateAutocomplete } from "@/hooks/usePlateAutocomplete";
 import { InlineEditSelect, type InlineEditTriggerState } from "@/components/fleet/InlineEditSelect";
 import { InlineEditText } from "@/components/fleet/InlineEditText";
 import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
@@ -296,9 +297,8 @@ export default function SuiviRlPage() {
 
   const rows = rowsQuery.data ?? EMPTY_ROWS;
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [activeFleet, setActiveFleet] = useState<Fleet>("INTERNE");
-  const [activePrestataire, setActivePrestataire] = useState("TOUS");
-  const [activeFlag, setActiveFlag] = useState("TOUS");
 
   const fleetFiltered = useMemo(() => {
     if (activeFleet === "TOUS") {
@@ -307,40 +307,23 @@ export default function SuiviRlPage() {
     return rows.filter((r) => r.ETAT?.toUpperCase() === activeFleet);
   }, [rows, activeFleet]);
 
-  const visiblePrestataires = useMemo(
-    () => [...new Set(fleetFiltered.map((r) => r.prestataire).filter(Boolean))].sort(),
+  // Plate-only search, standardized on the same shared autocomplete pattern
+  // as Parking/Atelier — client/modele/prestataire/commentaire free-text
+  // matching was removed by explicit product decision.
+  const immList = useMemo(
+    () => [...new Set(fleetFiltered.map((r) => r.IMM).filter(Boolean))],
     [fleetFiltered]
   );
-
-  const prestataireFiltered = useMemo(
-    () => (activePrestataire === "TOUS" ? fleetFiltered : fleetFiltered.filter((r) => r.prestataire === activePrestataire)),
-    [fleetFiltered, activePrestataire]
-  );
-
-  const visibleFlags = useMemo(
-    () => [...new Set(prestataireFiltered.map((r) => r.flag).filter(Boolean))].sort(),
-    [prestataireFiltered]
-  );
-
-  const flagFiltered = useMemo(
-    () => (activeFlag === "TOUS" ? prestataireFiltered : prestataireFiltered.filter((r) => r.flag === activeFlag)),
-    [prestataireFiltered, activeFlag]
-  );
+  const { suggestions } = usePlateAutocomplete(search, immList);
 
   const searched = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return flagFiltered;
-    return flagFiltered.filter((r) => BDD_HEADERS.some((h) => String(r[h] ?? "").toLowerCase().includes(q)));
-  }, [flagFiltered, search]);
+    const term = search.trim().toUpperCase();
+    if (!term) return fleetFiltered;
+    return fleetFiltered.filter((r) => String(r.IMM ?? "").toUpperCase().includes(term));
+  }, [fleetFiltered, search]);
 
   function selectFleet(f: Fleet) {
     setActiveFleet(f);
-    setActivePrestataire("TOUS");
-    setActiveFlag("TOUS");
-  }
-  function selectPrestataire(p: string) {
-    setActivePrestataire(p);
-    setActiveFlag("TOUS");
   }
 
   // Original page only surfaced fetch errors when it had nothing cached to
@@ -362,11 +345,15 @@ export default function SuiviRlPage() {
         count={searched.length}
         onRefresh={() => rowsQuery.refetch()}
       >
-        <Input
+        <Combobox
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Recherche globale…"
-          className="bg-zinc-900"
+          onValueChange={(v) => { setSearch(v); setSearchOpen(true); }}
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          options={suggestions}
+          onSelect={(imm) => { setSearch(imm); setSearchOpen(false); }}
+          placeholder="Rechercher par immatriculation…"
+          inputMode="numeric"
         />
 
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto">
@@ -383,36 +370,6 @@ export default function SuiviRlPage() {
             ))}
           </ToggleGroup>
         </div>
-        <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
-          <ToggleGroup
-            type="single"
-            value={activePrestataire}
-            onValueChange={(v) => v && selectPrestataire(v)}
-          >
-            <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
-            {visiblePrestataires.map((p) => (
-              <ToggleGroupItem key={p} value={p}>
-                {p}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </div>
-        {visibleFlags.length > 0 && (
-          <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
-            <ToggleGroup
-              type="single"
-              value={activeFlag}
-              onValueChange={(v) => v && setActiveFlag(v)}
-            >
-              <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
-              {visibleFlags.map((f) => (
-                <ToggleGroupItem key={f} value={f}>
-                  {f}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          </div>
-        )}
       </ListPageHeader>
 
       <div className="px-3 py-3">
