@@ -331,20 +331,22 @@ export default function SuiviRlPage() {
 
   // Plate-only search, standardized on the same shared autocomplete pattern
   // as Parking/Atelier — client/modele/prestataire/commentaire free-text
-  // matching was removed by explicit product decision. Applies as the final
-  // stage on top of the Flotte/Prestataire/Flag chip cascade above, which
-  // operate independently of the plate search.
+  // matching was removed by explicit product decision. By design, this
+  // bypasses the Flotte/Prestataire/Flag chip cascade entirely: chips are a
+  // separate browsing filter, while search is for finding a specific real
+  // plate regardless of what chips currently happen to be set. Chips only
+  // apply when the search box is empty.
   const immList = useMemo(
-    () => [...new Set(flagFiltered.map((r) => r.IMM).filter(Boolean))],
-    [flagFiltered]
+    () => [...new Set(rows.map((r) => r.IMM).filter(Boolean))],
+    [rows]
   );
   const { suggestions } = usePlateAutocomplete(search, immList);
 
   const searched = useMemo(() => {
     const term = search.trim().toUpperCase();
     if (!term) return flagFiltered;
-    return flagFiltered.filter((r) => String(r.IMM ?? "").toUpperCase().includes(term));
-  }, [flagFiltered, search]);
+    return rows.filter((r) => String(r.IMM ?? "").toUpperCase().includes(term));
+  }, [flagFiltered, rows, search]);
 
   function selectFleet(f: Fleet) {
     setActiveFleet(f);
