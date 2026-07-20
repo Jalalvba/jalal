@@ -1,6 +1,6 @@
 // app/api/query/route.ts
-// Resolves partial IMM/WW → returns { mode:"suggest", suggestions[] }
-//                          or { mode:"data", imm, ww }
+// Resolves partial IMM/WW (plate/WW only, no VIN) → returns
+// { mode:"suggest", suggestions[] } or { mode:"data", imm, ww }
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,6 @@ export async function GET(req: Request) {
       .find({ $or: [
         { Immatriculation: regex },
         { "Numéro WW": regex },
-        { "N° de chassis": regex },
       ]})
       .project({ Immatriculation: 1, "Numéro WW": 1, Marque: 1, "Modèle": 1, _id: 0 })
       .limit(10)

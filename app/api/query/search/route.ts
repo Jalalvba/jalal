@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     const regex = { $regex: "^" + escapeRegex(q), $options: "i" };
 
     const docs = await col
-      .find({ $or: [{ Immatriculation: regex }, { "Numéro WW": regex }, { VIN: regex }] })
+      .find({ $or: [{ Immatriculation: regex }, { "Numéro WW": regex }] })
       .project({ Immatriculation: 1, "Numéro WW": 1, Marque: 1, Modèle: 1, _id: 0 })
       .limit(10)
       .toArray();

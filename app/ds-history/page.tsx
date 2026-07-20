@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { logout } from "@/app/login/actions";
 import { useDarkMode } from "@/hooks/useDarkMode";
+import { Combobox } from "@/components/ui/combobox";
 import type {
   Line,
   DsHistoryItem,
@@ -111,6 +112,18 @@ function displayValue(item: DsHistoryItem, key: keyof DsHistoryItem): string {
 
   if (key === "Date DS") return fmtDate(v as string);
   return String(v).trim() || "—";
+}
+
+// Search suggestions now match IMM/WW only (VIN search cut) — plate/WW
+// standardization across the app. Formats one suggestion into the single
+// display line the shared Combobox renders per row.
+type SearchResult = { imm: string; ww: string; label: string; primary?: string; secondary?: string };
+
+function formatSuggestion(s: SearchResult): string {
+  const parts = [s.primary ?? s.imm];
+  if (s.secondary) parts.push(`(${s.secondary})`);
+  if (s.label) parts.push(`— ${s.label}`);
+  return parts.join(" ");
 }
 
 function displayLineValue(line: Line, key: keyof Line): string {
@@ -651,7 +664,6 @@ export default function Home() {
   const [limit, setLimit] = useState(200);
 
   // Smart search suggestions
-  type SearchResult = { imm: string; ww: string; label: string; primary?: string; secondary?: string };
   const [suggestions, setSuggestions]         = useState<SearchResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchLoading, setSearchLoading]     = useState(false);
@@ -692,14 +704,18 @@ export default function Home() {
     fetchAll(s.imm);
   }
 
-  function handleImmKeyDown(e: React.KeyboardEvent) {
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    setShowSuggestions(false);
-    if (suggestions.length === 1) { selectSuggestion(suggestions[0]); return; }
-    if (suggestions.length === 0) { fetchAll(); return; }
-    // multiple suggestions — show them (already visible)
-  }
+  // Formatted display label per suggestion (what the shared Combobox
+  // renders), mapped back to the underlying SearchResult for onSelect.
+  const { suggestionOptions, suggestionByLabel } = useMemo(() => {
+    const options: string[] = [];
+    const byLabel = new Map<string, SearchResult>();
+    for (const s of suggestions) {
+      const label = formatSuggestion(s);
+      options.push(label);
+      byLabel.set(label, s);
+    }
+    return { suggestionOptions: options, suggestionByLabel: byLabel };
+  }, [suggestions]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string>("");
@@ -874,7 +890,7 @@ export default function Home() {
               Accueil
             </Link>
             <h1 className="text-2xl font-semibold tracking-tight">DS History</h1>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Recherche par immatriculation / WW / VIN</p>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Recherche par immatriculation / WW</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
@@ -941,42 +957,28 @@ export default function Home() {
         <div className={`mt-6 rounded-2xl border p-4 shadow-sm ${rlRows.length > 0 && !loading ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}>
           <div className="grid gap-3 sm:grid-cols-12 sm:items-end">
             <div className="sm:col-span-5" ref={searchRef}>
-              <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Immatriculation / WW / VIN</label>
-              <div className="relative">
-                <input
-                  value={imm}
-                  onChange={e => handleImmChange(e.target.value)}
-                  onKeyDown={handleImmKeyDown}
-                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                  placeholder="ex: 48070 / 832223WW / VIN"
-                  className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 pr-8 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:focus:border-zinc-600"
-                />
-                {searchLoading && (
-                  <div className="absolute right-3 top-3.5">
-                    <svg className="h-4 w-4 animate-spin text-zinc-400" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                    </svg>
-                  </div>
-                )}
-                {showSuggestions && suggestions.length > 0 && (
-                  <ul className="absolute z-50 mt-1 w-full rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-                    {suggestions.map(s => (
-                      <li key={s.imm}
-                        onMouseDown={() => selectSuggestion(s)}
-                        className="cursor-pointer px-4 py-2.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                        <span className="font-semibold text-zinc-800 dark:text-zinc-100">{s.primary ?? s.imm}</span>
-                        {s.label && (
-                          <span className="ml-2 text-xs text-zinc-400">{s.label}</span>
-                        )}
-                        {s.secondary && (
-                          <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-500">{s.secondary}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Immatriculation / WW</label>
+              <Combobox
+                value={imm}
+                onValueChange={handleImmChange}
+                open={showSuggestions}
+                onOpenChange={setShowSuggestions}
+                options={suggestionOptions}
+                onSelect={(label) => {
+                  const s = suggestionByLabel.get(label);
+                  if (s) selectSuggestion(s);
+                }}
+                loading={searchLoading}
+                placeholder="ex: 48070 / 832223WW"
+                inputMode="numeric"
+                onKeyDownCapture={(e) => {
+                  if (e.key === "Enter" && suggestions.length === 0) {
+                    e.preventDefault();
+                    setShowSuggestions(false);
+                    fetchAll();
+                  }
+                }}
+              />
             </div>
             <div className="sm:col-span-3">
               <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Année (optionnel)</label>

@@ -106,7 +106,7 @@ export default function Home() {
           <NavCard
             href="/ds-history"
             title="DS History"
-            subtitle="Recherche par immatriculation / WW / VIN"
+            subtitle="Recherche par immatriculation / WW"
             accent="bg-blue-500"
             icon={
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
