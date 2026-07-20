@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     const results = docs.map(d => ({
       imm:   d["Immatriculation"] ?? "",
       ww:    d["Numéro WW"]       ?? "",
-      label: [d["Immatriculation"], d["Marque"], d["Modèle"]].filter(Boolean).join(" — "),
+      label: [d["Marque"], d["Modèle"]].filter(Boolean).join(" — "),
     }));
 
     return NextResponse.json({ ok: true, results });
