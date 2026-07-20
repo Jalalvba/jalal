@@ -53,6 +53,7 @@ export function PlateSearchInput({
         options={suggestions}
         onSelect={selectSuggestion}
         placeholder={placeholder}
+        inputMode="numeric"
         inputClassName={`border-2 ${accentBorderClassName}`}
         onKeyDownCapture={(e) => {
           if (e.key === "Enter" && suggestions.length === 0) {
