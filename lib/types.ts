@@ -154,8 +154,6 @@ export const BDD_EDITABLE_FIELDS = [
   "Technicien",
 ] as const;
 
-export type BddEditableField = (typeof BDD_EDITABLE_FIELDS)[number];
-
 export type BddUpdateResult =
   | { ok: true; written: string[] }
   | { ok: false; error: string; rejectedFields: string[] };
