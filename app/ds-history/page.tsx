@@ -14,12 +14,30 @@ import type {
   ParcApiResponse,
   CpItem,
   CpApiResponse,
+  BddRow,
 } from "@/lib/types";
-import { FLAG_STYLE } from "@/lib/types";
+import {
+  FLAG_STYLE,
+  ETAT_OPTIONS,
+  FLAG_OPTIONS,
+  CATEGORIE_OPTIONS,
+  TECHNICIEN_OPTIONS,
+  PRESTATAIRE_OPTIONS,
+  prestataireDotClass,
+  BDD_EDITABLE_FIELDS,
+} from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
+import { InlineEditSelect } from "@/components/fleet/InlineEditSelect";
+import { InlineEditText } from "@/components/fleet/InlineEditText";
+import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
+import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
+import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate } from "@/hooks/useBddRows";
+import { buildPlateVariants } from "@/lib/plateVariants";
 import type { RlRow } from "@/lib/googleSheetsRl";
 import type { ImportRow } from "@/lib/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/format";
+
+type FieldKey = (typeof BDD_EDITABLE_FIELDS)[number];
 
 // ─── Field-visibility persistence (localStorage, same pattern as the
 // dark-mode toggle — previously a hand-rolled document.cookie utility) ──────
@@ -502,36 +520,127 @@ function FieldSelector({
 
 // ─── Sheet Card (BDD + RL merged) ────────────────────────────────────────────
 
-// Narrower display-only shape than lib/types.ts's full BddRow (which has 22
-// fields incl. editable ones for the Suivi RL page) — /api/sheet?sheet=bdd
-// returns that full row, but this card only ever reads these 18 fields.
-// Renamed from the original "BddRow" to kill the naming collision with the
-// real, wider type.
-type SheetBddRow = { IMM: string; date: string; client: string; modele: string; ETAT: string; prestataire: string; flag: string; commentaire: string; "Catégorie": string; Technicien: string; "Reunion N-1": string; mois_restant: string; date_fin_contrat: string; lieu_Reparation: string; Motif: string; "station_départ": string; ds: string; date_ds: string; };
+// Module-scope so both SheetCard (RL rows, Import section) and
+// BddEditableRow (Réunion N-1, the one read-only field left on the BDD row)
+// can call it without needing to thread a prop through.
+const etatStyle = (etat: string) => ({
+  "DISPONIBLE": "bg-[#1a7a4a] text-white border-[#1a7a4a]",
+  "INTERNE":    "bg-[#f4c430] text-[#5a3e00] border-[#e6b800]",
+  "EXTERNE":    "bg-red-600 text-white border-red-700",
+  "ANNULEE":    "bg-zinc-700 text-zinc-200 border-zinc-600",
+} as Record<string,string>)[etat?.toUpperCase()] ?? "bg-zinc-700 text-zinc-200 border-zinc-600";
 
-function SheetCard({ bddRows, rlRows, importRows }: { bddRows: SheetBddRow[]; rlRows: RlRow[]; importRows: ImportRow[] }) {
-  if (!bddRows.length && !rlRows.length && !importRows.length) return null;
-
-  const etatStyle = (etat: string) => ({
-    "DISPONIBLE": "bg-[#1a7a4a] text-white border-[#1a7a4a]",
-    "INTERNE":    "bg-[#f4c430] text-[#5a3e00] border-[#e6b800]",
-    "EXTERNE":    "bg-red-600 text-white border-red-700",
-    "ANNULEE":    "bg-zinc-700 text-zinc-200 border-zinc-600",
-  } as Record<string,string>)[etat?.toUpperCase()] ?? "bg-zinc-700 text-zinc-200 border-zinc-600";
-
-  const GREEN_PRESTATAIRES = new Set(["M-AUTOMOTIV","CAC","BUGSHAN","STELLANTIS","SMEIA","BAMOTORS","JAMEEL"]);
-
-  const f = (label: string, val?: string) => val ? (
+function f(label: string, val?: string) {
+  return val ? (
     <div className="min-w-0">
       <div className="text-xs text-zinc-400 dark:text-zinc-500">{label}</div>
-      <div className="mt-0.5 flex items-start gap-1.5 whitespace-normal break-words text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-        {label === "Prestataire" && (
-          <span className={`mt-1 inline-block h-2.5 w-2.5 rounded-full flex-shrink-0 ${GREEN_PRESTATAIRES.has(val.toUpperCase()) ? "bg-[#1a7a4a]" : "bg-[#f4c430]"}`} />
-        )}
+      <div className="mt-0.5 whitespace-normal break-words text-sm font-semibold text-zinc-800 dark:text-zinc-100">
         {val}
       </div>
     </div>
   ) : null;
+}
+
+// ─── BDD row (editable) ───────────────────────────────────────────────────────
+//
+// Same 6 BDD_EDITABLE_FIELDS, same InlineEdit* components, same
+// useUpdateBddRow/useOptimisticBddUpdate mutation as app/suivi-rl/page.tsx —
+// this card and Suivi RL edit the exact same sheet row (matched by `_row`),
+// now via the same shared react-query cache (see useBddRows()), so a write
+// from either page is reflected in the other. One component per row (not
+// inlined in a .map()) because the commit hooks must be called at a stable
+// position — same reason Suivi RL's BddCard is its own component.
+function BddEditableRow({ row }: { row: BddRow }) {
+  const updateMutation = useUpdateBddRow();
+  const applyOptimisticUpdate = useOptimisticBddUpdate();
+
+  function commitField(field: FieldKey) {
+    return async (value: string) => {
+      await updateMutation.mutateAsync({ row: row._row, updates: { [field]: value } });
+      applyOptimisticUpdate(row._row, { [field]: value } as Partial<BddRow>);
+    };
+  }
+
+  const dot = prestataireDotClass(row.prestataire);
+
+  return (
+    <div className="px-5 py-4">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <InlineEditSelect
+          value={row.ETAT}
+          options={ETAT_OPTIONS}
+          label="État"
+          onCommit={commitField("ETAT")}
+          renderTrigger={({ value, pending, justSaved, onOpen }) => (
+            <button
+              type="button"
+              onClick={onOpen}
+              disabled={pending}
+              className={`rounded-md border px-1.5 py-0.5 text-xs font-medium transition disabled:opacity-60 ${etatStyle(value)} ${justSaved ? "ring-2 ring-emerald-400" : ""}`}
+            >
+              {value || "—"}
+            </button>
+          )}
+        />
+        <InlineEditSelect
+          value={row.flag}
+          options={FLAG_OPTIONS}
+          label="Flag"
+          onCommit={commitField("flag")}
+          renderTrigger={({ value, pending, justSaved, onOpen }) => (
+            <button type="button" onClick={onOpen} disabled={pending} className="disabled:opacity-60">
+              {value && FLAG_STYLE[value] ? (
+                <Badge className={`${FLAG_STYLE[value].badge} ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>{value}</Badge>
+              ) : (
+                <span className={`rounded-md border border-dashed border-zinc-400 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:border-zinc-700 dark:text-zinc-500 ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>
+                  + Flag
+                </span>
+              )}
+            </button>
+          )}
+        />
+        {row.date && <span className="text-xs text-zinc-400">{row.date}</span>}
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+        <InlineEditCombobox
+          value={row.prestataire}
+          options={PRESTATAIRE_OPTIONS}
+          onCommit={commitField("prestataire")}
+          placeholder="Prestataire…"
+          renderTrigger={(state) => <FieldRowTrigger label="Prestataire" placeholder="— Aucun —" dot={dot} {...state} />}
+        />
+        <InlineEditSelect
+          value={row["Catégorie"]}
+          options={CATEGORIE_OPTIONS}
+          label="Catégorie"
+          onCommit={commitField("Catégorie")}
+          renderTrigger={(state) => <FieldRowTrigger label="Catégorie" placeholder="— Choisir —" {...state} />}
+        />
+        <InlineEditSelect
+          value={row.Technicien}
+          options={TECHNICIEN_OPTIONS}
+          label="Technicien"
+          onCommit={commitField("Technicien")}
+          renderTrigger={(state) => <FieldRowTrigger label="Technicien" placeholder="— Choisir —" {...state} />}
+        />
+        {f("Réunion N-1", row["Reunion N-1"])}
+      </div>
+
+      <div className="mt-3">
+        <InlineEditText
+          value={row.commentaire}
+          resyncDeps={[row._row, row.commentaire]}
+          onCommit={commitField("commentaire")}
+          placeholder="Commentaire…"
+        />
+      </div>
+    </div>
+  );
+}
+
+function SheetCard({ bddRows, rlRows, importRows }: { bddRows: BddRow[]; rlRows: RlRow[]; importRows: ImportRow[] }) {
+  if (!bddRows.length && !rlRows.length && !importRows.length) return null;
 
   const hasRl = rlRows.length > 0;
 
@@ -550,27 +659,8 @@ function SheetCard({ bddRows, rlRows, importRows }: { bddRows: SheetBddRow[]; rl
 
       <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
         {/* BDD rows */}
-        {bddRows.map((row, i) => (
-          <div key={i} className="px-5 py-4">
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              {row.ETAT && (
-                <span className={`rounded-md border px-1.5 py-0.5 text-xs font-medium ${etatStyle(row.ETAT)}`}>
-                  {row.ETAT}
-                </span>
-              )}
-              {row.flag && FLAG_STYLE[row.flag] && (
-                <Badge className={FLAG_STYLE[row.flag].badge}>{row.flag}</Badge>
-              )}
-              {row.date && <span className="text-xs text-zinc-400">{row.date}</span>}
-            </div>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
-              {f("Prestataire", row.prestataire)}
-              {f("Catégorie", row["Catégorie"])}
-              {f("Technicien", row.Technicien)}
-              {f("Réunion N-1", row["Reunion N-1"])}
-              {f("Commentaire", row.commentaire)}
-            </div>
-          </div>
+        {bddRows.map((row) => (
+          <BddEditableRow key={row._row} row={row} />
         ))}
 
         {/* RL rows */}
@@ -732,7 +822,18 @@ export default function Home() {
 
 
   // ── Google Sheets ──────────────────────────────────────────────────────────
-  const [bddRows, setBddRows] = useState<SheetBddRow[]>([]);
+  // BDD rows come from the same useBddRows() react-query cache Suivi RL uses
+  // (unfiltered fetch of the whole tab) — filtered here to just the plate(s)
+  // currently being viewed, by IMM/WW variant, the same matching logic
+  // /api/sheet?sheet=bdd used to apply server-side (see lib/plateVariants.ts).
+  // Sharing the cache (not just the sheet) means an edit made here or on
+  // Suivi RL is reflected in the other without a page reload.
+  const bddRowsQuery = useBddRows();
+  const [bddMatchVariants, setBddMatchVariants] = useState<Set<string> | null>(null);
+  const bddRows = useMemo(() => {
+    if (!bddMatchVariants || !bddRowsQuery.data) return [];
+    return bddRowsQuery.data.filter((r) => bddMatchVariants.has(String(r.IMM ?? "").trim().toUpperCase()));
+  }, [bddRowsQuery.data, bddMatchVariants]);
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [rlRows, setRlRows] = useState<RlRow[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -771,7 +872,7 @@ export default function Home() {
         if (resolveJson.ok && resolveJson.mode === "suggest") {
           setSuggestions(resolveJson.suggestions ?? []);
           setShowSuggestions(true);
-          setData(null); setVehicle(null); setContracts([]); setBddRows([]); setImportRows([]); setRlRows([]);
+          setData(null); setVehicle(null); setContracts([]); setBddMatchVariants(null); setImportRows([]); setRlRows([]);
           return;
         }
         if (resolveJson.ok && resolveJson.mode === "data") {
@@ -789,13 +890,11 @@ export default function Home() {
       const sheetImmQs    = new URLSearchParams({ imm: immVal });
       const sheetWwQs     = rawVal !== immVal ? new URLSearchParams({ imm: rawVal }) : null;
 
-      const [dsRes, parcRes, cpRes, bddRes, importRes, bddWwRes, importWwRes, rlRes, rlWwRes] = await Promise.all([
+      const [dsRes, parcRes, cpRes, importRes, importWwRes, rlRes, rlWwRes] = await Promise.all([
         fetch(`/api/ds/history?${dsQs}`),
         fetch(`/api/parc?${parcQs}`),
         fetch(`/api/cp?${cpQs}`),
-        fetch(`/api/sheet?sheet=bdd&${sheetImmQs}`),
         fetch(`/api/sheet?sheet=import&${sheetImmQs}`),
-        sheetWwQs ? fetch(`/api/sheet?sheet=bdd&${sheetWwQs}`) : Promise.resolve(null),
         sheetWwQs ? fetch(`/api/sheet?sheet=import&${sheetWwQs}`) : Promise.resolve(null),
         fetch(`/api/sheet?sheet=rl&${sheetImmQs}`),
         sheetWwQs ? fetch(`/api/sheet?sheet=rl&${sheetWwQs}`) : Promise.resolve(null),
@@ -804,12 +903,18 @@ export default function Home() {
       const dsJson     = await dsRes.json()     as DsApiResponse;
       const parcJson   = await parcRes.json()   as ParcApiResponse;
       const cpJson     = await cpRes.json()     as CpApiResponse;
-      const bddJson      = await bddRes.json();
       const importJson   = await importRes.json();
-      const bddWwJson    = bddWwRes    ? await bddWwRes.json()    : { ok: false, items: [] };
       const importWwJson = importWwRes ? await importWwRes.json() : { ok: false, items: [] };
       const rlJson       = await rlRes.json();
       const rlWwJson     = rlWwRes     ? await rlWwRes.json()     : { ok: false, items: [] };
+
+      // BDD rows: filter the shared useBddRows() cache client-side by the
+      // same IMM/WW variant set /api/sheet?sheet=bdd used to match
+      // server-side, instead of a separate fetch — see bddRows useMemo above.
+      setBddMatchVariants(new Set([
+        ...buildPlateVariants(immVal),
+        ...(rawVal !== immVal ? buildPlateVariants(rawVal) : []),
+      ]));
 
       if (!dsRes.ok || !dsJson.ok) {
         setData(null);
@@ -824,16 +929,11 @@ export default function Home() {
       if (cpRes.ok && cpJson.ok) setContracts(cpJson.items ?? []);
       else setContracts([]);
 
-      // Merge IMM results + WW results, deduplicate by reference/IMM
-      const mergeBdd = [
-        ...(bddJson.ok ? bddJson.items : []),
-        ...(bddWwJson.ok ? bddWwJson.items : []),
-      ].filter((r, i, arr) => arr.findIndex(x => x.IMM === r.IMM && x.date === r.date) === i);
+      // Merge IMM results + WW results, deduplicate by reference
       const mergeImport = [
         ...(importJson.ok ? importJson.items : []),
         ...(importWwJson.ok ? importWwJson.items : []),
       ].filter((r, i, arr) => arr.findIndex(x => x["Reference dossier"] === r["Reference dossier"] && x["DatePrestation"] === r["DatePrestation"]) === i);
-      setBddRows(mergeBdd);
       setImportRows(mergeImport);
 
       const mergeRl = [
@@ -846,7 +946,7 @@ export default function Home() {
       setRlRows(mergeRl);
 
     } catch (e) {
-      setData(null); setVehicle(null); setContracts([]); setBddRows([]); setImportRows([]); setRlRows([]);
+      setData(null); setVehicle(null); setContracts([]); setBddMatchVariants(null); setImportRows([]); setRlRows([]);
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setLoading(false);

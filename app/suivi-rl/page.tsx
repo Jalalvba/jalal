@@ -1,8 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil } from "lucide-react";
-import { BDD_HEADERS, FLAG_STYLE, type BddRow } from "@/lib/types";
+import {
+  BDD_HEADERS,
+  FLAG_STYLE,
+  ETAT_OPTIONS,
+  FLAG_OPTIONS,
+  CATEGORIE_OPTIONS,
+  TECHNICIEN_OPTIONS,
+  PRESTATAIRE_OPTIONS,
+  prestataireDotClass,
+  type BddRow,
+} from "@/lib/types";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,62 +21,9 @@ import { usePlateAutocomplete } from "@/hooks/usePlateAutocomplete";
 import { InlineEditSelect, type InlineEditTriggerState } from "@/components/fleet/InlineEditSelect";
 import { InlineEditText } from "@/components/fleet/InlineEditText";
 import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
+import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
 import { cn } from "@/components/ui/utils";
 import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate } from "@/hooks/useBddRows";
-
-// ─── Dropdown option lists — exact, given verbatim, not invented ──────────────
-
-const ETAT_OPTIONS = ["INTERNE", "EXTERNE", "DISPONIBLE", "ANNULE", "ANNULEE"];
-
-const FLAG_OPTIONS = ["Urgent", "Prêt", "NTR", "INST", "REP", "ESSAI"];
-
-const CATEGORIE_OPTIONS = [
-  "Atelier chargé — en attente diagnostic",
-  "En cours diagnostic par technicien",
-  "En réparation atelier",
-  'En réparation externe — décision validée"',
-  "En attente décision Mehdi",
-  "En attente PDR",
-  "En attente validation pièce",
-  "En attente validation devis prestataire externe",
-  "Chez concessionnaire — expertise externe",
-  "Chez concessionnaire — garantie constructeur",
-];
-
-const TECHNICIEN_OPTIONS = [
-  "ALI ELGHORABI",
-  "Said Errakkachi",
-  "AMDAOUI OTHMANE",
-  "Othmane Madih",
-  "MALEK HAMZA",
-  "BELOUARDIGHI AZIZ",
-  "RIDA BOULLAH",
-  "HAJJI BADRY",
-  "MINYAOUI SAID",
-  "ABDERRAHIM ELKONTAFI",
-  "RAMZI ADIL",
-  "HOUCINE CHARII",
-];
-
-const PRESTATAIRE_YELLOW = new Set([
-  "amine diag", "pres injection", "simo BV", "EMAA", "nabil", "ELECTRO DIESEL",
-  "FATR", "OPTIMUM", "HAMID CLIM", "nabil plaque", "My cherif Pneu", "FAP",
-]);
-const PRESTATAIRE_GREEN = new Set([
-  "M-AUTOMOTIV", "CAC", "BUGSHAN", "STELLANTIS", "SMEIA", "BAMOTORS", "JAMEEL", "VOVLO",
-]);
-const PRESTATAIRE_OPTIONS = [
-  "SCAL", "amine diag", "pres injection", "simo BV", "EMAA", "nabil",
-  "ELECTRO DIESEL", "FATR", "OPTIMUM", "HAMID CLIM", "nabil plaque",
-  "M-AUTOMOTIV", "CAC", "BUGSHAN", "STELLANTIS", "SMEIA", "BAMOTORS",
-  "JAMEEL", "VOVLO", "My cherif Pneu", "FAP",
-];
-
-function prestataireDotClass(val: string): string | null {
-  if (PRESTATAIRE_GREEN.has(val)) return "bg-emerald-500";
-  if (PRESTATAIRE_YELLOW.has(val)) return "bg-amber-400";
-  return null;
-}
 
 function formatAge(dataUpdatedAt: number): string {
   if (!dataUpdatedAt) return "";
@@ -99,56 +55,6 @@ const READONLY_HEADERS = BDD_HEADERS.filter(
     h !== "Catégorie" &&
     h !== "Technicien"
 );
-
-// ─── Shared trigger look for the "labeled row" editable fields (Catégorie,
-// Technicien, Prestataire) — a faint background + pencil affordance marks
-// these as tappable, distinct from the plain read-only rows below them. ────
-
-function FieldRowTrigger({
-  label,
-  value,
-  placeholder,
-  pending,
-  justSaved,
-  error,
-  onOpen,
-  dot,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  pending: boolean;
-  justSaved: boolean;
-  error: string;
-  onOpen: () => void;
-  dot?: string | null;
-}) {
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={onOpen}
-        disabled={pending}
-        className={cn(
-          "flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition disabled:opacity-60",
-          justSaved
-            ? "border-emerald-500/60 bg-emerald-500/5"
-            : error
-              ? "border-red-500/60 bg-red-500/5"
-              : "border-zinc-800 bg-zinc-800/50 active:bg-zinc-800"
-        )}
-      >
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="flex-shrink-0 text-[9px] font-bold uppercase text-zinc-500">{label}</span>
-          {dot && <span className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />}
-          <span className={cn("truncate", value ? "text-zinc-200" : "italic text-zinc-600")}>{value || placeholder}</span>
-        </span>
-        <Pencil className="h-3 w-3 flex-shrink-0 text-zinc-600" />
-      </button>
-      {error && <div className="mt-1 text-[10px] text-red-400">{error}</div>}
-    </div>
-  );
-}
 
 // ─── Card ───────────────────────────────────────────────────────────────────
 

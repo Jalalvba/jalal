@@ -154,8 +154,9 @@ export const BDD_EDITABLE_FIELDS = [
   "Technicien",
 ] as const;
 
-// Shared with app/suivi-rl/page.tsx so both pages render the same flag
-// exactly the same way — single source of truth, not two copies to drift.
+// Shared with app/suivi-rl/page.tsx (and now app/ds-history/page.tsx) so
+// every page renders the same flag exactly the same way — single source of
+// truth, not copies to drift.
 export const FLAG_STYLE: Record<string, { border: string; badge: string }> = {
   Urgent: { border: "border-l-red-500", badge: "bg-red-500/10 text-red-400 border-red-500/20" },
   "Prêt": { border: "border-l-emerald-500", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
@@ -164,6 +165,62 @@ export const FLAG_STYLE: Record<string, { border: string; badge: string }> = {
   REP: { border: "border-l-orange-500", badge: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
   ESSAI: { border: "border-l-blue-500", badge: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
 };
+
+// Dropdown option lists — exact, given verbatim, not invented. Shared between
+// app/suivi-rl/page.tsx and app/ds-history/page.tsx: both edit the same 6
+// BDD_EDITABLE_FIELDS against the same sheet, so the picker choices must
+// match exactly rather than being two independently-typed literal lists.
+export const ETAT_OPTIONS = ["INTERNE", "EXTERNE", "DISPONIBLE", "ANNULE", "ANNULEE"];
+
+export const FLAG_OPTIONS = ["Urgent", "Prêt", "NTR", "INST", "REP", "ESSAI"];
+
+export const CATEGORIE_OPTIONS = [
+  "Atelier chargé — en attente diagnostic",
+  "En cours diagnostic par technicien",
+  "En réparation atelier",
+  'En réparation externe — décision validée"',
+  "En attente décision Mehdi",
+  "En attente PDR",
+  "En attente validation pièce",
+  "En attente validation devis prestataire externe",
+  "Chez concessionnaire — expertise externe",
+  "Chez concessionnaire — garantie constructeur",
+];
+
+export const TECHNICIEN_OPTIONS = [
+  "ALI ELGHORABI",
+  "Said Errakkachi",
+  "AMDAOUI OTHMANE",
+  "Othmane Madih",
+  "MALEK HAMZA",
+  "BELOUARDIGHI AZIZ",
+  "RIDA BOULLAH",
+  "HAJJI BADRY",
+  "MINYAOUI SAID",
+  "ABDERRAHIM ELKONTAFI",
+  "RAMZI ADIL",
+  "HOUCINE CHARII",
+];
+
+const PRESTATAIRE_YELLOW = new Set([
+  "amine diag", "pres injection", "simo BV", "EMAA", "nabil", "ELECTRO DIESEL",
+  "FATR", "OPTIMUM", "HAMID CLIM", "nabil plaque", "My cherif Pneu", "FAP",
+]);
+const PRESTATAIRE_GREEN = new Set([
+  "M-AUTOMOTIV", "CAC", "BUGSHAN", "STELLANTIS", "SMEIA", "BAMOTORS", "JAMEEL", "VOVLO",
+]);
+export const PRESTATAIRE_OPTIONS = [
+  "SCAL", "amine diag", "pres injection", "simo BV", "EMAA", "nabil",
+  "ELECTRO DIESEL", "FATR", "OPTIMUM", "HAMID CLIM", "nabil plaque",
+  "M-AUTOMOTIV", "CAC", "BUGSHAN", "STELLANTIS", "SMEIA", "BAMOTORS",
+  "JAMEEL", "VOVLO", "My cherif Pneu", "FAP",
+];
+
+export function prestataireDotClass(val: string): string | null {
+  if (PRESTATAIRE_GREEN.has(val)) return "bg-emerald-500";
+  if (PRESTATAIRE_YELLOW.has(val)) return "bg-amber-400";
+  return null;
+}
 
 export type BddUpdateResult =
   | { ok: true; written: string[] }
