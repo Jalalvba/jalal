@@ -31,7 +31,13 @@ export function InlineEditCombobox({
   const { pending, justSaved, error, commit } = useInlineFieldCommit(onCommit);
   const justSelectedRef = useRef(false);
 
-  const filtered = options.filter((o) => o.toLowerCase().includes(text.trim().toLowerCase()));
+  // Show the full list until the user actually types something — otherwise
+  // opening the combobox pre-fills `text` with the current value, which
+  // would immediately self-filter the suggestions down to just that one
+  // entry (e.g. opening on "SCAL" would only ever suggest "SCAL").
+  const filtered = text === value
+    ? options
+    : options.filter((o) => o.toLowerCase().includes(text.trim().toLowerCase()));
 
   function startEditing() {
     setText(value);

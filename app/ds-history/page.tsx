@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Pencil } from "lucide-react";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { logout } from "@/app/login/actions";
@@ -576,9 +577,10 @@ function BddEditableRow({ row }: { row: BddRow }) {
               type="button"
               onClick={onOpen}
               disabled={pending}
-              className={`rounded-md border px-1.5 py-0.5 text-xs font-medium transition disabled:opacity-60 ${etatStyle(value)} ${justSaved ? "ring-2 ring-emerald-400" : ""}`}
+              className={`flex min-h-11 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-60 ${etatStyle(value)} ${justSaved ? "ring-2 ring-emerald-400" : ""}`}
             >
               {value || "—"}
+              <Pencil className="h-3 w-3 opacity-60" />
             </button>
           )}
         />
