@@ -154,6 +154,17 @@ export const BDD_EDITABLE_FIELDS = [
   "Technicien",
 ] as const;
 
+// Shared with app/suivi-rl/page.tsx so both pages render the same flag
+// exactly the same way — single source of truth, not two copies to drift.
+export const FLAG_STYLE: Record<string, { border: string; badge: string }> = {
+  Urgent: { border: "border-l-red-500", badge: "bg-red-500/10 text-red-400 border-red-500/20" },
+  "Prêt": { border: "border-l-emerald-500", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
+  NTR: { border: "border-l-zinc-500", badge: "bg-zinc-500/10 text-zinc-300 border-zinc-500/20" },
+  INST: { border: "border-l-amber-500", badge: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
+  REP: { border: "border-l-orange-500", badge: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
+  ESSAI: { border: "border-l-blue-500", badge: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+};
+
 export type BddUpdateResult =
   | { ok: true; written: string[] }
   | { ok: false; error: string; rejectedFields: string[] };

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Pencil } from "lucide-react";
-import { BDD_HEADERS, type BddRow } from "@/lib/types";
+import { BDD_HEADERS, FLAG_STYLE, type BddRow } from "@/lib/types";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,15 +20,6 @@ import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate } from "@/hooks/use
 const ETAT_OPTIONS = ["INTERNE", "EXTERNE", "DISPONIBLE", "ANNULE", "ANNULEE"];
 
 const FLAG_OPTIONS = ["Urgent", "Prêt", "NTR", "INST", "REP", "ESSAI"];
-
-const FLAG_STYLE: Record<string, { border: string; badge: string }> = {
-  Urgent: { border: "border-l-red-500", badge: "bg-red-500/10 text-red-400 border-red-500/20" },
-  "Prêt": { border: "border-l-emerald-500", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
-  NTR: { border: "border-l-zinc-500", badge: "bg-zinc-500/10 text-zinc-300 border-zinc-500/20" },
-  INST: { border: "border-l-amber-500", badge: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-  REP: { border: "border-l-orange-500", badge: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
-  ESSAI: { border: "border-l-blue-500", badge: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
-};
 
 const CATEGORIE_OPTIONS = [
   "Atelier chargé — en attente diagnostic",

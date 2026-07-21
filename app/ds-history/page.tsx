@@ -15,6 +15,8 @@ import type {
   CpItem,
   CpApiResponse,
 } from "@/lib/types";
+import { FLAG_STYLE } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
 import type { RlRow } from "@/lib/googleSheetsRl";
 import type { ImportRow } from "@/lib/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/format";
@@ -502,10 +504,10 @@ function FieldSelector({
 
 // Narrower display-only shape than lib/types.ts's full BddRow (which has 22
 // fields incl. editable ones for the Suivi RL page) — /api/sheet?sheet=bdd
-// returns that full row, but this card only ever reads these 15 fields.
+// returns that full row, but this card only ever reads these 18 fields.
 // Renamed from the original "BddRow" to kill the naming collision with the
 // real, wider type.
-type SheetBddRow = { IMM: string; date: string; client: string; modele: string; ETAT: string; prestataire: string; commentaire: string; "Reunion N-1": string; mois_restant: string; date_fin_contrat: string; lieu_Reparation: string; Motif: string; "station_départ": string; ds: string; date_ds: string; };
+type SheetBddRow = { IMM: string; date: string; client: string; modele: string; ETAT: string; prestataire: string; flag: string; commentaire: string; "Catégorie": string; Technicien: string; "Reunion N-1": string; mois_restant: string; date_fin_contrat: string; lieu_Reparation: string; Motif: string; "station_départ": string; ds: string; date_ds: string; };
 
 function SheetCard({ bddRows, rlRows, importRows }: { bddRows: SheetBddRow[]; rlRows: RlRow[]; importRows: ImportRow[] }) {
   if (!bddRows.length && !rlRows.length && !importRows.length) return null;
@@ -520,11 +522,11 @@ function SheetCard({ bddRows, rlRows, importRows }: { bddRows: SheetBddRow[]; rl
   const GREEN_PRESTATAIRES = new Set(["M-AUTOMOTIV","CAC","BUGSHAN","STELLANTIS","SMEIA","BAMOTORS","JAMEEL"]);
 
   const f = (label: string, val?: string) => val ? (
-    <div>
+    <div className="min-w-0">
       <div className="text-xs text-zinc-400 dark:text-zinc-500">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold text-zinc-800 dark:text-zinc-100 truncate flex items-center gap-1.5">
+      <div className="mt-0.5 flex items-start gap-1.5 whitespace-normal break-words text-sm font-semibold text-zinc-800 dark:text-zinc-100">
         {label === "Prestataire" && (
-          <span className={`inline-block h-2.5 w-2.5 rounded-full flex-shrink-0 ${GREEN_PRESTATAIRES.has(val.toUpperCase()) ? "bg-[#1a7a4a]" : "bg-[#f4c430]"}`} />
+          <span className={`mt-1 inline-block h-2.5 w-2.5 rounded-full flex-shrink-0 ${GREEN_PRESTATAIRES.has(val.toUpperCase()) ? "bg-[#1a7a4a]" : "bg-[#f4c430]"}`} />
         )}
         {val}
       </div>
@@ -556,10 +558,15 @@ function SheetCard({ bddRows, rlRows, importRows }: { bddRows: SheetBddRow[]; rl
                   {row.ETAT}
                 </span>
               )}
+              {row.flag && FLAG_STYLE[row.flag] && (
+                <Badge className={FLAG_STYLE[row.flag].badge}>{row.flag}</Badge>
+              )}
               {row.date && <span className="text-xs text-zinc-400">{row.date}</span>}
             </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
               {f("Prestataire", row.prestataire)}
+              {f("Catégorie", row["Catégorie"])}
+              {f("Technicien", row.Technicien)}
               {f("Réunion N-1", row["Reunion N-1"])}
               {f("Commentaire", row.commentaire)}
             </div>
@@ -615,21 +622,22 @@ function SheetCard({ bddRows, rlRows, importRows }: { bddRows: SheetBddRow[]; rl
                 </span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full table-fixed text-xs">
                   <thead>
                     <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                      {["Evénement","N° de tel","Date prestation","Lieu de destination"].map(h => (
-                        <th key={h} className="px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500 whitespace-nowrap">{h}</th>
-                      ))}
+                      <th className="w-[20%] px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500">Evénement</th>
+                      <th className="w-[18%] px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500">N° de tel</th>
+                      <th className="w-[24%] px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500">Date prestation</th>
+                      <th className="w-[38%] px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500">Lieu de destination</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
                     {filteredRows.map((row, i) => (
                       <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
-                        <td className="px-4 py-2 text-zinc-700 dark:text-zinc-200">{row["Evénement"]}</td>
-                        <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{row["N° de tel"]}</td>
-                        <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{parseDate(row["DatePrestation"]).replace("T", " ").slice(0, 16)}</td>
-                        <td className="px-4 py-2 text-zinc-500">{row["Lieu de Destination"]}</td>
+                        <td className="whitespace-normal break-words px-4 py-2 text-zinc-700 dark:text-zinc-200">{row["Evénement"]}</td>
+                        <td className="whitespace-normal break-words px-4 py-2 text-zinc-500">{row["N° de tel"]}</td>
+                        <td className="whitespace-normal break-words px-4 py-2 text-zinc-500">{parseDate(row["DatePrestation"]).replace("T", " ").slice(0, 16)}</td>
+                        <td className="whitespace-normal break-words px-4 py-2 text-zinc-500">{row["Lieu de Destination"]}</td>
                       </tr>
                     ))}
                   </tbody>
