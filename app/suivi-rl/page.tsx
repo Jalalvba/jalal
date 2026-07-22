@@ -24,6 +24,8 @@ import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
 import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
 import { cn } from "@/components/ui/utils";
 import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate } from "@/hooks/useBddRows";
+import { useVehicleZone } from "@/hooks/useVehicleZone";
+import { ZoneBadges } from "@/components/fleet/ZoneBadges";
 
 function formatAge(dataUpdatedAt: number): string {
   if (!dataUpdatedAt) return "";
@@ -61,6 +63,7 @@ const READONLY_HEADERS = BDD_HEADERS.filter(
 function BddCard({ row }: { row: BddRow }) {
   const updateMutation = useUpdateBddRow();
   const applyOptimisticUpdate = useOptimisticBddUpdate();
+  const zone = useVehicleZone(row.IMM);
 
   function commitField(field: FieldKey) {
     return async (value: string) => {
@@ -106,6 +109,7 @@ function BddCard({ row }: { row: BddRow }) {
               </button>
             )}
           />
+          <ZoneBadges {...zone} />
         </div>
         <InlineEditSelect
           value={row.ETAT}

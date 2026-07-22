@@ -33,6 +33,8 @@ import { InlineEditText } from "@/components/fleet/InlineEditText";
 import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
 import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
 import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate } from "@/hooks/useBddRows";
+import { useVehicleZone } from "@/hooks/useVehicleZone";
+import { ZoneBadges } from "@/components/fleet/ZoneBadges";
 import { buildPlateVariants } from "@/lib/plateVariants";
 import type { RlRow } from "@/lib/googleSheetsRl";
 import type { ImportRow } from "@/lib/googleSheetsImport";
@@ -268,6 +270,11 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
   const cp = contracts[0] ?? null;
   const isRemplacement = contracts.some(c => c.type?.trim().toLowerCase() === "remplacement");
   const isRed = hasRl || isRemplacement;
+  const zone = useVehicleZone(parc.imm ?? "");
+  const zoneLabel =
+    zone.inParking && zone.inAtelier ? "Parking + Atelier" :
+    zone.inParking ? "Parking" :
+    zone.inAtelier ? "Atelier" : null;
 
   const f = (label: string, val?: string | null) => (
     <div>
@@ -301,6 +308,7 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
         {f("Etat véhicule", parc.vehicle_state)}
         {f("Date MCE",      fmtDate(parc.mce_date ?? cp?.mce_date))}
         {f("Fin contrat",   fmtDate(cp?.date_fin_contrat))}
+        {zoneLabel && f("Zone", zoneLabel)}
       </div>
 
       {/* ── Version full width ── */}
@@ -554,6 +562,7 @@ function f(label: string, val?: string) {
 function BddEditableRow({ row }: { row: BddRow }) {
   const updateMutation = useUpdateBddRow();
   const applyOptimisticUpdate = useOptimisticBddUpdate();
+  const zone = useVehicleZone(row.IMM);
 
   function commitField(field: FieldKey) {
     return async (value: string) => {
@@ -601,6 +610,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
             </button>
           )}
         />
+        <ZoneBadges {...zone} />
         {row.date && <span className="text-xs text-zinc-400">{row.date}</span>}
       </div>
 
