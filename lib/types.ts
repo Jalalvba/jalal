@@ -57,6 +57,15 @@ export type ParcApiResponse = {
   error?: string;
 };
 
+// Raw `parc` collection shape, projected down to the 4 fields the
+// query/query-search suggest endpoints actually read.
+export type ParcDoc = {
+  Immatriculation?: string;
+  "Numéro WW"?: string;
+  Marque?: string;
+  "Modèle"?: string;
+};
+
 export type CpItem = {
   gestionnaire?: string;
   ww?: string;

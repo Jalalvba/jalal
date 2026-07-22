@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo";
 import { escapeRegex } from "@/lib/regex";
+import type { ParcDoc } from "@/lib/types";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
   if (!q) return NextResponse.json({ ok: false, error: "Missing q" }, { status: 400 });
 
   try {
-    const col = await getCollection("parc");
+    const col = await getCollection<ParcDoc>("parc");
 
     const regex = { $regex: "^" + escapeRegex(q), $options: "i" };
 

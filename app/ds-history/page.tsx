@@ -817,6 +817,7 @@ export default function Home() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string>("");
+  const fetchIdRef = useRef(0);
 
   const [data, setData]         = useState<DsApiResponse | null>(null);
   const [vehicle, setVehicle]   = useState<ParcItem | null>(null);
@@ -860,6 +861,11 @@ export default function Home() {
     const rawVal = (nextImm ?? imm).trim();
     if (!rawVal) return;
 
+    // Guards against an earlier, slower search's response overwriting a
+    // later one's — whichever fetchAll() call was started last "wins".
+    const fetchId = ++fetchIdRef.current;
+    const isCurrent = () => fetchIdRef.current === fetchId;
+
     setLoading(true);
     setError("");
     setSuggestions([]);
@@ -871,6 +877,7 @@ export default function Home() {
       if (rawVal.length < 10) {
         const resolveRes  = await fetch(`/api/query?q=${encodeURIComponent(rawVal)}`);
         const resolveJson = await resolveRes.json();
+        if (!isCurrent()) return;
         if (resolveJson.ok && resolveJson.mode === "suggest") {
           setSuggestions(resolveJson.suggestions ?? []);
           setShowSuggestions(true);
@@ -910,6 +917,8 @@ export default function Home() {
       const rlJson       = await rlRes.json();
       const rlWwJson     = rlWwRes     ? await rlWwRes.json()     : { ok: false, items: [] };
 
+      if (!isCurrent()) return;
+
       // BDD rows: filter the shared useBddRows() cache client-side by the
       // same IMM/WW variant set /api/sheet?sheet=bdd used to match
       // server-side, instead of a separate fetch — see bddRows useMemo above.
@@ -948,10 +957,11 @@ export default function Home() {
       setRlRows(mergeRl);
 
     } catch (e) {
+      if (!isCurrent()) return;
       setData(null); setVehicle(null); setContracts([]); setBddMatchVariants(null); setImportRows([]); setRlRows([]);
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }
 

@@ -7,6 +7,12 @@ import type { Document } from "mongodb";
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
+function clampInt(v: string | null, def: number, min: number, max: number) {
+  const n = Number(v ?? def);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(Math.max(Math.trunc(n), min), max);
+}
+
 export async function GET(request: Request) {
   const { allowed, retryAfterSeconds } = await checkRateLimit(
     "article",
@@ -26,7 +32,7 @@ export async function GET(request: Request) {
   const article   = searchParams.get("article")?.trim() || "";
   const brand     = searchParams.get("brand")?.trim()   || "";
   const yearParam = searchParams.get("year");
-  const limit     = Math.min(Number(searchParams.get("limit") || 200), 500);
+  const limit     = clampInt(searchParams.get("limit"), 200, 1, 500);
 
   if (!article) {
     return NextResponse.json(
@@ -86,8 +92,9 @@ export async function GET(request: Request) {
       },
     ];
 
-    if (yearParam && yearParam !== "all") {
-      pipeline.push({ $match: { Année: Number(yearParam) } });
+    const year = yearParam && yearParam !== "all" ? Number(yearParam) : null;
+    if (year !== null && Number.isInteger(year)) {
+      pipeline.push({ $match: { Année: year } });
     }
 
     pipeline.push(
