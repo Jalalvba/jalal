@@ -44,7 +44,10 @@ async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
  * not a date, so this is intentionally column-aware rather than "any number
  * looks like a date."
  */
-const DATE_LIKE_HEADERS = new Set(["date", "date_ds", "date_fin_contrat"]);
+// "date_ds" dropped (no longer exists as a header — see BDD_HEADERS comment
+// in lib/types.ts); "RDV" added — its XLOOKUP formula returns RDV!A:A
+// (the RDV tab's Date column), confirmed live to be a date serial too.
+const DATE_LIKE_HEADERS = new Set(["date", "date_fin_contrat", "RDV"]);
 
 function formatCellValue(header: string, raw: unknown): string | number {
   if (raw == null) return "";
@@ -91,6 +94,12 @@ export async function getSheetRows(immFilter?: string): Promise<BddRow[]> {
     const record: Record<string, string | number> = {};
     headers.forEach((header, colIdx) => {
       if (!header) return; // unnamed trailing columns (e.g. W-AB on this sheet)
+      // Live sheet has a duplicate header ("Technicien" appears at both the
+      // real editable column and a mislabeled DATE_DS-formula column further
+      // right) — keep the first occurrence so reads agree with
+      // updateSheetRow()'s headers.indexOf(), which already resolves to the
+      // first match.
+      if (header in record) return;
       record[header] = formatCellValue(header, row[colIdx]);
     });
     record._row = i + 1; // absolute 1-based sheet row, for writeback targeting

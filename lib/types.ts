@@ -92,12 +92,18 @@ export type CpApiResponse = {
 
 // ─── BDD sheet (Google Sheets, tab "BDD", gid=868042157) ──────────────────────
 //
-// Confirmed by a live read of the real header row (all 22 columns, no
-// truncation — see conversation history). This is NOT a guess: it's the
-// actual row-1 content of the sheet as of the discovery pass. lib/googleSheetsBdd.ts
-// still builds rows dynamically from a fresh live header read at runtime —
-// this list exists for the UI layer (labels, field order, search) and the
-// editable-fields allowlist below, not as a substitute for that live read.
+// Confirmed by a live read of the real header row. This is NOT a guess: it's
+// the actual row-1 content of the sheet as of the discovery pass.
+// lib/googleSheetsBdd.ts still builds rows dynamically from a fresh live
+// header read at runtime — this list exists for the UI layer (labels, field
+// order, search) and the editable-fields allowlist below, not as a
+// substitute for that live read.
+//
+// Re-confirmed live on a later pass: "Parking" and "date_ds" no longer exist
+// as header text anywhere in the sheet (column order drifted and those two
+// were dropped/renamed on the sheet side) — removed here to match. "Part"
+// was re-confirmed as pluralized to "Parts". Added RDV/CONVOYEUR/Intervention:
+// new formula-derived (XLOOKUP against the RDV tab) read-only columns.
 
 export const BDD_HEADERS = [
   "IMM",
@@ -111,10 +117,8 @@ export const BDD_HEADERS = [
   "Catégorie",
   "Technicien",
   "Reunion N-1",
-  "Parking",
-  "date_ds",
   "ds",
-  "Part",
+  "Parts",
   "Technicein_ds",
   "Founisseur",
   "mois_restant",
@@ -122,6 +126,9 @@ export const BDD_HEADERS = [
   "lieu_Reparation",
   "Motif",
   "station_départ",
+  "RDV",
+  "CONVOYEUR",
+  "Intervention",
 ] as const;
 
 export type BddRow = {
@@ -137,10 +144,8 @@ export type BddRow = {
   "Catégorie": string;
   Technicien: string;
   "Reunion N-1": string;
-  Parking: string;
-  date_ds: string;
   ds: string;
-  Part: string;
+  Parts: string;
   Technicein_ds: string;
   Founisseur: string;
   mois_restant: number;
@@ -148,6 +153,9 @@ export type BddRow = {
   lieu_Reparation: string;
   Motif: string;
   "station_départ": string;
+  RDV: string;
+  CONVOYEUR: string;
+  Intervention: string;
 };
 
 // Business-rule allowlist (not derived from the sheet — a deliberate policy:
