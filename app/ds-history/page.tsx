@@ -32,6 +32,7 @@ import { InlineEditSelect } from "@/components/fleet/InlineEditSelect";
 import { InlineEditText } from "@/components/fleet/InlineEditText";
 import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
 import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
+import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate } from "@/hooks/useBddRows";
 import { useVehicleZone } from "@/hooks/useVehicleZone";
 import { ZoneBadges } from "@/components/fleet/ZoneBadges";
@@ -646,6 +647,14 @@ function BddEditableRow({ row }: { row: BddRow }) {
           placeholder="Commentaire…"
         />
       </div>
+
+      <ReadonlyFieldList
+        fields={[
+          { label: "RDV", value: row.RDV },
+          { label: "CONVOYEUR", value: row.CONVOYEUR },
+          { label: "Intervention", value: row.Intervention },
+        ]}
+      />
     </div>
   );
 }
