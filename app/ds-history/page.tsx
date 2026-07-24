@@ -271,10 +271,9 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
   const isRemplacement = contracts.some(c => c.type?.trim().toLowerCase() === "remplacement");
   const isRed = hasRl || isRemplacement;
   const zone = useVehicleZone(parc.imm ?? "");
-  const zoneLabel =
-    zone.inParking && zone.inAtelier ? "Parking + Atelier" :
-    zone.inParking ? "Parking" :
-    zone.inAtelier ? "Atelier" : null;
+  const zoneLabel = [zone.inParking && "Parking", zone.inAtelier && "Atelier", zone.inRdv && "RDV"]
+    .filter(Boolean)
+    .join(" + ") || null;
 
   const f = (label: string, val?: string | null) => (
     <div>

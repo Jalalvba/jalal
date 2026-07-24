@@ -71,7 +71,10 @@ function RdvCard({
       onDelete={() => onDelete(row.rowIndex)}
     >
       <div className="mb-1.5">
-        <ZoneBadges {...zone} />
+        {/* inRdv omitted deliberately — every row on this page is trivially
+            "in RDV", so that badge would always show and add no information
+            here. Parking/Atelier are still useful cross-tab context. */}
+        <ZoneBadges inParking={zone.inParking} inAtelier={zone.inAtelier} />
       </div>
 
       <div className="grid grid-cols-1 gap-2.5 text-[11px] sm:grid-cols-2">
