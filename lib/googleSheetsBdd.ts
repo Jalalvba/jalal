@@ -44,10 +44,11 @@ async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
  * not a date, so this is intentionally column-aware rather than "any number
  * looks like a date."
  */
-// "date_ds" dropped (no longer exists as a header — see BDD_HEADERS comment
-// in lib/types.ts); "RDV" added — its XLOOKUP formula returns RDV!A:A
-// (the RDV tab's Date column), confirmed live to be a date serial too.
-const DATE_LIKE_HEADERS = new Set(["date", "date_fin_contrat", "RDV"]);
+// "date_ds" restored (the sheet owner fixed its mislabeled header back —
+// see BDD_HEADERS comment in lib/types.ts); "RDV" added — its XLOOKUP
+// formula returns RDV!A:A (the RDV tab's Date column), confirmed live to
+// be a date serial too.
+const DATE_LIKE_HEADERS = new Set(["date", "date_fin_contrat", "date_ds", "RDV"]);
 
 function formatCellValue(header: string, raw: unknown): string | number {
   if (raw == null) return "";

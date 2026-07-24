@@ -99,11 +99,19 @@ export type CpApiResponse = {
 // order, search) and the editable-fields allowlist below, not as a
 // substitute for that live read.
 //
-// Re-confirmed live on a later pass: "Parking" and "date_ds" no longer exist
-// as header text anywhere in the sheet (column order drifted and those two
-// were dropped/renamed on the sheet side) — removed here to match. "Part"
-// was re-confirmed as pluralized to "Parts". Added RDV/CONVOYEUR/Intervention:
-// new formula-derived (XLOOKUP against the RDV tab) read-only columns.
+// Re-confirmed live on a later pass: "Parking" no longer exists as header
+// text anywhere in the sheet (column order drifted and it was dropped on
+// the sheet side) — removed here to match. "Part" was re-confirmed as
+// pluralized to "Parts". Added RDV/CONVOYEUR/Intervention: new
+// formula-derived (XLOOKUP against the RDV tab) read-only columns.
+//
+// "date_ds" briefly disappeared too (its column had been mislabeled
+// "Technicien" — a duplicate of the real editable column — causing
+// getSheetRows() to silently return the wrong value on read; see the
+// duplicate-header handling below). The sheet owner has since corrected
+// that header cell back to "date_ds", its actual XLOOKUP-DATE_DS content
+// all along, confirmed live (no duplicate header names remain anywhere in
+// the row) — restored here as a read-only, date-formatted field.
 
 export const BDD_HEADERS = [
   "IMM",
@@ -118,6 +126,7 @@ export const BDD_HEADERS = [
   "Technicien",
   "Reunion N-1",
   "ds",
+  "date_ds",
   "Parts",
   "Technicein_ds",
   "Founisseur",
@@ -145,6 +154,7 @@ export type BddRow = {
   Technicien: string;
   "Reunion N-1": string;
   ds: string;
+  date_ds: string;
   Parts: string;
   Technicein_ds: string;
   Founisseur: string;
