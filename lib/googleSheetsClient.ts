@@ -58,9 +58,27 @@ export function serialToUTCDate(serial: number): Date {
   return new Date(SHEETS_EPOCH_MS + wholeDays * 86400000 + fractionalMs);
 }
 
+/** Any UTC moment as a Sheets serial number, for writing a date/timestamp. */
+export function dateToSerial(d: Date): number {
+  return (d.getTime() - SHEETS_EPOCH_MS) / 86400000;
+}
+
 /** Current moment as a Sheets serial number, for writing a "now" timestamp. */
 export function nowToSerial(): number {
-  return (Date.now() - SHEETS_EPOCH_MS) / 86400000;
+  return dateToSerial(new Date());
+}
+
+/**
+ * Parses a "yyyy-mm-dd" date-only string (the value shape an HTML
+ * `<input type="date">` produces) into a whole-day Sheets serial number, for
+ * writing a real date value (not text) into a date column — e.g. RDV's Date
+ * field. Returns null if the string isn't that exact shape.
+ */
+export function isoDateToSerial(iso: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!m) return null;
+  const [, y, mo, d] = m;
+  return dateToSerial(new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d))));
 }
 
 function pad2(n: number): string {

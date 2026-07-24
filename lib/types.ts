@@ -330,3 +330,77 @@ export type AtelierRow = {
 export const ATELIER_EDITABLE_FIELDS = ["COMMENTAIRE", "CATÉGORIE", "TECHNICIEN", "BESOIN PIÈCE"] as const;
 
 export type AtelierEditableField = (typeof ATELIER_EDITABLE_FIELDS)[number];
+
+// ─── RDV sheet (Google Sheets, tab "RDV", gid=2066154497) ─────────────────────
+//
+// Confirmed by a live spreadsheets.values.get() read of the real header row
+// (full width A1:H1, nothing beyond H): Date, Heure, Clients, Véhicule,
+// Matricule, Intervention, Contact, CONVOYEUR. Unlike PARKING/ATELIER, this
+// tab has no formula/XLOOKUP columns at all — every field is manually typed
+// (a call/appointment log), confirmed all 8 are editable. "Matricule" is the
+// plate field — same "NNNNN-L-N" format confirmed live against BDD's IMM
+// column, so it plugs into the same usePlateAutocomplete/ZoneBadges
+// infrastructure as IMM elsewhere. Also confirmed live: BDD's RDV/CONVOYEUR/
+// Intervention columns are XLOOKUP formulas reading Matricule (RDV!E:E)
+// against this tab's Date/CONVOYEUR/Intervention columns — this tab is
+// already wired in as a lookup source the same way ds/parc/RL_reunion feed
+// Atelier/Parking.
+//
+// Unlike PARKING/ATELIER, rows here are NOT keyed/deduped by plate — the
+// same Matricule legitimately appears across many appointment rows over
+// time, and there's no TIMESTAMP column to bump on a "duplicate". Adding a
+// row always appends a brand-new entry.
+
+export const RDV_HEADERS = [
+  "Date",
+  "Heure",
+  "Clients",
+  "Véhicule",
+  "Matricule",
+  "Intervention",
+  "Contact",
+  "CONVOYEUR",
+] as const;
+
+export type RdvRow = {
+  rowIndex: number;
+  date: string; // dd/mm/yyyy, formatted from the sheet's date serial
+  rawDate: number; // for sorting
+  heure: string;
+  clients: string;
+  vehicule: string;
+  matricule: string;
+  intervention: string;
+  contact: string;
+  convoyeur: string;
+};
+
+// All 8 real columns are editable — this tab has no formula/read-only
+// columns, confirmed live (see comment above).
+export const RDV_EDITABLE_FIELDS = [
+  "Date",
+  "Heure",
+  "Clients",
+  "Véhicule",
+  "Matricule",
+  "Intervention",
+  "Contact",
+  "CONVOYEUR",
+] as const;
+
+export type RdvEditableField = (typeof RDV_EDITABLE_FIELDS)[number];
+
+export type RdvAddInput = {
+  date: string; // dd/mm/yyyy, written USER_ENTERED so Sheets parses it as a real date
+  heure: string;
+  clients: string;
+  vehicule: string;
+  matricule: string;
+  intervention: string;
+  contact: string;
+  convoyeur: string;
+};
+
+export type RdvAddResponse = { ok: true; rowIndex: number } | { ok: false; error: string };
+
+export type RdvUpdateResult = { ok: true } | { ok: false; error: string };

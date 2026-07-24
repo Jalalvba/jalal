@@ -136,6 +136,18 @@ export default function Home() {
               </svg>
             }
           />
+          <NavCard
+            href="/rdv"
+            title="RDV"
+            subtitle="Rendez-vous et convoyage"
+            accent="bg-emerald-500"
+            icon={
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="3" y="4" width="18" height="18" rx="2"/>
+                <path d="M16 2v4M8 2v4M3 10h18" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            }
+          />
         </div>
       </div>
     </div>
