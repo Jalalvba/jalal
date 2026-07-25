@@ -1,0 +1,76 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { DepotRow, ParkingAddResponse } from "@/lib/types";
+
+// Same pattern/shape as hooks/useParkingRows.ts. No dedicated imm-list hook
+// here — app/depot/page.tsx reuses useParkingImmList() directly, same as
+// Atelier already does ("shares the same parc plate list as Parking — same
+// underlying resource").
+
+const ROWS_KEY = ["depot", "rows"] as const;
+
+async function fetchJson<T extends { ok: boolean; error?: string }>(
+  url: string,
+  init?: RequestInit
+): Promise<T> {
+  const res = await fetch(url, init);
+  const json = (await res.json()) as T;
+  if (!json.ok) throw new Error(json.error ?? "Erreur inconnue");
+  return json;
+}
+
+export function useDepotRows() {
+  return useQuery({
+    queryKey: ROWS_KEY,
+    queryFn: () => fetchJson<{ ok: true; rows: DepotRow[] }>("/api/depot"),
+    select: (data) => data.rows,
+  });
+}
+
+export function useAddDepotPlates() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (raw: string) =>
+      fetchJson<ParkingAddResponse & { ok: true }>("/api/depot/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+  });
+}
+
+export function useUpdateDepotAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ rowIndex, action }: { rowIndex: number; action: string }) =>
+      fetchJson<{ ok: true }>("/api/depot/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex, action }),
+      }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+  });
+}
+
+export function useDeleteDepotRow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (rowIndex: number) =>
+      fetchJson<{ ok: true }>("/api/depot/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex }),
+      }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+  });
+}
+
+export function useClearDepotAll() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => fetchJson<{ ok: true }>("/api/depot/clear", { method: "POST" }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+  });
+}

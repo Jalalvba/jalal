@@ -136,6 +136,18 @@ export default function Home() {
               </svg>
             }
           />
+          <NavCard
+            href="/depot"
+            title="Dépôt"
+            subtitle="Suivi des véhicules au dépôt"
+            accent="bg-lime-500"
+            icon={
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M3 21V9l9-6 9 6v12" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M9 21v-8h6v8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            }
+          />
         </div>
       </div>
     </div>

@@ -1,18 +1,56 @@
-import { getSheetsClient } from "@/lib/googleSheetsClient";
+import { type sheets_v4 } from "googleapis";
+import { getIMMList, resolveIMM } from "@/lib/googleSheetsParking";
+import type { DepotRow, ParkingAddResponse, ParkingAddResultItem } from "@/lib/types";
+import {
+  getSheetsClient,
+  serialToUTCDate,
+  nowToSerial,
+  fmtDateOnlyDash,
+  fmtDateTime,
+} from "@/lib/googleSheetsClient";
 
-// Tab name, gid (1365327220) and header row confirmed by a live
-// spreadsheets.get()/values.get() read — not a guess. Same spreadsheet as
-// PARKING/ATELIER/BDD/RDV. Structurally near-identical to PARKING (IMM,
-// TIMESTAMP, ACTION, plus the same 9 read-only XLOOKUP columns), but only
-// existence-checked here — no other feature is needed for this tab, so
-// this file deliberately stays a single function instead of a full
-// read/write module like Parking/Atelier/RDV got.
+// Tab name, gid (1365327220), column layout and XLOOKUP formulas confirmed
+// by a live spreadsheets.get()/values.get()/FORMULA-render read — not a
+// guess, and not just inferred from resemblance to PARKING: this tab is a
+// byte-for-byte structural clone (same 15 columns, same 12 XLOOKUP formulas
+// verbatim, same manual/read-only split — only ACTION is editable). See
+// lib/types.ts's DepotRow comment for the full column list.
+//
+// This file originally had only a getDepotPlates() existence-check for the
+// zone-badge feature, before this tab got its own full page. That function
+// has been superseded by getDepotRows() below (which reads the same IMM
+// column plus everything else) — useVehicleZone.ts now checks DEPOT via the
+// full rows query, same as it already does for Parking/Atelier/RDV, rather
+// than keeping two separate reads of the same tab.
 
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 
 const DEPOT_TAB = "DEPOT";
+const DATA_START_ROW = 2;
 const HEADER_RANGE_WIDTH = "O"; // 15 real columns, confirmed live
+
+function columnIndexToLetter(oneBasedIndex: number): string {
+  let n = oneBasedIndex;
+  let letters = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letters = String.fromCharCode(65 + rem) + letters;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letters;
+}
+
+/** Live header row → column-name lookup, never hardcoded indices. */
+async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId!,
+    range: `'${DEPOT_TAB}'!A1:${HEADER_RANGE_WIDTH}1`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+  const row = res.data.values?.[0] ?? [];
+  return row.map((h) => String(h ?? "").trim().toUpperCase());
+}
 
 function buildColMap(headers: string[]): Record<string, number> {
   const map: Record<string, number> = {};
@@ -22,11 +60,27 @@ function buildColMap(headers: string[]): Record<string, number> {
   return map;
 }
 
+async function getDepotSheetProps(sheets: sheets_v4.Sheets): Promise<{ sheetId: number; rowCount: number }> {
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId: spreadsheetId!,
+    fields: "sheets.properties",
+  });
+  const props = res.data.sheets?.find((s) => s.properties?.title === DEPOT_TAB)?.properties;
+  if (!props || props.sheetId == null) {
+    throw new Error(`Sheet tab '${DEPOT_TAB}' not found`);
+  }
+  return { sheetId: props.sheetId, rowCount: props.gridProperties?.rowCount ?? 0 };
+}
+
+// ─── getDepotRows ──────────────────────────────────────────────────────────
+
 /**
- * Every non-blank IMM value currently in the DEPOT tab, uppercased —
- * existence-check only for the zone-badge feature, no other column is read.
+ * Reads every non-empty row (IMM non-blank) from the DEPOT tab, sorted
+ * ascending by timestamp (oldest first) — same convention as
+ * getParkingRows(), which this is a straight port of given the confirmed
+ * identical schema.
  */
-export async function getDepotPlates(): Promise<string[]> {
+export async function getDepotRows(): Promise<DepotRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
@@ -40,12 +94,280 @@ export async function getDepotPlates(): Promise<string[]> {
   const headers = values[0].map((h) => String(h ?? "").trim().toUpperCase());
   const colMap = buildColMap(headers);
   const immCol = colMap["IMM"] ?? 1;
+  const actionCol = colMap["ACTION"] ?? 2;
+  const marqueCol = colMap["MARQUE"] ?? 3;
+  const modelCol = colMap["MODEL"] ?? 4;
+  const clientCol = colMap["CLIENT"] ?? 5;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const rlReunionCol = colMap["RL_REUNION"];
+  const motifCol = colMap["MOTIF"];
+  const etatVehiculeCol = colMap["ETAT VÉHICULE"];
+  const bddCol = colMap["BDD"];
+  const dateDsCol = colMap["DATE_DS"];
+  const dsCol = colMap["DS"];
+  const partsCol = colMap["PARTS"];
+  const techniceinCol = colMap["TECHNICEIN"];
+  const founisseurCol = colMap["FOUNISSEUR"];
 
-  const plates: string[] = [];
+  const rows: DepotRow[] = [];
+
   for (let i = 1; i < values.length; i++) {
-    const raw = values[i][immCol - 1];
-    const imm = raw != null ? String(raw).trim().toUpperCase() : "";
-    if (imm) plates.push(imm);
+    const row = values[i];
+    const immRaw = row[immCol - 1];
+    const imm = immRaw != null ? String(immRaw).trim().toUpperCase() : "";
+    if (!imm) continue;
+
+    const tsRaw = row[tsCol - 1];
+    let timestamp = "";
+    let rawDate = 0;
+    if (typeof tsRaw === "number") {
+      const d = serialToUTCDate(tsRaw);
+      timestamp = fmtDateTime(d);
+      rawDate = d.getTime();
+    }
+
+    const strOrEmpty = (col: number | undefined) => {
+      if (!col) return "";
+      const v = row[col - 1];
+      return v != null ? String(v).trim() : "";
+    };
+
+    const dateOrEmpty = (col: number | undefined) => {
+      if (!col) return "";
+      const v = row[col - 1];
+      if (v == null || v === "") return "";
+      return typeof v === "number" ? fmtDateOnlyDash(serialToUTCDate(v)) : String(v).trim();
+    };
+
+    rows.push({
+      rowIndex: i + 1,
+      imm,
+      timestamp,
+      rawDate,
+      action: strOrEmpty(actionCol),
+      marque: strOrEmpty(marqueCol),
+      model: strOrEmpty(modelCol),
+      client: strOrEmpty(clientCol),
+      rlReunion: strOrEmpty(rlReunionCol),
+      motif: strOrEmpty(motifCol),
+      etatVehicule: strOrEmpty(etatVehiculeCol),
+      bdd: strOrEmpty(bddCol),
+      dateDs: dateOrEmpty(dateDsCol),
+      ds: strOrEmpty(dsCol),
+      parts: strOrEmpty(partsCol),
+      technicein: strOrEmpty(techniceinCol),
+      founisseur: strOrEmpty(founisseurCol),
+    });
   }
-  return plates;
+
+  rows.sort((a, b) => a.rawDate - b.rawDate);
+  return rows;
+}
+
+// ─── addDepotPlates ────────────────────────────────────────────────────────
+
+// XLOOKUP formulas, verbatim from a live FORMULA-render read of DEPOT —
+// identical to Parking's CFG_PARKING_SHEET.FORMULAS, confirmed not assumed.
+const FORMULAS: Record<string, string> = {
+  MARQUE: '=XLOOKUP(A{ROW};parc!F:F;parc!D:D;"";0;1)',
+  MODEL: '=XLOOKUP(A{ROW};parc!F:F;parc!E:E;"";0;1)',
+  CLIENT: '=XLOOKUP(A{ROW};parc!F:F;parc!C:C;"";0;1)',
+  RL_REUNION: '=XLOOKUP(A{ROW};RL_reunion!A:A;RL_reunion!B:B;"";0;1)',
+  MOTIF: '=XLOOKUP(A{ROW};RL!D:D;RL!S:S;"sans RL";0;1)',
+  "ETAT VÉHICULE": '=XLOOKUP(A{ROW};parc!F:F;parc!I:I;"";0;1)',
+  BDD: '=XLOOKUP(A{ROW};BDD!A:A;BDD!H:H;"";0;1)',
+  DATE_DS: '=XLOOKUP(A{ROW};ds!D:D;ds!A:A;"";0;-1)',
+  DS: '=XLOOKUP(A{ROW};ds!D:D;ds!C:C;"";0;-1)',
+  PARTS: '=XLOOKUP(A{ROW};ds!D:D;ds!G:G;"";0;-1)',
+  TECHNICEIN: '=XLOOKUP(A{ROW};ds!D:D;ds!E:E;"";0;-1)',
+  FOUNISSEUR: '=XLOOKUP(A{ROW};ds!D:D;ds!F:F;"";0;-1)',
+};
+
+/**
+ * Exact same shape/behavior as Parking's addPlates(): resolveIMM() against
+ * the Mongo parc plate list, duplicate → bump TIMESTAMP only, new → first
+ * empty IMM row (growing the sheet by the exact shortfall if none remain),
+ * seeding that row's formula columns so it isn't blank until some other
+ * process re-touches it.
+ */
+export async function addDepotPlates(rawInput: string): Promise<ParkingAddResponse> {
+  const tokens = (rawInput ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t !== "");
+
+  if (tokens.length === 0) {
+    return { ok: false, error: "Aucune immatriculation saisie." };
+  }
+
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
+
+  const dataRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId!,
+    range: `'${DEPOT_TAB}'!A2:${HEADER_RANGE_WIDTH}`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+  const dataRows = dataRes.data.values ?? [];
+
+  const existingSet = new Set<string>();
+  const plateToRow = new Map<string, number>();
+  const emptyRows: number[] = [];
+
+  dataRows.forEach((row, i) => {
+    const rowNum = DATA_START_ROW + i;
+    const raw = row[immCol - 1];
+    const val = raw != null ? String(raw).trim().toUpperCase() : "";
+    if (val) {
+      existingSet.add(val);
+      plateToRow.set(val, rowNum);
+    } else {
+      emptyRows.push(rowNum);
+    }
+  });
+
+  const needed = tokens.length;
+  if (emptyRows.length < needed) {
+    const props = await getDepotSheetProps(sheets);
+    const lastKnownRow = DATA_START_ROW + dataRows.length - 1;
+    const shortfall = needed - emptyRows.length;
+    const startNewRow = Math.max(props.rowCount, lastKnownRow) + 1;
+    const gridShortfall = startNewRow + shortfall - 1 - props.rowCount;
+    if (gridShortfall > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId!,
+        requestBody: {
+          requests: [{ appendDimension: { sheetId: props.sheetId, dimension: "ROWS", length: gridShortfall } }],
+        },
+      });
+    }
+    for (let r = startNewRow; r < startNewRow + shortfall; r++) emptyRows.push(r);
+  }
+
+  const immList = await getIMMList();
+  const results: ParkingAddResultItem[] = [];
+  const nowSerial = nowToSerial();
+  const writes: { range: string; values: (string | number)[][] }[] = [];
+  let emptyIdx = 0;
+
+  for (const token of tokens) {
+    const resolved = resolveIMM(token, immList) || token.trim().toUpperCase();
+    const inParc = immList.includes(resolved);
+    const duplicate = existingSet.has(resolved);
+
+    if (duplicate) {
+      const targetRow = plateToRow.get(resolved)!;
+      writes.push({
+        range: `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
+        values: [[nowSerial]],
+      });
+      results.push({ imm: resolved, status: "updated", inParc });
+      continue;
+    }
+
+    const targetRow = emptyRows[emptyIdx++];
+    if (targetRow == null) break; // shouldn't happen given the expansion above
+
+    writes.push({
+      range: `'${DEPOT_TAB}'!${columnIndexToLetter(immCol)}${targetRow}`,
+      values: [[resolved]],
+    });
+    writes.push({
+      range: `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
+      values: [[nowSerial]],
+    });
+
+    for (const [field, template] of Object.entries(FORMULAS)) {
+      const col = colMap[field];
+      if (!col) continue;
+      writes.push({
+        range: `'${DEPOT_TAB}'!${columnIndexToLetter(col)}${targetRow}`,
+        values: [[template.replace(/\{ROW\}/g, String(targetRow))]],
+      });
+    }
+
+    existingSet.add(resolved);
+    plateToRow.set(resolved, targetRow);
+    results.push({ imm: resolved, status: "added", inParc });
+  }
+
+  if (writes.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: spreadsheetId!,
+      requestBody: { valueInputOption: "USER_ENTERED", data: writes },
+    });
+  }
+
+  return { ok: true, results };
+}
+
+// ─── updateDepotAction ─────────────────────────────────────────────────────
+
+export async function updateDepotAction(rowIndex: number, action: string): Promise<void> {
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const actionCol = colMap["ACTION"] ?? 2;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: spreadsheetId!,
+    requestBody: {
+      valueInputOption: "USER_ENTERED",
+      data: [
+        { range: `'${DEPOT_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`, values: [[action.trim()]] },
+        { range: `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`, values: [[nowToSerial()]] },
+      ],
+    },
+  });
+}
+
+// ─── deleteDepotRow ────────────────────────────────────────────────────────
+
+/** Clears IMM, TIMESTAMP, ACTION only — the row itself and its formula
+ *  columns are left in place, exactly like Parking's deletePlate(). */
+export async function deleteDepotRow(rowIndex: number): Promise<void> {
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
+  const actionCol = colMap["ACTION"] ?? 2;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
+
+  await sheets.spreadsheets.values.batchClear({
+    spreadsheetId: spreadsheetId!,
+    requestBody: {
+      ranges: [
+        `'${DEPOT_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+        `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`,
+        `'${DEPOT_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`,
+      ],
+    },
+  });
+}
+
+// ─── clearDepotAll ─────────────────────────────────────────────────────────
+
+export async function clearDepotAll(): Promise<void> {
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
+  const actionCol = colMap["ACTION"] ?? 2;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
+
+  const props = await getDepotSheetProps(sheets);
+  const lastRow = props.rowCount;
+  if (lastRow < DATA_START_ROW) return;
+
+  const colRange = (col: number) =>
+    `'${DEPOT_TAB}'!${columnIndexToLetter(col)}${DATA_START_ROW}:${columnIndexToLetter(col)}${lastRow}`;
+
+  await sheets.spreadsheets.values.batchClear({
+    spreadsheetId: spreadsheetId!,
+    requestBody: { ranges: [colRange(immCol), colRange(tsCol), colRange(actionCol)] },
+  });
 }

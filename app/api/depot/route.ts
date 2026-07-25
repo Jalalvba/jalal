@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { getDepotPlates } from "@/lib/googleSheetsDepot";
+import { getDepotRows } from "@/lib/googleSheetsDepot";
 
 export async function GET() {
   try {
-    const plates = await getDepotPlates();
-    return NextResponse.json({ ok: true, plates });
+    const rows = await getDepotRows();
+    return NextResponse.json({ ok: true, rows });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Failed to read DEPOT plate list" },
+      { ok: false, error: e instanceof Error ? e.message : "Failed to read DEPOT sheet" },
       { status: 500 }
     );
   }

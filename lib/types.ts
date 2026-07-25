@@ -414,3 +414,35 @@ export type RdvAddInput = {
 export type RdvAddResponse = { ok: true; rowIndex: number } | { ok: false; error: string };
 
 export type RdvUpdateResult = { ok: true } | { ok: false; error: string };
+
+// ─── DEPOT sheet (Google Sheets, tab "DEPOT", gid=1365327220) ─────────────────
+//
+// Confirmed live to be a byte-for-byte structural clone of PARKING: same 15
+// columns (IMM, TIMESTAMP, ACTION, MARQUE, MODEL, CLIENT, RL_REUNION, MOTIF,
+// ETAT VÉHICULE, BDD, DATE_DS, DS, PARTS, TECHNICEIN, FOUNISSEUR — TECHNICEIN/
+// FOUNISSEUR sic, matching Parking's real header cells), same 12 XLOOKUP
+// formulas verbatim (checked via a FORMULA-render read, not inferred from
+// resemblance alone). Only ACTION is editable — IMM/TIMESTAMP are the
+// add-mechanism fields, the rest is read-only XLOOKUP output, exactly like
+// Parking. Reuses ParkingAddResponse/ParkingAddResultItem (lib/googleSheetsAtelier.ts
+// already sets this precedent) since the add-result shape is identical.
+
+export type DepotRow = {
+  rowIndex: number;
+  imm: string;
+  timestamp: string;
+  rawDate: number;
+  action: string;
+  marque: string;
+  model: string;
+  client: string;
+  rlReunion: string;
+  motif: string;
+  etatVehicule: string;
+  bdd: string;
+  dateDs: string;
+  ds: string;
+  parts: string;
+  technicein: string;
+  founisseur: string;
+};
