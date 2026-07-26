@@ -228,23 +228,18 @@ const FORMULAS: Record<string, string> = {
 };
 
 /**
- * Exact port of addIMMsFromWeb(): comma-separated tokens, each resolved via
- * resolveIMM(). A plate already present in PARKING just gets its TIMESTAMP
- * bumped to now (moves it to the bottom of the sorted list) instead of
- * inserting a new row. A genuinely new plate goes into the first available
- * empty IMM row; if none remain, the sheet is grown by exactly as many rows
- * as still needed (via appendDimension) — the original used a fixed
- * AUTO_EXPAND=100-row batch since it was minimizing Apps Script round-trips;
- * this port grows by the exact shortfall since a single API call already
- * does the job.
+ * Comma-separated tokens, each resolved via resolveIMM(). A plate already
+ * present in PARKING just gets its TIMESTAMP bumped to now (moves it to the
+ * bottom of the sorted list) instead of inserting a new row. A genuinely new
+ * plate is appended right after the last existing data row — empty rows are
+ * never reused, since deletePlate() now removes rows outright instead of
+ * clearing them, so none exist to reuse. The sheet is grown by exactly as
+ * many rows as still needed (via appendDimension) if appending would run
+ * past the grid's current row count.
  *
  * New rows also get the 12 XLOOKUP formulas seeded into their formula
- * columns — original GAS rows keep their formulas from a previous
- * occupant (clearContent() on delete never touches the formula columns,
- * relying on XLOOKUP's own "not found" default to blank them out), but a
- * *brand-new* row created by growing the sheet has never had a formula
- * written into it, so this always (re)writes them to stay correct in both
- * cases.
+ * columns, since a brand-new row created by growing the sheet has never had
+ * a formula written into it.
  */
 export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
   const tokens = (rawInput ?? "")
@@ -271,7 +266,6 @@ export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
 
   const existingSet = new Set<string>();
   const plateToRow = new Map<string, number>();
-  const emptyRows: number[] = [];
 
   dataRows.forEach((row, i) => {
     const rowNum = DATA_START_ROW + i;
@@ -280,36 +274,29 @@ export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
     if (val) {
       existingSet.add(val);
       plateToRow.set(val, rowNum);
-    } else {
-      emptyRows.push(rowNum);
     }
   });
 
-  // Upper-bound estimate (duplicates consume zero, but this only ever
-  // over-provisions, never under) — matches ensureEmptyRows_(sheet, tokens.length).
   const needed = tokens.length;
-  if (emptyRows.length < needed) {
-    const props = await getParkingSheetProps(sheets);
-    const lastKnownRow = DATA_START_ROW + dataRows.length - 1;
-    const shortfall = needed - emptyRows.length;
-    const startNewRow = Math.max(props.rowCount, lastKnownRow) + 1;
-    const gridShortfall = startNewRow + shortfall - 1 - props.rowCount;
-    if (gridShortfall > 0) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: spreadsheetId!,
-        requestBody: {
-          requests: [{ appendDimension: { sheetId: props.sheetId, dimension: "ROWS", length: gridShortfall } }],
-        },
-      });
-    }
-    for (let r = startNewRow; r < startNewRow + shortfall; r++) emptyRows.push(r);
+  const nextRows: number[] = [];
+  const startNewRow = DATA_START_ROW + dataRows.length;
+  const props = await getParkingSheetProps(sheets);
+  const gridShortfall = startNewRow + needed - 1 - props.rowCount;
+  if (gridShortfall > 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: spreadsheetId!,
+      requestBody: {
+        requests: [{ appendDimension: { sheetId: props.sheetId, dimension: "ROWS", length: gridShortfall } }],
+      },
+    });
   }
+  for (let r = startNewRow; r < startNewRow + needed; r++) nextRows.push(r);
 
   const immList = await getIMMList();
   const results: ParkingAddResultItem[] = [];
   const nowSerial = nowToSerial();
   const writes: { range: string; values: (string | number)[][] }[] = [];
-  let emptyIdx = 0;
+  let nextIdx = 0;
 
   for (const token of tokens) {
     const resolved = resolveIMM(token, immList) || token.trim().toUpperCase();
@@ -326,7 +313,7 @@ export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
       continue;
     }
 
-    const targetRow = emptyRows[emptyIdx++];
+    const targetRow = nextRows[nextIdx++];
     if (targetRow == null) break; // shouldn't happen given the expansion above
 
     writes.push({
@@ -385,24 +372,23 @@ export async function updateAction(rowIndex: number, action: string): Promise<vo
 
 // ─── deleteIMMFromWeb ──────────────────────────────────────────────────────
 
-/** Clears IMM, TIMESTAMP, ACTION only — the row itself and its formula
- *  columns are left in place, exactly like the original (XLOOKUP's own
- *  "not found" default blanks the formula columns once IMM is empty). */
+/** Genuinely deletes the row (Sheets "delete row" — DeleteDimensionRequest),
+ *  shifting every row below it up by one. Replaces the original's
+ *  clear-cells behavior: empty rows are no longer reused by addPlates(), so
+ *  there's no reason to leave a hollowed-out row in place. */
 export async function deletePlate(rowIndex: number): Promise<void> {
   const sheets = getSheetsClient();
-  const headers = await getHeaderRow(sheets);
-  const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
-  const actionCol = colMap["ACTION"] ?? 2;
-  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const { sheetId } = await getParkingSheetProps(sheets);
 
-  await sheets.spreadsheets.values.batchClear({
+  await sheets.spreadsheets.batchUpdate({
     spreadsheetId: spreadsheetId!,
     requestBody: {
-      ranges: [
-        `'${PARKING_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
-        `'${PARKING_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`,
-        `'${PARKING_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`,
+      requests: [
+        {
+          deleteDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: rowIndex - 1, endIndex: rowIndex },
+          },
+        },
       ],
     },
   });

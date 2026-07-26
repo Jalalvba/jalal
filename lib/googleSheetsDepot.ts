@@ -185,10 +185,12 @@ const FORMULAS: Record<string, string> = {
 
 /**
  * Exact same shape/behavior as Parking's addPlates(): resolveIMM() against
- * the Mongo parc plate list, duplicate → bump TIMESTAMP only, new → first
- * empty IMM row (growing the sheet by the exact shortfall if none remain),
- * seeding that row's formula columns so it isn't blank until some other
- * process re-touches it.
+ * the Mongo parc plate list, duplicate → bump TIMESTAMP only, new → appended
+ * right after the last existing data row (growing the sheet if needed) —
+ * empty rows are never reused, since deleteDepotRow() now removes rows
+ * outright instead of clearing them, so none exist to reuse. Seeds the new
+ * row's formula columns so it isn't blank until some other process
+ * re-touches it.
  */
 export async function addDepotPlates(rawInput: string): Promise<ParkingAddResponse> {
   const tokens = (rawInput ?? "")
@@ -215,7 +217,6 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
 
   const existingSet = new Set<string>();
   const plateToRow = new Map<string, number>();
-  const emptyRows: number[] = [];
 
   dataRows.forEach((row, i) => {
     const rowNum = DATA_START_ROW + i;
@@ -224,34 +225,29 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
     if (val) {
       existingSet.add(val);
       plateToRow.set(val, rowNum);
-    } else {
-      emptyRows.push(rowNum);
     }
   });
 
   const needed = tokens.length;
-  if (emptyRows.length < needed) {
-    const props = await getDepotSheetProps(sheets);
-    const lastKnownRow = DATA_START_ROW + dataRows.length - 1;
-    const shortfall = needed - emptyRows.length;
-    const startNewRow = Math.max(props.rowCount, lastKnownRow) + 1;
-    const gridShortfall = startNewRow + shortfall - 1 - props.rowCount;
-    if (gridShortfall > 0) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: spreadsheetId!,
-        requestBody: {
-          requests: [{ appendDimension: { sheetId: props.sheetId, dimension: "ROWS", length: gridShortfall } }],
-        },
-      });
-    }
-    for (let r = startNewRow; r < startNewRow + shortfall; r++) emptyRows.push(r);
+  const nextRows: number[] = [];
+  const startNewRow = DATA_START_ROW + dataRows.length;
+  const props = await getDepotSheetProps(sheets);
+  const gridShortfall = startNewRow + needed - 1 - props.rowCount;
+  if (gridShortfall > 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: spreadsheetId!,
+      requestBody: {
+        requests: [{ appendDimension: { sheetId: props.sheetId, dimension: "ROWS", length: gridShortfall } }],
+      },
+    });
   }
+  for (let r = startNewRow; r < startNewRow + needed; r++) nextRows.push(r);
 
   const immList = await getIMMList();
   const results: ParkingAddResultItem[] = [];
   const nowSerial = nowToSerial();
   const writes: { range: string; values: (string | number)[][] }[] = [];
-  let emptyIdx = 0;
+  let nextIdx = 0;
 
   for (const token of tokens) {
     const resolved = resolveIMM(token, immList) || token.trim().toUpperCase();
@@ -268,7 +264,7 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
       continue;
     }
 
-    const targetRow = emptyRows[emptyIdx++];
+    const targetRow = nextRows[nextIdx++];
     if (targetRow == null) break; // shouldn't happen given the expansion above
 
     writes.push({
@@ -327,23 +323,24 @@ export async function updateDepotAction(rowIndex: number, action: string): Promi
 
 // ─── deleteDepotRow ────────────────────────────────────────────────────────
 
-/** Clears IMM, TIMESTAMP, ACTION only — the row itself and its formula
- *  columns are left in place, exactly like Parking's deletePlate(). */
+/** Genuinely deletes the row (Sheets "delete row" — DeleteDimensionRequest),
+ *  shifting every row below it up by one. Replaces the original's
+ *  clear-cells behavior: empty rows are no longer reused by
+ *  addDepotPlates(), so there's no reason to leave a hollowed-out row in
+ *  place. */
 export async function deleteDepotRow(rowIndex: number): Promise<void> {
   const sheets = getSheetsClient();
-  const headers = await getHeaderRow(sheets);
-  const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
-  const actionCol = colMap["ACTION"] ?? 2;
-  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const { sheetId } = await getDepotSheetProps(sheets);
 
-  await sheets.spreadsheets.values.batchClear({
+  await sheets.spreadsheets.batchUpdate({
     spreadsheetId: spreadsheetId!,
     requestBody: {
-      ranges: [
-        `'${DEPOT_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
-        `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`,
-        `'${DEPOT_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`,
+      requests: [
+        {
+          deleteDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: rowIndex - 1, endIndex: rowIndex },
+          },
+        },
       ],
     },
   });

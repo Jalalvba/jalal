@@ -195,10 +195,12 @@ const FORMULAS: Record<string, string> = {
 
 /**
  * Exact same shape/behavior as Parking's addPlates(): resolveIMM() against
- * the Mongo parc plate list, duplicate → bump TIMESTAMP only, new → first
- * empty IMM row (growing the sheet by the exact shortfall if none remain),
- * seeding that row's formula columns so it isn't blank until some other
- * process re-touches it.
+ * the Mongo parc plate list, duplicate → bump TIMESTAMP only, new → appended
+ * right after the last existing data row (growing the sheet if needed) —
+ * empty rows are never reused, since deleteAtelierRow() now removes rows
+ * outright instead of clearing them, so none exist to reuse. Seeds the new
+ * row's formula columns so it isn't blank until some other process
+ * re-touches it.
  */
 export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResponse> {
   const tokens = (rawInput ?? "")
@@ -226,7 +228,6 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
 
   const existingSet = new Set<string>();
   const plateToRow = new Map<string, number>();
-  const emptyRows: number[] = [];
 
   dataRows.forEach((row, i) => {
     const rowNum = DATA_START_ROW + i;
@@ -235,34 +236,29 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
     if (val) {
       existingSet.add(val);
       plateToRow.set(val, rowNum);
-    } else {
-      emptyRows.push(rowNum);
     }
   });
 
   const needed = tokens.length;
-  if (emptyRows.length < needed) {
-    const props = await getAtelierSheetProps(sheets);
-    const lastKnownRow = DATA_START_ROW + dataRows.length - 1;
-    const shortfall = needed - emptyRows.length;
-    const startNewRow = Math.max(props.rowCount, lastKnownRow) + 1;
-    const gridShortfall = startNewRow + shortfall - 1 - props.rowCount;
-    if (gridShortfall > 0) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: spreadsheetId!,
-        requestBody: {
-          requests: [{ appendDimension: { sheetId: props.sheetId, dimension: "ROWS", length: gridShortfall } }],
-        },
-      });
-    }
-    for (let r = startNewRow; r < startNewRow + shortfall; r++) emptyRows.push(r);
+  const nextRows: number[] = [];
+  const startNewRow = DATA_START_ROW + dataRows.length;
+  const props = await getAtelierSheetProps(sheets);
+  const gridShortfall = startNewRow + needed - 1 - props.rowCount;
+  if (gridShortfall > 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: spreadsheetId!,
+      requestBody: {
+        requests: [{ appendDimension: { sheetId: props.sheetId, dimension: "ROWS", length: gridShortfall } }],
+      },
+    });
   }
+  for (let r = startNewRow; r < startNewRow + needed; r++) nextRows.push(r);
 
   const immList = await getIMMList();
   const results: ParkingAddResultItem[] = [];
   const nowSerial = nowToSerial();
   const writes: { range: string; values: (string | number)[][] }[] = [];
-  let emptyIdx = 0;
+  let nextIdx = 0;
 
   for (const token of tokens) {
     const resolved = resolveIMM(token, immList) || token.trim().toUpperCase();
@@ -279,7 +275,7 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
       continue;
     }
 
-    const targetRow = emptyRows[emptyIdx++];
+    const targetRow = nextRows[nextIdx++];
     if (targetRow == null) break; // shouldn't happen given the expansion above
 
     writes.push({
@@ -353,25 +349,26 @@ export async function updateAtelierField(
 
 // ─── deleteIMMFromWeb ──────────────────────────────────────────────────────
 
-/** Clears IMM, TIMESTAMP and the 4 editable manual fields — formula columns
- *  are left in place, same reasoning as Parking's deletePlate(). */
+/** Genuinely deletes the row (Sheets "delete row" — DeleteDimensionRequest),
+ *  shifting every row below it up by one. Replaces the original's
+ *  clear-cells behavior: empty rows are no longer reused by
+ *  addAtelierPlates(), so there's no reason to leave a hollowed-out row in
+ *  place. */
 export async function deleteAtelierRow(rowIndex: number): Promise<void> {
   const sheets = getSheetsClient();
-  const headers = await getHeaderRow(sheets);
-  const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
-  const tsCol = colMap["TIMESTAMP"];
+  const { sheetId } = await getAtelierSheetProps(sheets);
 
-  const ranges = [`'${ATELIER_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`];
-  if (tsCol) ranges.push(`'${ATELIER_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`);
-  for (const field of ATELIER_EDITABLE_FIELDS) {
-    const col = colMap[field];
-    if (col) ranges.push(`'${ATELIER_TAB}'!${columnIndexToLetter(col)}${rowIndex}`);
-  }
-
-  await sheets.spreadsheets.values.batchClear({
+  await sheets.spreadsheets.batchUpdate({
     spreadsheetId: spreadsheetId!,
-    requestBody: { ranges },
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: rowIndex - 1, endIndex: rowIndex },
+          },
+        },
+      ],
+    },
   });
 }
 
