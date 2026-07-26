@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { fmtDate, fmtNum } from "@/lib/format"
+import { ThemeToggle } from "@/components/fleet/ThemeToggle"
 
 type ArticleResult = {
   "CMD Num":             string
@@ -78,11 +79,14 @@ export default function ArticlePage() {
             <h1 className="text-2xl font-semibold tracking-tight">Recherche Prix Article</h1>
             <p className="mt-1 text-sm text-zinc-500">Source: bc + parc + cp</p>
           </div>
-          {count != null && (
-            <span className="inline-flex items-center rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-300">
-              {count} résultats
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {count != null && (
+              <span className="inline-flex items-center rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-300">
+                {count} résultats
+              </span>
+            )}
+            <ThemeToggle className="border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800" />
+          </div>
         </div>
 
         {/* Search panel */}

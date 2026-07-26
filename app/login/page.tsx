@@ -1,4 +1,5 @@
 import { login } from "./actions";
+import { ThemeToggle } from "@/components/fleet/ThemeToggle";
 
 export default async function LoginPage({
   searchParams,
@@ -10,7 +11,10 @@ export default async function LoginPage({
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950">
       <div className="w-full max-w-sm bg-gray-900 rounded-2xl p-8 shadow-xl border border-gray-800">
-        <h1 className="text-2xl font-semibold text-white mb-1">Connexion</h1>
+        <div className="mb-1 flex items-start justify-between gap-2">
+          <h1 className="text-2xl font-semibold text-white">Connexion</h1>
+          <ThemeToggle className="border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700" />
+        </div>
         <p className="text-gray-400 text-sm mb-8">AVIS Maroc — Gestion de flotte</p>
 
         {error === "locked" && (

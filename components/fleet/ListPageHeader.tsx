@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, RotateCw, Trash2, Power } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/fleet/ThemeToggle";
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -58,6 +59,7 @@ export function ListPageHeader({
         </div>
         <div className="flex items-center gap-1.5">
           <span className={`rounded-full border px-2 py-0.5 font-mono text-[11px] ${countClassName}`}>{count}</span>
+          <ThemeToggle variant="icon" />
           <Button type="button" variant="ghost" size="icon" onClick={onRefresh} title="Actualiser">
             <RotateCw className="h-4 w-4" />
           </Button>

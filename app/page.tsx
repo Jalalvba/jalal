@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { logout } from "@/app/login/actions";
-import { useDarkMode } from "@/hooks/useDarkMode";
+import { ThemeToggle } from "@/components/fleet/ThemeToggle";
 
 function HomeIcon({ children }: { children: React.ReactNode }) {
   return (
@@ -52,8 +52,6 @@ function NavCard({
 }
 
 export default function Home() {
-  const { dark, toggle: toggleDark } = useDarkMode();
-
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-black dark:text-zinc-50">
       <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
@@ -64,17 +62,7 @@ export default function Home() {
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Choisissez un espace de travail</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={toggleDark}
-              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              title={dark ? "Passer en mode clair" : "Passer en mode sombre"}
-            >
-              {dark
-                ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" strokeLinecap="round"/></svg>
-                : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-              }
-              {dark ? "Clair" : "Sombre"}
-            </button>
+            <ThemeToggle className="border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800" />
             <form action={logout}>
               <button
                 type="submit"
