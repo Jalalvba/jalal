@@ -65,15 +65,15 @@ export function Combobox({
         inputMode={inputMode}
         autoComplete="off"
         className={cn(
-          "h-11 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-zinc-500",
+          "h-11 w-full rounded-xl border border-border bg-input px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-zinc-500",
           inputClassName
         )}
       />
       {showList && (
-        <CommandPrimitive.List className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl">
-          {loading && <div className="px-4 py-3 text-xs text-zinc-500">Recherche…</div>}
+        <CommandPrimitive.List className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-border bg-popover shadow-2xl">
+          {loading && <div className="px-4 py-3 text-xs text-muted-foreground">Recherche…</div>}
           {!loading && options.length === 0 && emptyMessage && (
-            <CommandPrimitive.Empty className="px-4 py-3 text-xs text-zinc-500">
+            <CommandPrimitive.Empty className="px-4 py-3 text-xs text-muted-foreground">
               {emptyMessage}
             </CommandPrimitive.Empty>
           )}
@@ -83,7 +83,7 @@ export function Combobox({
                 key={option}
                 value={option}
                 onSelect={() => onSelect(option)}
-                className="cursor-pointer border-b border-zinc-800 px-4 py-2.5 font-mono text-sm font-semibold tracking-wide text-zinc-200 last:border-0 data-[selected=true]:bg-zinc-800"
+                className="cursor-pointer border-b border-border px-4 py-2.5 font-mono text-sm font-semibold tracking-wide text-popover-foreground last:border-0 data-[selected=true]:bg-muted"
               >
                 {option}
               </CommandPrimitive.Item>

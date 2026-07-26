@@ -17,7 +17,7 @@ export function AlertDialogContent({
       <AlertDialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/70 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=closed]:animate-out data-[state=closed]:fade-out" />
       <AlertDialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-zinc-700 bg-zinc-950 p-4 shadow-2xl focus:outline-none",
+          "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-popover p-4 shadow-2xl focus:outline-none",
           className
         )}
         {...props}
@@ -30,7 +30,7 @@ export const AlertDialogTitle = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Title ref={ref} className={cn("text-sm font-semibold text-zinc-100", className)} {...props} />
+  <AlertDialogPrimitive.Title ref={ref} className={cn("text-sm font-semibold text-popover-foreground", className)} {...props} />
 ));
 AlertDialogTitle.displayName = "AlertDialogTitle";
 
@@ -40,7 +40,7 @@ export const AlertDialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Description
     ref={ref}
-    className={cn("mt-2 text-sm text-zinc-400", className)}
+    className={cn("mt-2 text-sm text-muted-foreground", className)}
     {...props}
   />
 ));

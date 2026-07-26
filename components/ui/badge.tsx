@@ -13,7 +13,7 @@ const badgeVariants = cva("inline-flex items-center gap-1 rounded-md border px-1
       success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
       warning: "border-amber-500/30 bg-amber-500/10 text-amber-400",
       error: "border-red-500/30 bg-red-500/10 text-red-400",
-      neutral: "border-zinc-700 bg-zinc-800 text-zinc-300",
+      neutral: "border-border bg-muted text-foreground",
     },
   },
   defaultVariants: { variant: "neutral" },

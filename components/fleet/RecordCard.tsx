@@ -44,14 +44,14 @@ export function RecordCard({
     <Card className="space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="font-mono text-sm font-bold tracking-wide text-zinc-100">{imm}</div>
+          <div className="font-mono text-sm font-bold tracking-wide text-card-foreground">{imm}</div>
           {subtitle && (
-            <div className="mt-0.5 truncate text-[10px] font-medium text-zinc-400">{subtitle}</div>
+            <div className="mt-0.5 truncate text-[10px] font-medium text-muted-foreground">{subtitle}</div>
           )}
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5">
           {timestamp && (
-            <span className="rounded bg-zinc-950 px-2 py-0.5 text-[9px] font-semibold text-zinc-500">
+            <span className="rounded bg-muted px-2 py-0.5 text-[9px] font-semibold text-muted-foreground">
               {timestamp}
             </span>
           )}

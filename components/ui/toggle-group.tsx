@@ -23,7 +23,7 @@ export const ToggleGroupItem = React.forwardRef<
   <ToggleGroupPrimitive.Item
     ref={ref}
     className={cn(
-      "flex-shrink-0 whitespace-nowrap rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-medium text-zinc-400 transition",
+      "flex-shrink-0 whitespace-nowrap rounded-full border border-border bg-card px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition",
       accentClassName ?? "data-[state=on]:border-amber-500 data-[state=on]:bg-amber-500/10 data-[state=on]:text-amber-400",
       className
     )}

@@ -9,10 +9,10 @@ export function ReadonlyFieldList({ fields }: { fields: { label: string; value: 
   if (populated.length === 0) return null;
 
   return (
-    <div className="mt-2 flex flex-col gap-1 border-t border-zinc-800/60 pt-2">
+    <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
       {populated.map((f) => (
-        <div key={f.label} className="whitespace-pre-line text-[11px] leading-snug text-zinc-500">
-          <span className="mr-1 text-[9px] font-bold uppercase text-zinc-600">{f.label}:</span>
+        <div key={f.label} className="whitespace-pre-line text-[11px] leading-snug text-muted-foreground">
+          <span className="mr-1 text-[9px] font-bold uppercase text-muted-foreground">{f.label}:</span>
           {f.value}
         </div>
       ))}

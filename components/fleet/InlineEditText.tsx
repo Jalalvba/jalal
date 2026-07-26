@@ -36,8 +36,8 @@ export function InlineEditText({
         disabled={pending}
         rows={2}
         className={cn(
-          "w-full resize-none rounded-lg border bg-zinc-800/50 px-2.5 py-2 text-xs leading-snug text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 disabled:opacity-60",
-          justSaved ? "border-emerald-500/60" : error ? "border-red-500/60" : "border-zinc-700 focus:border-amber-500"
+          "w-full resize-none rounded-lg border bg-muted px-2.5 py-2 text-xs leading-snug text-foreground outline-none transition-colors placeholder:text-muted-foreground disabled:opacity-60",
+          justSaved ? "border-emerald-500/60" : error ? "border-red-500/60" : "border-border focus:border-amber-500"
         )}
       />
       {error && <div className="mt-1 text-[10px] text-red-400">{error}</div>}

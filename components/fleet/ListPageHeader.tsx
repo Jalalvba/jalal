@@ -47,14 +47,14 @@ export function ListPageHeader({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="sticky top-0 z-20 border-b border-zinc-800 bg-black/95 px-3 py-2 backdrop-blur">
+    <div className="sticky top-0 z-20 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Link href="/" className="text-zinc-500 transition hover:text-zinc-300" title="Accueil">
+          <Link href="/" className="text-muted-foreground transition hover:text-foreground" title="Accueil">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className={`font-mono text-sm font-semibold ${accentClassName}`}>
-            {title} <span className="ml-1 text-[10px] font-normal text-zinc-500">{subtitle}</span>
+            {title} <span className="ml-1 text-[10px] font-normal text-muted-foreground">{subtitle}</span>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
