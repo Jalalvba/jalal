@@ -5,9 +5,13 @@ import { sessionOptions, SessionData } from "@/lib/session";
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Allow login page and static assets through
+  // Allow login page, the Google OAuth start/callback routes, and static
+  // assets through. The OAuth routes must be reachable while unauthenticated
+  // — that's the whole point of a login route — same reasoning /login was
+  // already excluded for.
   if (
     pathname.startsWith("/login") ||
+    pathname.startsWith("/api/auth/google") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico")
   ) {

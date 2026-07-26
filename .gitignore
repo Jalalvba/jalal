@@ -45,3 +45,6 @@ jalal_source.tar
 *.tar
 *.tar.gz
 cookies.txt
+
+# OAuth client secret downloaded from Google Cloud Console
+secret.json
