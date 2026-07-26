@@ -70,57 +70,57 @@ export default function ArticlePage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-zinc-50">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
 
         {/* Header */}
         <div className="flex items-end justify-between mb-6">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Recherche Prix Article</h1>
-            <p className="mt-1 text-sm text-zinc-500">Source: bc + parc + cp</p>
+            <p className="mt-1 text-sm text-muted-foreground">Source: bc + parc + cp</p>
           </div>
           <div className="flex items-center gap-2">
             {count != null && (
-              <span className="inline-flex items-center rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-300">
+              <span className="inline-flex items-center rounded-full border border-border bg-popover px-2.5 py-1 text-xs text-foreground">
                 {count} résultats
               </span>
             )}
-            <ThemeToggle className="border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800" />
+            <ThemeToggle className="border-border bg-card text-foreground hover:bg-muted" />
           </div>
         </div>
 
         {/* Search panel */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 shadow-sm mb-6">
+        <div className="rounded-2xl border border-border bg-popover p-4 shadow-sm mb-6">
           <div className="grid gap-3 sm:grid-cols-12 sm:items-end">
 
             <div className="sm:col-span-5">
-              <label className="mb-1 block text-xs font-medium text-zinc-400">Article (mots-clés)</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Article (mots-clés)</label>
               <input
                 value={article}
                 onChange={e => setArticle(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="ex: vidange, boite vitesse, parebrise"
-                className="h-11 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-500"
+                className="h-11 w-full rounded-xl border border-border bg-input px-3 text-sm outline-none placeholder:text-muted-foreground focus:border-zinc-500"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-zinc-400">Marque / Modèle</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Marque / Modèle</label>
               <input
                 value={brand}
                 onChange={e => setBrand(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="ex: Dacia, A4, Dokker"
-                className="h-11 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-500"
+                className="h-11 w-full rounded-xl border border-border bg-input px-3 text-sm outline-none placeholder:text-muted-foreground focus:border-zinc-500"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-zinc-400">Année</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Année</label>
               <select
                 value={year}
                 onChange={e => setYear(e.target.value === "all" ? "all" : Number(e.target.value))}
-                className="h-11 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm outline-none focus:border-zinc-500"
+                className="h-11 w-full rounded-xl border border-border bg-input px-3 text-sm outline-none focus:border-zinc-500"
               >
                 {Array.from({ length: 6 }, (_, i) => currentYear - i).map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -133,7 +133,7 @@ export default function ArticlePage() {
               <button
                 onClick={search}
                 disabled={loading || !article.trim()}
-                className="h-11 w-full rounded-xl bg-zinc-100 px-4 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-11 w-full rounded-xl bg-foreground px-4 text-sm font-medium text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? "Recherche…" : "Rechercher"}
               </button>
@@ -150,11 +150,11 @@ export default function ArticlePage() {
 
         {/* Results table */}
         {results.length > 0 && (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden">
+          <div className="rounded-2xl border border-border bg-popover overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-zinc-900 text-left text-xs font-semibold text-zinc-400 border-b border-zinc-800">
+                  <tr className="bg-muted text-left text-xs font-semibold text-muted-foreground border-b border-border">
                     <th className="px-4 py-3">Fournisseur</th>
                     <th className="px-4 py-3">Description</th>
                     <th className="px-4 py-3 text-right">PU</th>
@@ -167,37 +167,37 @@ export default function ArticlePage() {
                     <th className="px-4 py-3 text-right">Année</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800">
+                <tbody className="divide-y divide-border">
                   {results.map((r, i) => (
-                    <tr key={i} className="hover:bg-zinc-900/50">
-                      <td className="px-4 py-2 text-zinc-400">
+                    <tr key={i} className="hover:bg-muted/50">
+                      <td className="px-4 py-2 text-muted-foreground">
                         {r.Fournisseurs || "—"}
                       </td>
-                      <td className="px-4 py-2 text-zinc-200">
+                      <td className="px-4 py-2 text-foreground">
                         {r["Description article"] || "—"}
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums font-semibold text-emerald-400 whitespace-nowrap">
                         {fmtNum(r.PU, 2)} MAD
                       </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-zinc-400">
+                      <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                         {r["Qté"] || "—"}
                       </td>
-                      <td className="px-4 py-2 text-zinc-400">
+                      <td className="px-4 py-2 text-muted-foreground">
                         {r.Marque || "—"}
                       </td>
-                      <td className="px-4 py-2 text-zinc-400">
+                      <td className="px-4 py-2 text-muted-foreground">
                         {r.Modele || "—"}
                       </td>
-                      <td className="px-4 py-2 text-zinc-400">
+                      <td className="px-4 py-2 text-muted-foreground">
                         {r.Version || "—"}
                       </td>
-                      <td className="px-4 py-2 tabular-nums whitespace-nowrap text-zinc-400">
+                      <td className="px-4 py-2 tabular-nums whitespace-nowrap text-muted-foreground">
                         {fmtDate(r.DateMCE)}
                       </td>
-                      <td className="px-4 py-2 text-zinc-400">
+                      <td className="px-4 py-2 text-muted-foreground">
                         {r["Cree par"] || "—"}
                       </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-zinc-400">
+                      <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
                         {r.Année || "—"}
                       </td>
                     </tr>
@@ -209,7 +209,7 @@ export default function ArticlePage() {
         )}
 
         {!loading && results.length === 0 && count === 0 && (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 text-sm text-zinc-500">
+          <div className="rounded-2xl border border-border bg-popover p-6 text-sm text-muted-foreground">
             Aucun résultat trouvé.
           </div>
         )}

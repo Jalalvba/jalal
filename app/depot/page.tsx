@@ -139,7 +139,7 @@ export default function DepotPage() {
   const displayError = error || (rowsQuery.error instanceof Error ? rowsQuery.error.message : "");
 
   return (
-    <div className="min-h-screen bg-black text-zinc-50">
+    <div className="min-h-screen bg-background text-foreground">
       <ListPageHeader
         title="DEPOT"
         subtitle="AVIS Maroc"
@@ -173,11 +173,11 @@ export default function DepotPage() {
         )}
 
         {rowsQuery.isPending && (
-          <div className="py-16 text-center text-sm text-zinc-500">Chargement…</div>
+          <div className="py-16 text-center text-sm text-muted-foreground">Chargement…</div>
         )}
 
         {!rowsQuery.isPending && searched.length === 0 && !displayError && (
-          <div className="py-16 text-center text-sm text-zinc-500">Aucun véhicule au dépôt</div>
+          <div className="py-16 text-center text-sm text-muted-foreground">Aucun véhicule au dépôt</div>
         )}
 
         <div className="flex flex-col gap-2.5">

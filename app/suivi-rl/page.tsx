@@ -81,7 +81,7 @@ function BddCard({ row }: { row: BddRow }) {
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="font-mono text-sm font-semibold text-amber-400">{row.IMM}</span>
-          {row.date && <span className="font-mono text-xs text-zinc-500">{row.date}</span>}
+          {row.date && <span className="font-mono text-xs text-muted-foreground">{row.date}</span>}
           <InlineEditSelect
             value={row.flag}
             options={FLAG_OPTIONS}
@@ -99,7 +99,7 @@ function BddCard({ row }: { row: BddRow }) {
                 ) : (
                   <span
                     className={cn(
-                      "rounded-md border border-dashed border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-500",
+                      "rounded-md border border-dashed border-border px-1.5 py-0.5 text-[10px] text-muted-foreground",
                       justSaved && "ring-2 ring-emerald-400"
                     )}
                   >
@@ -134,7 +134,7 @@ function BddCard({ row }: { row: BddRow }) {
       </div>
 
       {(row.client || row.modele) && (
-        <div className="mb-2 truncate text-xs text-zinc-400">{[row.client, row.modele].filter(Boolean).join(" · ")}</div>
+        <div className="mb-2 truncate text-xs text-muted-foreground">{[row.client, row.modele].filter(Boolean).join(" · ")}</div>
       )}
 
       <div className="flex flex-col gap-2">
@@ -174,10 +174,10 @@ function BddCard({ row }: { row: BddRow }) {
       </div>
 
       {populatedReadonly.length > 0 && (
-        <div className="mt-2 flex flex-col gap-1 border-t border-zinc-800/60 pt-2">
+        <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
           {populatedReadonly.map((h) => (
-            <div key={h} className="whitespace-pre-line text-[11px] leading-snug text-zinc-500">
-              <span className="mr-1 text-[9px] font-bold uppercase text-zinc-600">{h}:</span>
+            <div key={h} className="whitespace-pre-line text-[11px] leading-snug text-muted-foreground">
+              <span className="mr-1 text-[9px] font-bold uppercase text-muted-foreground">{h}:</span>
               {String(row[h])}
             </div>
           ))}
@@ -269,7 +269,7 @@ export default function SuiviRlPage() {
     : "";
 
   return (
-    <div className="min-h-screen bg-black text-zinc-50">
+    <div className="min-h-screen bg-background text-foreground">
       <ListPageHeader
         title="AVIS"
         subtitle="Suivi RL"
@@ -290,7 +290,7 @@ export default function SuiviRlPage() {
         />
 
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto">
-          <span className="mr-1 flex-shrink-0 text-[9px] font-bold uppercase text-zinc-500">Flotte</span>
+          <span className="mr-1 flex-shrink-0 text-[9px] font-bold uppercase text-muted-foreground">Flotte</span>
           <ToggleGroup
             type="single"
             value={activeFleet}
@@ -343,11 +343,11 @@ export default function SuiviRlPage() {
         )}
 
         {rowsQuery.isPending && (
-          <div className="py-16 text-center text-sm text-zinc-500">Chargement…</div>
+          <div className="py-16 text-center text-sm text-muted-foreground">Chargement…</div>
         )}
 
         {!rowsQuery.isPending && searched.length === 0 && !displayError && (
-          <div className="py-16 text-center text-sm text-zinc-500">Aucun véhicule</div>
+          <div className="py-16 text-center text-sm text-muted-foreground">Aucun véhicule</div>
         )}
 
         <div className="flex flex-col gap-2">
@@ -356,7 +356,7 @@ export default function SuiviRlPage() {
           ))}
         </div>
 
-        {updatedLabel && <div className="mt-4 text-center font-mono text-[9px] text-zinc-600">Sync: {updatedLabel}</div>}
+        {updatedLabel && <div className="mt-4 text-center font-mono text-[9px] text-muted-foreground">Sync: {updatedLabel}</div>}
       </div>
     </div>
   );

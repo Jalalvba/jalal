@@ -52,7 +52,7 @@ const TECHNICIEN_OPTIONS = [
 ];
 
 const selectClass =
-  "h-auto w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[11px] font-medium text-zinc-200 outline-none focus:border-amber-500";
+  "h-auto w-full rounded border border-border bg-popover px-2 py-1.5 text-[11px] font-medium text-popover-foreground outline-none focus:border-amber-500";
 
 // ─── Read-only reference fields — same 9 XLOOKUP columns as Parking, plus
 // TECHNICEIN_DS (distinct from the editable TECHNICIEN above) ──────────────
@@ -226,7 +226,7 @@ export default function AtelierPage() {
   const displayError = error || (rowsQuery.error instanceof Error ? rowsQuery.error.message : "");
 
   return (
-    <div className="min-h-screen bg-black text-zinc-50">
+    <div className="min-h-screen bg-background text-foreground">
       <ListPageHeader
         title="🔧 ATELIER"
         subtitle="AVIS Maroc"
@@ -260,11 +260,11 @@ export default function AtelierPage() {
         )}
 
         {rowsQuery.isPending && (
-          <div className="py-16 text-center text-sm text-zinc-500">Chargement…</div>
+          <div className="py-16 text-center text-sm text-muted-foreground">Chargement…</div>
         )}
 
         {!rowsQuery.isPending && searched.length === 0 && !displayError && (
-          <div className="py-16 text-center text-sm text-zinc-500">Aucun véhicule en atelier</div>
+          <div className="py-16 text-center text-sm text-muted-foreground">Aucun véhicule en atelier</div>
         )}
 
         <div className="flex flex-col gap-2.5">

@@ -9,28 +9,28 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950">
-      <div className="w-full max-w-sm bg-gray-900 rounded-2xl p-8 shadow-xl border border-gray-800">
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="w-full max-w-sm bg-card rounded-2xl p-8 shadow-xl border border-border">
         <div className="mb-1 flex items-start justify-between gap-2">
-          <h1 className="text-2xl font-semibold text-white">Connexion</h1>
-          <ThemeToggle className="border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700" />
+          <h1 className="text-2xl font-semibold text-card-foreground">Connexion</h1>
+          <ThemeToggle className="border-border bg-muted text-foreground hover:bg-muted/70" />
         </div>
-        <p className="text-gray-400 text-sm mb-8">AVIS Maroc — Gestion de flotte</p>
+        <p className="text-muted-foreground text-sm mb-8">AVIS Maroc — Gestion de flotte</p>
 
         {error === "locked" && (
-          <p className="text-red-400 text-sm mb-4 bg-red-950 border border-red-800 rounded-lg px-4 py-2">
+          <p className="text-red-400 text-sm mb-4 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">
             Trop de tentatives échouées. Veuillez réessayer dans quelques minutes.
           </p>
         )}
         {error && error !== "locked" && (
-          <p className="text-red-400 text-sm mb-4 bg-red-950 border border-red-800 rounded-lg px-4 py-2">
+          <p className="text-red-400 text-sm mb-4 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">
             Nom d&apos;utilisateur ou mot de passe incorrect.
           </p>
         )}
 
         <form action={login} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label htmlFor="username" className="text-sm text-gray-400">
+            <label htmlFor="username" className="text-sm text-muted-foreground">
               Nom d&apos;utilisateur
             </label>
             <input
@@ -39,12 +39,12 @@ export default async function LoginPage({
               type="text"
               required
               autoComplete="username"
-              className="bg-gray-800 text-white rounded-lg px-4 py-2.5 text-sm border border-gray-700 focus:outline-none focus:border-blue-500 transition"
+              className="bg-input text-foreground rounded-lg px-4 py-2.5 text-sm border border-border focus:outline-none focus:border-blue-500 transition"
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label htmlFor="password" className="text-sm text-gray-400">
+            <label htmlFor="password" className="text-sm text-muted-foreground">
               Mot de passe
             </label>
             <input
@@ -53,7 +53,7 @@ export default async function LoginPage({
               type="password"
               required
               autoComplete="current-password"
-              className="bg-gray-800 text-white rounded-lg px-4 py-2.5 text-sm border border-gray-700 focus:outline-none focus:border-blue-500 transition"
+              className="bg-input text-foreground rounded-lg px-4 py-2.5 text-sm border border-border focus:outline-none focus:border-blue-500 transition"
             />
           </div>
 
