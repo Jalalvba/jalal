@@ -1,22 +1,47 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { ThemeProvider } from "next-themes";
 import { AppQueryProvider } from "@/hooks/queryClient";
+import { LIGHT_START_HOUR, LIGHT_END_HOUR } from "@/lib/themeDefault";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// Geist Sans/Mono (next/font/google) used to be loaded here but were never
+// actually rendered — app/globals.css separately imports and applies DM
+// Sans/Playfair Display/JetBrains Mono directly on body/h1-h4, which is
+// what every page has always visually shown. Removed the dead Geist load
+// rather than keep paying for an unused font fetch.
 
 export const metadata: Metadata = {
   title: "AVIS Fleet Management",
   description: "Outil interne de gestion de flotte — DS History, Suivi Atelier, Parking, BDD.",
 };
+
+// Runs synchronously before hydration (same "no-flash" positioning
+// next-themes' own injected script uses) so the correct class is present
+// on first paint, not applied a frame late.
+//
+// Distinguishes "explicit user choice" (localStorage['theme-explicit'] ===
+// 'true', set by components/fleet/ThemeToggle.tsx when the user actually
+// clicks the toggle) from "no explicit choice yet". Only in the latter
+// case does it compute the time-of-day default and write it into
+// next-themes' own 'theme' key — so next-themes' hydration reads a value
+// that already matches what's on screen, no mismatch, no second flash —
+// and so every fresh visit re-evaluates the current hour until the user
+// makes an explicit choice (at which point it's honored going forward,
+// exactly like a real "explicit overrides auto-default" setting should).
+const noFlashScript = `(function() {
+  try {
+    var explicit = localStorage.getItem('theme-explicit');
+    var theme;
+    if (explicit === 'true') {
+      theme = localStorage.getItem('theme') || 'dark';
+    } else {
+      var h = new Date().getHours();
+      theme = (h >= ${LIGHT_START_HOUR} && h < ${LIGHT_END_HOUR}) ? 'light' : 'dark';
+      localStorage.setItem('theme', theme);
+    }
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  } catch (e) {}
+})();`;
 
 export default function RootLayout({
   children,
@@ -24,11 +49,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <AppQueryProvider>{children}</AppQueryProvider>
+    <html lang="fr" suppressHydrationWarning>
+      <body className="antialiased">
+        <script dangerouslySetInnerHTML={{ __html: noFlashScript }} />
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="theme" disableTransitionOnChange>
+          <AppQueryProvider>{children}</AppQueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

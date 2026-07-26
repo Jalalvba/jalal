@@ -3,11 +3,62 @@
 
 @variant dark (&:where(.dark, .dark *));
 
-
 @theme {
   --font-display: "Playfair Display", Georgia, serif;
   --font-body: "DM Sans", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+
+  /* Semantic color tokens — the app's single source of truth for
+     light/dark-aware colors. Every component should consume these
+     (bg-background, text-foreground, bg-card, border-border, etc.)
+     instead of hardcoding a literal zinc/black/white value, which was
+     the root cause of the light-mode audit's contrast bugs: a hardcoded
+     class can't respond to the theme, a token always can. Values below
+     are the light defaults; .dark overrides them (see below) — this
+     mapping layer is what turns --background into the bg-background
+     utility Tailwind v4 generates automatically for any color token. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+}
+
+/* Light values (default — no .dark class present). Matches the palette
+   app/page.tsx's Home page already used correctly before this system
+   existed: zinc-50 page bg, white cards, zinc-900 text. */
+:root {
+  --background: #fafafa; /* zinc-50 */
+  --foreground: #18181b; /* zinc-900 */
+  --card: #ffffff;
+  --card-foreground: #18181b; /* zinc-900 */
+  --muted: #f4f4f5; /* zinc-100 */
+  --muted-foreground: #71717a; /* zinc-500 */
+  --border: #e4e4e7; /* zinc-200 */
+  --input: #ffffff;
+  --popover: #ffffff;
+  --popover-foreground: #18181b; /* zinc-900 */
+}
+
+/* Dark values — matches the app's pre-existing all-dark look (bg-black,
+   zinc-900 cards, zinc-100 text) so this migration doesn't change dark
+   mode's appearance, only makes light mode actually work. */
+.dark {
+  --background: #000000;
+  --foreground: #fafafa; /* zinc-50 */
+  --card: #18181b; /* zinc-900 */
+  --card-foreground: #f4f4f5; /* zinc-100 */
+  --muted: #27272a; /* zinc-800 */
+  --muted-foreground: #71717a; /* zinc-500 */
+  --border: #27272a; /* zinc-800 */
+  --input: #18181b; /* zinc-900 */
+  --popover: #09090b; /* zinc-950 */
+  --popover-foreground: #f4f4f5; /* zinc-100 */
 }
 
 * {
@@ -23,6 +74,8 @@ body {
   font-weight: 300;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  background: var(--color-background);
+  color: var(--color-foreground);
 }
 
 /* Subtle noise grain overlay */
@@ -37,8 +90,8 @@ body::before {
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 3px; }
-::-webkit-scrollbar-track { background: #18181b; }
-::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 2px; }
+::-webkit-scrollbar-track { background: var(--color-muted); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
 
 h1, h2, h3, h4 {
   font-family: var(--font-display);
