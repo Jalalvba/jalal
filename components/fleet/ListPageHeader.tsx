@@ -53,7 +53,7 @@ export function ListPageHeader({
           <Link href="/" className="text-muted-foreground transition hover:text-foreground" title="Accueil">
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <div className={`font-mono text-sm font-semibold ${accentClassName}`}>
+          <div className={`font-sans text-sm font-semibold ${accentClassName}`}>
             {title} <span className="ml-1 text-micro font-normal text-muted-foreground">{subtitle}</span>
           </div>
         </div>

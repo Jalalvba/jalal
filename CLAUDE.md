@@ -134,18 +134,29 @@ that works acceptably in both themes without needing its own token.
 
 ### Font
 
-**DM Sans** (body, weight 300) + **Playfair Display** (h1–h4) + **JetBrains
-Mono** (`font-mono` utility) — loaded via a Google Fonts `@import` at the
-top of `app/globals.css`, with the actual font-family assignment done via
-plain CSS rules (`body { font-family: var(--font-body); }` etc.), not
-Tailwind's `font-sans` utility.
+**Inter** (body + h1–h4, weight 300 for body) + **JetBrains Mono**
+(`font-mono` utility, data/identifiers only) — loaded via a Google Fonts
+`@import` at the top of `app/globals.css`. Body/heading assignment is done
+via plain CSS rules (`body { font-family: var(--font-body); }`,
+`h1,h2,h3,h4 { font-family: var(--font-display); }`), both pointing at
+Inter. `--font-sans` is also defined (also Inter) so the Tailwind
+`font-sans` utility itself resolves correctly wherever it's used (e.g.
+`ListPageHeader`'s title) instead of falling back to the generic
+system-ui default.
+
+This app previously ran a 3-font system (DM Sans + Playfair Display +
+JetBrains Mono); Playfair Display was dropped since its entire footprint
+was 5 heading tags app-wide — not enough to justify a second display
+face, and a decorative serif was a mismatch for a data-dense fleet-ops
+tool. Don't reintroduce it.
 
 Do **not** reintroduce `next/font/google`'s Geist Sans/Mono in
 `app/layout.tsx` — a previous version of this app loaded Geist there but
 never actually applied it anywhere (globals.css's own font rules always
 won), so it was a pure dead network fetch. It was removed; if you want to
-change the app's font, edit the `--font-display`/`--font-body`/`--font-mono`
-tokens and the `@import` URL in `app/globals.css`, not layout.tsx.
+change the app's font, edit the `--font-display`/`--font-body`/
+`--font-sans`/`--font-mono` tokens and the `@import` URL in
+`app/globals.css`, not layout.tsx.
 
 ## 4. Authentication & security
 
