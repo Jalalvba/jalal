@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { DepotRow, ParkingAddResultItem } from "@/lib/types";
+import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { PlateSearchInput } from "@/components/fleet/PlateSearchInput";
 import { PlateFilterInput } from "@/components/fleet/PlateFilterInput";
@@ -143,8 +144,8 @@ export default function DepotPage() {
       <ListPageHeader
         title="DEPOT"
         subtitle="AVIS Maroc"
-        accentClassName="text-lime-400"
-        countClassName="border-lime-500/20 bg-lime-500/10 text-lime-400"
+        accentClassName={ZONE_COLORS.depot.accentText}
+        countClassName={ZONE_COLORS.depot.count}
         count={searched.length}
         onRefresh={() => rowsQuery.refetch()}
         onClearAll={handleClearAll}

@@ -12,6 +12,7 @@ import {
   prestataireDotClass,
   type BddRow,
 } from "@/lib/types";
+import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -80,7 +81,7 @@ function BddCard({ row }: { row: BddRow }) {
     <Card className={flagStyle ? `border-l-4 ${flagStyle.border}` : ""}>
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-mono text-sm font-semibold text-amber-400">{row.IMM}</span>
+          <span className={`font-mono text-sm font-semibold ${ZONE_COLORS.bdd.accentText}`}>{row.IMM}</span>
           {row.date && <span className="font-mono text-xs text-muted-foreground">{row.date}</span>}
           <InlineEditSelect
             value={row.flag}
@@ -273,8 +274,8 @@ export default function SuiviRlPage() {
       <ListPageHeader
         title="AVIS"
         subtitle="Suivi RL"
-        accentClassName="text-amber-400"
-        countClassName="border-amber-500/20 bg-amber-500/10 text-amber-400"
+        accentClassName={ZONE_COLORS.bdd.accentText}
+        countClassName={ZONE_COLORS.bdd.count}
         count={searched.length}
         onRefresh={() => rowsQuery.refetch()}
       >

@@ -533,8 +533,8 @@ function FieldSelector({
 // BddEditableRow (Réunion N-1, the one read-only field left on the BDD row)
 // can call it without needing to thread a prop through.
 const etatStyle = (etat: string) => ({
-  "DISPONIBLE": "bg-[#1a7a4a] text-white border-[#1a7a4a]",
-  "INTERNE":    "bg-[#f4c430] text-[#5a3e00] border-[#e6b800]",
+  "DISPONIBLE": "bg-green-700 text-white border-green-700",
+  "INTERNE":    "bg-amber-400 text-amber-950 border-amber-500",
   "EXTERNE":    "bg-red-600 text-white border-red-700",
   "ANNULEE":    "bg-zinc-700 text-zinc-200 border-zinc-600",
 } as Record<string,string>)[etat?.toUpperCase()] ?? "bg-zinc-700 text-zinc-200 border-zinc-600";

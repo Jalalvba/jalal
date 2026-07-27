@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AtelierRow, ParkingAddResultItem, AtelierEditableField } from "@/lib/types";
+import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { PlateSearchInput } from "@/components/fleet/PlateSearchInput";
 import { PlateFilterInput } from "@/components/fleet/PlateFilterInput";
@@ -230,8 +231,8 @@ export default function AtelierPage() {
       <ListPageHeader
         title="🔧 ATELIER"
         subtitle="AVIS Maroc"
-        accentClassName="text-amber-400"
-        countClassName="border-amber-500/20 bg-amber-500/10 text-amber-400"
+        accentClassName={ZONE_COLORS.atelier.accentText}
+        countClassName={ZONE_COLORS.atelier.count}
         count={searched.length}
         onRefresh={() => rowsQuery.refetch()}
         onClearAll={handleClearAll}

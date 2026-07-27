@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { logout } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/fleet/ThemeToggle";
+import { ZONE_COLORS } from "@/lib/constants/zones";
 
 function HomeIcon({ children }: { children: React.ReactNode }) {
   return (
@@ -82,7 +83,7 @@ export default function Home() {
             href="/atelier"
             title="Suivi Atelier"
             subtitle="Suivi des interventions atelier"
-            accent="bg-amber-400"
+            accent={ZONE_COLORS.atelier.navDot}
             icon={
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <rect x="1" y="8" width="22" height="10" rx="2"/>
@@ -106,7 +107,7 @@ export default function Home() {
             href="/parking"
             title="Parking"
             subtitle="Suivi des véhicules en parking"
-            accent="bg-sky-500"
+            accent={ZONE_COLORS.parking.navDot}
             icon={
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 11v10" strokeLinecap="round"/>
@@ -117,7 +118,7 @@ export default function Home() {
             href="/suivi-rl"
             title="BDD (Suivi RL)"
             subtitle="Véhicules de remplacement — Suivi RL"
-            accent="bg-red-500"
+            accent={ZONE_COLORS.bdd.navDot}
             icon={
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -128,7 +129,7 @@ export default function Home() {
             href="/depot"
             title="Dépôt"
             subtitle="Suivi des véhicules au dépôt"
-            accent="bg-lime-500"
+            accent={ZONE_COLORS.depot.navDot}
             icon={
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M3 21V9l9-6 9 6v12" strokeLinecap="round" strokeLinejoin="round"/>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ParkingRow, ParkingAddResultItem } from "@/lib/types";
+import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { PlateSearchInput } from "@/components/fleet/PlateSearchInput";
 import { PlateFilterInput } from "@/components/fleet/PlateFilterInput";
@@ -142,8 +143,8 @@ export default function ParkingPage() {
       <ListPageHeader
         title="PARKING"
         subtitle="AVIS Maroc"
-        accentClassName="text-sky-400"
-        countClassName="border-sky-500/20 bg-sky-500/10 text-sky-400"
+        accentClassName={ZONE_COLORS.parking.accentText}
+        countClassName={ZONE_COLORS.parking.count}
         count={searched.length}
         onRefresh={() => rowsQuery.refetch()}
         onClearAll={handleClearAll}
