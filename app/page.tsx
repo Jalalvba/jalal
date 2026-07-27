@@ -33,7 +33,7 @@ function NavCard({
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{title}</h2>
           {disabled && (
-            <span className="rounded-full border border-zinc-300 bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-500">
+            <span className="rounded-full border border-zinc-300 bg-white px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-500">
               Bientôt
             </span>
           )}

@@ -46,12 +46,12 @@ export function RecordCard({
         <div className="min-w-0">
           <div className="font-mono text-sm font-bold tracking-wide text-card-foreground">{imm}</div>
           {subtitle && (
-            <div className="mt-0.5 truncate text-[10px] font-medium text-muted-foreground">{subtitle}</div>
+            <div className="mt-0.5 truncate text-micro font-medium text-muted-foreground">{subtitle}</div>
           )}
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5">
           {timestamp && (
-            <span className="rounded-lg bg-muted px-2 py-0.5 text-[9px] font-semibold text-muted-foreground">
+            <span className="rounded-lg bg-muted px-2 py-0.5 text-micro font-semibold text-muted-foreground">
               {timestamp}
             </span>
           )}

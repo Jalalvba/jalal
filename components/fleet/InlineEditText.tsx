@@ -40,7 +40,7 @@ export function InlineEditText({
           justSaved ? "border-emerald-500/60" : error ? "border-red-500/60" : "border-border focus:border-amber-500"
         )}
       />
-      {error && <div className="mt-1 text-[10px] text-red-400">{error}</div>}
+      {error && <div className="mt-1 text-micro text-red-400">{error}</div>}
     </div>
   );
 }

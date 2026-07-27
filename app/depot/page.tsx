@@ -67,7 +67,7 @@ function DepotCard({
           onBlur={() => {
             if (action !== row.action) onActionCommit(row.rowIndex, action, row.imm);
           }}
-          className="h-auto py-2 text-[11px]"
+          className="h-auto py-2 text-micro"
         />
       </Field>
       <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />

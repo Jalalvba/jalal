@@ -27,6 +27,12 @@
   --color-input: var(--input);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
+
+  /* Single micro-label size replacing 3 ad hoc arbitrary values
+     (text-[9px]/[10px]/[11px]) that had grown up independently across
+     the app. text-xs (12px) remains the next tier up, unchanged. */
+  --text-micro: 0.6875rem; /* 11px */
+  --text-micro--line-height: 0.875rem; /* 14px */
 }
 
 /* Light values (default — no .dark class present). Matches the palette

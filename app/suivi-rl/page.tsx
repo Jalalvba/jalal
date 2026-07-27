@@ -101,7 +101,7 @@ function BddCard({ row }: { row: BddRow }) {
                 ) : (
                   <span
                     className={cn(
-                      "rounded-lg border border-dashed border-border px-1.5 py-0.5 text-[10px] text-muted-foreground",
+                      "rounded-lg border border-dashed border-border px-1.5 py-0.5 text-micro text-muted-foreground",
                       justSaved && "ring-2 ring-emerald-400"
                     )}
                   >
@@ -124,7 +124,7 @@ function BddCard({ row }: { row: BddRow }) {
               onClick={onOpen}
               disabled={pending}
               className={cn(
-                "flex min-h-8 flex-shrink-0 items-center rounded-lg px-2 py-1 text-[9px] font-bold uppercase transition disabled:opacity-60",
+                "flex min-h-8 flex-shrink-0 items-center rounded-lg px-2 py-1 text-micro font-bold uppercase transition disabled:opacity-60",
                 value?.toUpperCase() === "EXTERNE" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400",
                 justSaved && "ring-2 ring-emerald-400"
               )}
@@ -178,8 +178,8 @@ function BddCard({ row }: { row: BddRow }) {
       {populatedReadonly.length > 0 && (
         <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
           {populatedReadonly.map((h) => (
-            <div key={h} className="whitespace-pre-line text-[11px] leading-snug text-muted-foreground">
-              <span className="mr-1 text-[9px] font-bold uppercase text-muted-foreground">{h}:</span>
+            <div key={h} className="whitespace-pre-line text-micro leading-snug text-muted-foreground">
+              <span className="mr-1 text-micro font-bold uppercase text-muted-foreground">{h}:</span>
               {String(row[h])}
             </div>
           ))}
@@ -292,7 +292,7 @@ export default function SuiviRlPage() {
         />
 
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto">
-          <span className="mr-1 flex-shrink-0 text-[9px] font-bold uppercase text-muted-foreground">Flotte</span>
+          <span className="mr-1 flex-shrink-0 text-micro font-bold uppercase text-muted-foreground">Flotte</span>
           <ToggleGroup
             type="single"
             value={activeFleet}
@@ -356,7 +356,7 @@ export default function SuiviRlPage() {
           ))}
         </div>
 
-        {updatedLabel && <div className="mt-4 text-center font-mono text-[9px] text-muted-foreground">Sync: {updatedLabel}</div>}
+        {updatedLabel && <div className="mt-4 text-center font-mono text-micro text-muted-foreground">Sync: {updatedLabel}</div>}
       </div>
     </div>
   );

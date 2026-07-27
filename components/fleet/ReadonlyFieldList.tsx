@@ -11,8 +11,8 @@ export function ReadonlyFieldList({ fields }: { fields: { label: string; value: 
   return (
     <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
       {populated.map((f) => (
-        <div key={f.label} className="whitespace-pre-line text-[11px] leading-snug text-muted-foreground">
-          <span className="mr-1 text-[9px] font-bold uppercase text-muted-foreground">{f.label}:</span>
+        <div key={f.label} className="whitespace-pre-line text-micro leading-snug text-muted-foreground">
+          <span className="mr-1 text-micro font-bold uppercase text-muted-foreground">{f.label}:</span>
           {f.value}
         </div>
       ))}

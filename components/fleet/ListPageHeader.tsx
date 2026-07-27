@@ -54,11 +54,11 @@ export function ListPageHeader({
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className={`font-mono text-sm font-semibold ${accentClassName}`}>
-            {title} <span className="ml-1 text-[10px] font-normal text-muted-foreground">{subtitle}</span>
+            {title} <span className="ml-1 text-micro font-normal text-muted-foreground">{subtitle}</span>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={`rounded-full border px-2 py-0.5 font-mono text-[11px] ${countClassName}`}>{count}</span>
+          <span className={`rounded-full border px-2 py-0.5 font-mono text-micro ${countClassName}`}>{count}</span>
           <ThemeToggle variant="icon" />
           <Button type="button" variant="ghost" size="icon" onClick={onRefresh} title="Actualiser">
             <RotateCw className="h-4 w-4" />

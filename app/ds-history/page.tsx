@@ -390,8 +390,8 @@ function LinesTable({ lines, orderedLineFields, totalMtHt, visibleLineFields }: 
                   {f.key === "cmd_num" ? (
                     <span className="flex items-center gap-1.5">
                       {l.price_source === "bc"
-                        ? <span className="rounded-lg px-1 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">BC</span>
-                        : <span className="rounded-lg px-1 py-0.5 text-[10px] font-bold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">DS</span>
+                        ? <span className="rounded-lg px-1 py-0.5 text-micro font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">BC</span>
+                        : <span className="rounded-lg px-1 py-0.5 text-micro font-bold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">DS</span>
                       }
                       {displayLineValue(l, f.key)}
                     </span>
@@ -604,7 +604,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
               {value && FLAG_STYLE[value] ? (
                 <Badge className={`${FLAG_STYLE[value].badge} ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>{value}</Badge>
               ) : (
-                <span className={`rounded-lg border border-dashed border-zinc-400 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:border-zinc-700 dark:text-zinc-500 ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>
+                <span className={`rounded-lg border border-dashed border-zinc-400 px-1.5 py-0.5 text-micro text-zinc-500 dark:border-zinc-700 dark:text-zinc-500 ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>
                   + Flag
                 </span>
               )}

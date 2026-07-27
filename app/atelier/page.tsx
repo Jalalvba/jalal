@@ -54,7 +54,7 @@ const TECHNICIEN_OPTIONS = [
 ];
 
 const selectClass =
-  "h-auto w-full rounded-lg border border-border bg-popover px-2 py-1.5 text-[11px] font-medium text-popover-foreground outline-none focus:border-amber-500";
+  "h-auto w-full rounded-lg border border-border bg-popover px-2 py-1.5 text-micro font-medium text-popover-foreground outline-none focus:border-amber-500";
 
 // ─── Read-only reference fields — same 9 XLOOKUP columns as Parking, plus
 // TECHNICEIN_DS (distinct from the editable TECHNICIEN above) ──────────────
@@ -95,7 +95,7 @@ function AtelierCard({
       timestamp={row.timestamp}
       onDelete={() => onDelete(row.rowIndex, row.imm)}
     >
-      <div className="grid grid-cols-1 gap-2.5 text-[11px] sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2.5 text-micro sm:grid-cols-2">
         <Field label="Catégorie">
           <select
             value={categorie}
@@ -132,7 +132,7 @@ function AtelierCard({
         </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 text-[11px] sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2.5 text-micro sm:grid-cols-2">
         <Field label="Suivi (Commentaire)">
           <Input
             value={commentaire}
@@ -141,7 +141,7 @@ function AtelierCard({
             onBlur={() => {
               if (commentaire !== row.commentaire) onFieldCommit(row.rowIndex, "COMMENTAIRE", commentaire, row.imm);
             }}
-            className="h-auto py-1.5 text-[11px] focus:border-amber-500"
+            className="h-auto py-1.5 text-micro focus:border-amber-500"
           />
         </Field>
         <Field label="Besoin Pièce">
@@ -152,7 +152,7 @@ function AtelierCard({
             onBlur={() => {
               if (besoinPiece !== row.besoinPiece) onFieldCommit(row.rowIndex, "BESOIN PIÈCE", besoinPiece, row.imm);
             }}
-            className="h-auto py-1.5 text-[11px] focus:border-amber-500"
+            className="h-auto py-1.5 text-micro focus:border-amber-500"
           />
         </Field>
       </div>

@@ -44,13 +44,13 @@ export function FieldRowTrigger({
         )}
       >
         <span className="flex min-w-0 items-start gap-1.5">
-          <span className="flex-shrink-0 pt-0.5 text-[9px] font-bold uppercase text-muted-foreground">{label}</span>
+          <span className="flex-shrink-0 pt-0.5 text-micro font-bold uppercase text-muted-foreground">{label}</span>
           {dot && <span className={cn("mt-1 inline-block h-2 w-2 flex-shrink-0 rounded-full", dot)} />}
           <span className={cn("whitespace-normal break-words", value ? "text-foreground" : "italic text-muted-foreground")}>{value || placeholder}</span>
         </span>
         <Pencil className="mt-0.5 h-3 w-3 flex-shrink-0 text-muted-foreground" />
       </button>
-      {error && <div className="mt-1 text-[10px] text-red-400">{error}</div>}
+      {error && <div className="mt-1 text-micro text-red-400">{error}</div>}
     </div>
   );
 }
