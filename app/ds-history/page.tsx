@@ -279,26 +279,26 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
 
   const f = (label: string, val?: string | null) => (
     <div>
-      <div className="text-xs text-zinc-400 dark:text-zinc-500">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold text-zinc-800 dark:text-zinc-100 truncate">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-0.5 text-sm font-semibold text-card-foreground truncate">
         {val?.trim() || "—"}
       </div>
     </div>
   );
 
   return (
-    <div className={`rounded-2xl border shadow-sm ${isRed ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}>
+    <div className={`rounded-2xl border shadow-sm ${isRed ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-border bg-card dark:border-border dark:bg-card"}`}>
       {/* Header */}
-      <div className={`flex items-center gap-2 border-b px-5 py-3 ${isRed ? "border-red-200 dark:border-red-800/50" : "border-zinc-100 dark:border-zinc-800"}`}>
-        <svg className={`h-4 w-4 ${isRed ? "text-red-500" : "text-zinc-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <div className={`flex items-center gap-2 border-b px-5 py-3 ${isRed ? "border-red-200 dark:border-red-800/50" : "border-border"}`}>
+        <svg className={`h-4 w-4 ${isRed ? "text-red-500" : "text-muted-foreground"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <rect x="1" y="8" width="22" height="10" rx="2"/>
           <path d="M5 8V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2"/>
           <circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>
         </svg>
-        <span className={`text-xs font-semibold uppercase tracking-widest ${isRed ? "text-red-600 dark:text-red-400" : "text-zinc-400 dark:text-zinc-500"}`}>
+        <span className={`text-xs font-semibold uppercase tracking-widest ${isRed ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
           {isRed && "⚠ "}Véhicule
         </span>
-        <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">parc + cp</span>
+        <span className="ml-auto text-xs italic text-muted-foreground">parc + cp</span>
       </div>
 
       {/* ── Priority row: always visible ── */}
@@ -314,15 +314,15 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
 
       {/* ── Version full width ── */}
       {cp?.version && (
-        <div className="border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
-          <div className="text-xs text-zinc-400 dark:text-zinc-500">Version</div>
-          <div className="mt-0.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-snug">{cp.version}</div>
+        <div className="border-t border-border px-5 py-3 dark:border-border">
+          <div className="text-xs text-muted-foreground">Version</div>
+          <div className="mt-0.5 text-sm font-medium text-card-foreground leading-snug">{cp.version}</div>
         </div>
       )}
 
       {/* ── Extra: expand/collapse ── */}
       {open && (
-        <div className="border-t border-zinc-100 px-5 py-4 space-y-4 dark:border-zinc-800">
+        <div className="border-t border-border px-5 py-4 space-y-4 dark:border-border">
           <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
             {f("Marque",         parc.brand)}
             {f("Modèle",         parc.model)}
@@ -336,10 +336,10 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
           </div>
           {contracts.length > 1 && (
             <div>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Autres contrats ({contracts.length - 1})</div>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">Autres contrats ({contracts.length - 1})</div>
               <div className="space-y-2">
                 {contracts.slice(1).map((c, i) => (
-                  <div key={i} className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-xl border border-zinc-100 px-4 py-3 sm:grid-cols-4 dark:border-zinc-800">
+                  <div key={i} className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-xl border border-border px-4 py-3 sm:grid-cols-4 dark:border-border">
                     {f("IMM", c.imm)} {f("Fin contrat", fmtDate(c.date_fin_contrat))} {f("Type relais", c.type)}
                   </div>
                 ))}
@@ -350,7 +350,7 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
       )}
 
       <button onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center justify-center gap-1.5 border-t border-zinc-100 py-2 text-xs font-medium text-zinc-400 transition hover:bg-zinc-50 hover:text-zinc-600 dark:border-zinc-800 dark:hover:bg-zinc-900 dark:hover:text-zinc-300">
+        className="flex w-full items-center justify-center gap-1.5 border-t border-border py-2 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground">
         {open
           ? <><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 10l4-4 4 4" strokeLinecap="round"/></svg> Voir moins</>
           : <><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6l4 4 4-4" strokeLinecap="round"/></svg> Voir plus</>}
@@ -369,29 +369,29 @@ function LinesTable({ lines, orderedLineFields, totalMtHt, visibleLineFields }: 
 }) {
   if (!lines.length || !orderedLineFields.length) return null;
   return (
-    <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+    <div className="overflow-x-auto rounded-xl border border-border">
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-zinc-50 text-left text-xs font-semibold text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+          <tr className="bg-muted text-left text-xs font-semibold text-muted-foreground dark:bg-card dark:text-muted-foreground">
             {orderedLineFields.map(f => (
               <th key={f.key} className={`px-3 py-2 whitespace-nowrap ${NUM_LINE_KEYS.has(f.key) ? "text-right" : ""}`}>{f.label}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        <tbody className="divide-y divide-border">
           {lines.map((l, idx) => (
-            <tr key={idx} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+            <tr key={idx} className="hover:bg-muted">
               {orderedLineFields.map(f => (
                 <td key={f.key} className={`px-3 py-2 ${
                   NUM_LINE_KEYS.has(f.key) ? "text-right tabular-nums font-medium"
-                  : f.key==="code_art" ? "font-mono text-xs font-medium text-zinc-700 dark:text-zinc-300"
-                  : "text-zinc-600 dark:text-zinc-400"
+                  : f.key==="code_art" ? "font-mono text-xs font-medium text-card-foreground"
+                  : "text-muted-foreground"
                 }`}>
                   {f.key === "cmd_num" ? (
                     <span className="flex items-center gap-1.5">
                       {l.price_source === "bc"
                         ? <span className="rounded-lg px-1 py-0.5 text-micro font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">BC</span>
-                        : <span className="rounded-lg px-1 py-0.5 text-micro font-bold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">DS</span>
+                        : <span className="rounded-lg px-1 py-0.5 text-micro font-bold bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground">DS</span>
                       }
                       {displayLineValue(l, f.key)}
                     </span>
@@ -403,7 +403,7 @@ function LinesTable({ lines, orderedLineFields, totalMtHt, visibleLineFields }: 
         </tbody>
         {lines.length > 1 && visibleLineFields.has("mt_ht") && totalMtHt != null && (
           <tfoot>
-            <tr className="border-t-2 border-zinc-200 bg-zinc-50 font-semibold dark:border-zinc-700 dark:bg-zinc-900">
+            <tr className="border-t-2 border-border bg-muted font-semibold dark:border-border dark:bg-card">
               {orderedLineFields.map((f, i) => (
                 <td key={f.key} className={`px-3 py-2 text-xs ${NUM_LINE_KEYS.has(f.key) ? "text-right tabular-nums" : ""}`}>
                   {f.key === "mt_ht" ? fmtNum(totalMtHt, 2) : i === 0 ? "Total" : ""}
@@ -461,19 +461,19 @@ function FieldSelector({
           className="fixed inset-0 z-50 flex items-start justify-end outline-none"
           aria-describedby={undefined}
         >
-      <div className="mr-4 mt-16 w-80 max-h-[80vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-950">
-        <div className="sticky top-0 flex items-center justify-between border-b border-zinc-100 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="mr-4 mt-16 w-80 max-h-[80vh] overflow-y-auto rounded-2xl border border-border bg-popover shadow-2xl">
+        <div className="sticky top-0 flex items-center justify-between border-b border-border bg-popover px-4 py-3">
           <DialogPrimitive.Title asChild>
             <span className="text-sm font-semibold">Champs visibles</span>
           </DialogPrimitive.Title>
           <div className="flex items-center gap-1">
             <button
               onClick={() => { saveCard(DEFAULT_CARD_VISIBLE); saveLine(DEFAULT_LINE_VISIBLE); }}
-              className="rounded-lg px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
               title="Réinitialiser aux champs par défaut">
               ↺ Reset
             </button>
-            <button onClick={onClose} className="rounded-lg px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">✕ Fermer</button>
+            <button onClick={onClose} className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-muted">✕ Fermer</button>
           </div>
         </div>
         <div className="mx-3 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-400">
@@ -485,17 +485,17 @@ function FieldSelector({
             return (
               <div key={group}>
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">{group}</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{group}</span>
                   <div className="flex gap-2">
                     <button onClick={() => { const n = new Set(visibleCardFields); fields.forEach(f => n.add(f.key)); saveCard(n); }} className="text-xs text-blue-500 hover:underline">Tout</button>
-                    <button onClick={() => { const n = new Set(visibleCardFields); fields.forEach(f => { if (f.key !== "N°DS") n.delete(f.key); }); saveCard(n); }} className="text-xs text-zinc-400 hover:underline">Aucun</button>
+                    <button onClick={() => { const n = new Set(visibleCardFields); fields.forEach(f => { if (f.key !== "N°DS") n.delete(f.key); }); saveCard(n); }} className="text-xs text-muted-foreground hover:underline">Aucun</button>
                   </div>
                 </div>
                 <div className="space-y-1">
                   {fields.map(f => (
-                    <label key={f.key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900">
-                      <input type="checkbox" checked={visibleCardFields.has(f.key)} onChange={() => toggleCard(f.key)} disabled={f.key==="N°DS"} className="h-3.5 w-3.5 accent-zinc-800" />
-                      <span className="text-sm text-zinc-700 dark:text-zinc-300">{f.label}</span>
+                    <label key={f.key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted">
+                      <input type="checkbox" checked={visibleCardFields.has(f.key)} onChange={() => toggleCard(f.key)} disabled={f.key==="N°DS"} className="h-3.5 w-3.5 accent-foreground" />
+                      <span className="text-sm text-card-foreground">{f.label}</span>
                     </label>
                   ))}
                 </div>
@@ -504,17 +504,17 @@ function FieldSelector({
           })}
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Colonnes lignes</span>
+              <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Colonnes lignes</span>
               <div className="flex gap-2">
                 <button onClick={() => saveLine(new Set(LINE_FIELDS.map(f => f.key)))} className="text-xs text-blue-500 hover:underline">Tout</button>
-                <button onClick={() => saveLine(new Set(["code_art"] as (keyof Line)[]))} className="text-xs text-zinc-400 hover:underline">Aucun</button>
+                <button onClick={() => saveLine(new Set(["code_art"] as (keyof Line)[]))} className="text-xs text-muted-foreground hover:underline">Aucun</button>
               </div>
             </div>
             <div className="space-y-1">
               {LINE_FIELDS.map(f => (
-                <label key={f.key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900">
-                  <input type="checkbox" checked={visibleLineFields.has(f.key)} onChange={() => toggleLine(f.key)} className="h-3.5 w-3.5 accent-zinc-800" />
-                  <span className="text-sm text-zinc-700 dark:text-zinc-300">{f.label}</span>
+                <label key={f.key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted">
+                  <input type="checkbox" checked={visibleLineFields.has(f.key)} onChange={() => toggleLine(f.key)} className="h-3.5 w-3.5 accent-foreground" />
+                  <span className="text-sm text-card-foreground">{f.label}</span>
                 </label>
               ))}
             </div>
@@ -543,8 +543,8 @@ const etatStyle = (etat: string) => ({
 function f(label: string, val?: string) {
   return val ? (
     <div className="min-w-0">
-      <div className="text-xs text-zinc-400 dark:text-zinc-500">{label}</div>
-      <div className="mt-0.5 whitespace-normal break-words text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-0.5 whitespace-normal break-words text-sm font-semibold text-card-foreground">
         {val}
       </div>
     </div>
@@ -604,7 +604,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
               {value && FLAG_STYLE[value] ? (
                 <Badge className={`${FLAG_STYLE[value].badge} ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>{value}</Badge>
               ) : (
-                <span className={`rounded-lg border border-dashed border-zinc-400 px-1.5 py-0.5 text-micro text-zinc-500 dark:border-zinc-700 dark:text-zinc-500 ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>
+                <span className={`rounded-lg border border-dashed border-border px-1.5 py-0.5 text-micro text-muted-foreground ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>
                   + Flag
                 </span>
               )}
@@ -612,7 +612,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
           )}
         />
         <ZoneBadges {...zone} />
-        {row.date && <span className="text-xs text-zinc-400">{row.date}</span>}
+        {row.date && <span className="text-xs text-muted-foreground">{row.date}</span>}
       </div>
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
@@ -666,19 +666,19 @@ function SheetCard({ bddRows, rlRows, importRows }: { bddRows: BddRow[]; rlRows:
   const hasRl = rlRows.length > 0;
 
   return (
-    <div className={`rounded-2xl border shadow-sm ${hasRl ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}>
+    <div className={`rounded-2xl border shadow-sm ${hasRl ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-border bg-card dark:border-border dark:bg-card"}`}>
       {/* Header */}
-      <div className={`flex items-center gap-2 border-b px-5 py-3 ${hasRl ? "border-red-200 dark:border-red-800/50" : "border-zinc-100 dark:border-zinc-800"}`}>
-        <svg className={`h-4 w-4 ${hasRl ? "text-red-500" : "text-zinc-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <div className={`flex items-center gap-2 border-b px-5 py-3 ${hasRl ? "border-red-200 dark:border-red-800/50" : "border-border"}`}>
+        <svg className={`h-4 w-4 ${hasRl ? "text-red-500" : "text-muted-foreground"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
-        <span className={`text-xs font-semibold uppercase tracking-widest ${hasRl ? "text-red-600 dark:text-red-400" : "text-zinc-400 dark:text-zinc-500"}`}>
+        <span className={`text-xs font-semibold uppercase tracking-widest ${hasRl ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
           {hasRl && "⚠ "}Immobilisation BDD {bddRows.length > 0 && `(${bddRows.length})`}
         </span>
-        <span className="ml-auto text-xs italic text-zinc-400 dark:text-zinc-600">Source Google Sheets</span>
+        <span className="ml-auto text-xs italic text-muted-foreground">Source Google Sheets</span>
       </div>
 
-      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+      <div className="divide-y divide-border">
         {/* BDD rows */}
         {bddRows.map((row) => (
           <BddEditableRow key={row._row} row={row} />
@@ -689,8 +689,8 @@ function SheetCard({ bddRows, rlRows, importRows }: { bddRows: BddRow[]; rlRows:
           <div key={`rl-${i}`} className="px-5 py-4">
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wide">Véhicule de remplacement</span>
-              <span className="text-xs font-mono text-zinc-500">{row.Reference}</span>
-              {row.Date && <span className="text-xs text-zinc-400">{row.Date}</span>}
+              <span className="text-xs font-mono text-muted-foreground">{row.Reference}</span>
+              {row.Date && <span className="text-xs text-muted-foreground">{row.Date}</span>}
             </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
               {f("Téléphone",        row["Téléphone"])}
@@ -723,32 +723,32 @@ function SheetCard({ bddRows, rlRows, importRows }: { bddRows: BddRow[]; rlRows:
             if (!seenDatetimes.has(dt)) { seenDatetimes.add(dt); filteredRows.push(r); }
           }
           return (
-            <div className="border-t border-zinc-100 dark:border-zinc-800">
+            <div className="border-t border-border">
               <div className="flex items-center gap-2 px-5 py-2">
-                <svg className="h-3.5 w-3.5 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <svg className="h-3.5 w-3.5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
                 </svg>
-                <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                   Assistance Import ({filteredRows.length}/{importRows.length})
                 </span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full table-fixed text-xs">
                   <thead>
-                    <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                      <th className="w-[20%] px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500">Evénement</th>
-                      <th className="w-[18%] px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500">N° de tel</th>
-                      <th className="w-[24%] px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500">Date prestation</th>
-                      <th className="w-[38%] px-4 py-2 text-left font-medium text-zinc-400 dark:text-zinc-500">Lieu de destination</th>
+                    <tr className="border-b border-border">
+                      <th className="w-[20%] px-4 py-2 text-left font-medium text-muted-foreground">Evénement</th>
+                      <th className="w-[18%] px-4 py-2 text-left font-medium text-muted-foreground">N° de tel</th>
+                      <th className="w-[24%] px-4 py-2 text-left font-medium text-muted-foreground">Date prestation</th>
+                      <th className="w-[38%] px-4 py-2 text-left font-medium text-muted-foreground">Lieu de destination</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900">
+                  <tbody className="divide-y divide-border">
                     {filteredRows.map((row, i) => (
-                      <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
-                        <td className="whitespace-normal break-words px-4 py-2 text-zinc-700 dark:text-zinc-200">{row["Evénement"]}</td>
-                        <td className="whitespace-normal break-words px-4 py-2 text-zinc-500">{row["N° de tel"]}</td>
-                        <td className="whitespace-normal break-words px-4 py-2 text-zinc-500">{parseDate(row["DatePrestation"]).replace("T", " ").slice(0, 16)}</td>
-                        <td className="whitespace-normal break-words px-4 py-2 text-zinc-500">{row["Lieu de Destination"]}</td>
+                      <tr key={i} className="hover:bg-muted">
+                        <td className="whitespace-normal break-words px-4 py-2 text-card-foreground">{row["Evénement"]}</td>
+                        <td className="whitespace-normal break-words px-4 py-2 text-muted-foreground">{row["N° de tel"]}</td>
+                        <td className="whitespace-normal break-words px-4 py-2 text-muted-foreground">{parseDate(row["DatePrestation"]).replace("T", " ").slice(0, 16)}</td>
+                        <td className="whitespace-normal break-words px-4 py-2 text-muted-foreground">{row["Lieu de Destination"]}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1002,7 +1002,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-black dark:text-zinc-50">
+    <div className="min-h-screen bg-background text-foreground">
       <FieldSelector
         visibleCardFields={visibleCardFields} setVisibleCardFields={setVisibleCardFields}
         visibleLineFields={visibleLineFields}  setVisibleLineFields={setVisibleLineFields}
@@ -1014,24 +1014,24 @@ export default function Home() {
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Link href="/" className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-zinc-400 transition hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300">
+            <Link href="/" className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition hover:text-foreground">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 3L5 8l5 5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               Accueil
             </Link>
             <h1 className="text-2xl font-semibold tracking-tight">DS History</h1>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Recherche par immatriculation / WW</p>
+            <p className="mt-1 text-sm text-muted-foreground">Recherche par immatriculation / WW</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+            <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground dark:border-border dark:bg-card dark:text-card-foreground">
               {data ? `${data.count} DS` : "—"}
             </span>
-            <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-950">
+            <span className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-1 text-xs dark:border-border dark:bg-card">
               {loading ? "⏳ Chargement…" : "✓ Prêt"}
             </span>
 
             {/* Champs */}
             <button onClick={() => setSelectorOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground transition hover:bg-muted/70">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 4h12M4 8h8M6 12h4" strokeLinecap="round"/></svg>
               Champs ({mounted ? visibleCardFields.size : "..."})
             </button>
@@ -1044,12 +1044,12 @@ export default function Home() {
   🔎 Articles
 </Link>
 
-            <ThemeToggle className="border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800" />
+            <ThemeToggle className="border-border bg-muted text-foreground hover:bg-muted/70" />
 
             {/* Logout */}
             <form action={logout}>
               <button type="submit"
-                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground transition hover:bg-muted/70"
                 title="Se déconnecter">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 Déconnexion
@@ -1074,10 +1074,10 @@ export default function Home() {
         </div>
 
         {/* Search */}
-        <div className={`mt-6 rounded-2xl border p-4 shadow-sm ${rlRows.length > 0 && !loading ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"}`}>
+        <div className={`mt-6 rounded-2xl border p-4 shadow-sm ${rlRows.length > 0 && !loading ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-border bg-card dark:border-border dark:bg-card"}`}>
           <div className="grid gap-3 sm:grid-cols-12 sm:items-end">
             <div className="sm:col-span-10" ref={searchRef}>
-              <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Immatriculation / WW</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Immatriculation / WW</label>
               <Combobox
                 value={imm}
                 onValueChange={handleImmChange}
@@ -1102,7 +1102,7 @@ export default function Home() {
             </div>
             <div className="sm:col-span-2">
               <button onClick={() => fetchAll()} disabled={loading || !imm.trim()}
-                className="h-11 w-full rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">
+                className="h-11 w-full rounded-xl bg-foreground px-4 text-sm font-medium text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
                 Rechercher
               </button>
             </div>
@@ -1120,16 +1120,16 @@ export default function Home() {
         {/* Results */}
         <div className="mt-4 space-y-3">
           {!data && !loading && (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground dark:border-border dark:bg-card">
               Entrez une immatriculation et cliquez sur Rechercher.
             </div>
           )}
 
           {loading && (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
-              <div className="h-5 w-48 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />
+            <div className="rounded-2xl border border-border bg-card p-6 dark:border-border dark:bg-card">
+              <div className="h-5 w-48 animate-pulse rounded-lg bg-muted" />
               <div className="mt-4 space-y-3">
-                {[0,1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />)}
+                {[0,1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />)}
               </div>
             </div>
           )}
@@ -1141,18 +1141,18 @@ export default function Home() {
             const allCardFields = orderedCardFields;
 
             return (
-            <div key={nds} className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <div key={nds} className="rounded-2xl border border-border bg-card shadow-sm dark:border-border dark:bg-card">
 
               {/* Top bar */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-5 py-3 dark:border-zinc-800">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3 dark:border-border">
                 {/* LEFT: date · KM */}
                 <div className="flex flex-wrap items-center gap-2">
                   {visibleCardFields.has("Date DS") && (
-                    <span className="text-sm font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{fmtDate(it["Date DS"])}</span>
+                    <span className="text-sm font-bold tabular-nums text-card-foreground">{fmtDate(it["Date DS"])}</span>
                   )}
                   {visibleCardFields.has("KM") && it.KM != null && (
-                    <><span className="text-zinc-400">•</span>
-                    <span className="text-sm font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{fmtNum(it.KM)} km</span></>
+                    <><span className="text-muted-foreground">•</span>
+                    <span className="text-sm font-bold tabular-nums text-card-foreground">{fmtNum(it.KM)} km</span></>
                   )}
                 </div>
                 {/* RIGHT: MAD · Site · N°DS · Type DS · Affectation */}
@@ -1175,8 +1175,8 @@ export default function Home() {
                     if (val === "—") return null;
                     return (
                       <div key={f.key} className={f.key === "Description" ? "sm:col-span-3" : ""}>
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">{f.label}</div>
-                        <div className={`text-sm font-medium text-zinc-800 dark:text-zinc-200 ${f.key === "Description" ? "whitespace-pre-wrap" : "truncate"}`}>
+                        <div className="text-xs text-muted-foreground">{f.label}</div>
+                        <div className={`text-sm font-medium text-card-foreground ${f.key === "Description" ? "whitespace-pre-wrap" : "truncate"}`}>
                           {val}
                         </div>
                       </div>
@@ -1187,8 +1187,8 @@ export default function Home() {
 
               {/* Lines — always visible */}
               {it.lines?.length && orderedLineFields.length > 0 ? (
-                <div className="border-t border-zinc-100 px-5 pb-4 pt-3 dark:border-zinc-800">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                <div className="border-t border-border px-5 pb-4 pt-3 dark:border-border">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                     Lignes ({it.lines.length})
                   </div>
                   <LinesTable
