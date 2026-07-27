@@ -7,7 +7,7 @@ import { cn } from "@/components/ui/utils";
 // RL's per-flag colors) pass their own className instead of a variant —
 // those specific hex values are real data-driven distinctions, not
 // something to force into a 4-way enum.
-const badgeVariants = cva("inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium", {
+const badgeVariants = cva("inline-flex items-center gap-1 rounded-lg border px-1.5 py-0.5 text-xs font-medium", {
   variants: {
     variant: {
       success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",

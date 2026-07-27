@@ -51,7 +51,7 @@ export function RecordCard({
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5">
           {timestamp && (
-            <span className="rounded bg-muted px-2 py-0.5 text-[9px] font-semibold text-muted-foreground">
+            <span className="rounded-lg bg-muted px-2 py-0.5 text-[9px] font-semibold text-muted-foreground">
               {timestamp}
             </span>
           )}

@@ -390,8 +390,8 @@ function LinesTable({ lines, orderedLineFields, totalMtHt, visibleLineFields }: 
                   {f.key === "cmd_num" ? (
                     <span className="flex items-center gap-1.5">
                       {l.price_source === "bc"
-                        ? <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">BC</span>
-                        : <span className="rounded px-1 py-0.5 text-[10px] font-bold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">DS</span>
+                        ? <span className="rounded-lg px-1 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">BC</span>
+                        : <span className="rounded-lg px-1 py-0.5 text-[10px] font-bold bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">DS</span>
                       }
                       {displayLineValue(l, f.key)}
                     </span>
@@ -587,7 +587,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
               type="button"
               onClick={onOpen}
               disabled={pending}
-              className={`flex min-h-11 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-60 ${etatStyle(value)} ${justSaved ? "ring-2 ring-emerald-400" : ""}`}
+              className={`flex min-h-11 items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-60 ${etatStyle(value)} ${justSaved ? "ring-2 ring-emerald-400" : ""}`}
             >
               {value || "—"}
               <Pencil className="h-3 w-3 opacity-60" />
@@ -604,7 +604,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
               {value && FLAG_STYLE[value] ? (
                 <Badge className={`${FLAG_STYLE[value].badge} ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>{value}</Badge>
               ) : (
-                <span className={`rounded-md border border-dashed border-zinc-400 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:border-zinc-700 dark:text-zinc-500 ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>
+                <span className={`rounded-lg border border-dashed border-zinc-400 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:border-zinc-700 dark:text-zinc-500 ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>
                   + Flag
                 </span>
               )}
@@ -1127,7 +1127,7 @@ export default function Home() {
 
           {loading && (
             <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
-              <div className="h-5 w-48 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+              <div className="h-5 w-48 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />
               <div className="mt-4 space-y-3">
                 {[0,1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />)}
               </div>

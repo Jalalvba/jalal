@@ -54,7 +54,7 @@ const TECHNICIEN_OPTIONS = [
 ];
 
 const selectClass =
-  "h-auto w-full rounded border border-border bg-popover px-2 py-1.5 text-[11px] font-medium text-popover-foreground outline-none focus:border-amber-500";
+  "h-auto w-full rounded-lg border border-border bg-popover px-2 py-1.5 text-[11px] font-medium text-popover-foreground outline-none focus:border-amber-500";
 
 // ─── Read-only reference fields — same 9 XLOOKUP columns as Parking, plus
 // TECHNICEIN_DS (distinct from the editable TECHNICIEN above) ──────────────

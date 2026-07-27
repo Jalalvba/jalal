@@ -101,7 +101,7 @@ function BddCard({ row }: { row: BddRow }) {
                 ) : (
                   <span
                     className={cn(
-                      "rounded-md border border-dashed border-border px-1.5 py-0.5 text-[10px] text-muted-foreground",
+                      "rounded-lg border border-dashed border-border px-1.5 py-0.5 text-[10px] text-muted-foreground",
                       justSaved && "ring-2 ring-emerald-400"
                     )}
                   >
@@ -124,7 +124,7 @@ function BddCard({ row }: { row: BddRow }) {
               onClick={onOpen}
               disabled={pending}
               className={cn(
-                "flex min-h-8 flex-shrink-0 items-center rounded px-2 py-1 text-[9px] font-bold uppercase transition disabled:opacity-60",
+                "flex min-h-8 flex-shrink-0 items-center rounded-lg px-2 py-1 text-[9px] font-bold uppercase transition disabled:opacity-60",
                 value?.toUpperCase() === "EXTERNE" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400",
                 justSaved && "ring-2 ring-emerald-400"
               )}
