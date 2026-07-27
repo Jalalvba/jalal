@@ -58,7 +58,20 @@ export default async function RootLayout({
   return (
     <html lang="fr" suppressHydrationWarning>
       <body className="antialiased">
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: noFlashScript }} />
+        {/* suppressHydrationWarning: browsers intentionally blank the `nonce`
+            attribute on read-back after it's set on a DOM node (so it can't
+            be exfiltrated via injected script/serialization) — CSP matching
+            itself already happened at parse time, before that blanking, so
+            the script still executes correctly. React's hydration diff
+            reads the DOM back and sees server="<real nonce>" vs
+            client="" and flags a false-positive mismatch. next-themes'
+            own internal script (rendered below) hits the same thing and
+            already suppresses it the same way. */}
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: noFlashScript }}
+        />
         {/* next-themes renders its own inline no-flash script server-side —
             that script doesn't go through Next's automatic nonce
             propagation (only Next's own framework scripts get that), so it
