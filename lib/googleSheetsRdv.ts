@@ -1,7 +1,17 @@
 import { type sheets_v4 } from "googleapis";
 import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult } from "@/lib/types";
 import { RDV_EDITABLE_FIELDS } from "@/lib/types";
-import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, isoDateToSerial } from "@/lib/googleSheetsClient";
+import {
+  getSheetsClient,
+  serialToUTCDate,
+  fmtDateOnlySlash,
+  isoDateToSerial,
+  withCache,
+  invalidateCache,
+} from "@/lib/googleSheetsClient";
+
+const ROWS_CACHE_KEY = "rows:RDV";
+const HEADERS_CACHE_KEY = "headers:RDV";
 
 // Tab name, gid (2066154497) and the real header row confirmed by a live
 // spreadsheets.get()/values.get() read — not a guess. Same spreadsheet as
@@ -28,15 +38,17 @@ function columnIndexToLetter(oneBasedIndex: number): string {
   return letters;
 }
 
-/** Fetches the real row-1 header list live — never hardcoded, never cached across calls. */
+/** Fetches the real row-1 header list, cached 5min — headers essentially never change. */
 async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: spreadsheetId!,
-    range: `'${RDV_TAB}'!A1:${HEADER_RANGE_WIDTH}1`,
-    valueRenderOption: "UNFORMATTED_VALUE",
+  return withCache(HEADERS_CACHE_KEY, 5 * 60_000, async () => {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheetId!,
+      range: `'${RDV_TAB}'!A1:${HEADER_RANGE_WIDTH}1`,
+      valueRenderOption: "UNFORMATTED_VALUE",
+    });
+    const row = res.data.values?.[0] ?? [];
+    return row.map((h) => String(h ?? "").trim());
   });
-  const row = res.data.values?.[0] ?? [];
-  return row.map((h) => String(h ?? "").trim());
 }
 
 function buildColMap(headers: string[]): Record<string, number> {
@@ -79,6 +91,10 @@ function strOrEmpty(row: unknown[], col: number | undefined): string {
  * sort convention.
  */
 export async function getRdvRows(): Promise<RdvRow[]> {
+  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchRdvRows());
+}
+
+async function fetchRdvRows(): Promise<RdvRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
@@ -215,6 +231,7 @@ export async function addRdvRow(input: RdvAddInput): Promise<RdvAddResponse> {
     spreadsheetId: spreadsheetId!,
     requestBody: { valueInputOption: "RAW", data: writes },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 
   return { ok: true, rowIndex: targetRow };
 }
@@ -251,6 +268,7 @@ export async function updateRdvField(rowIndex: number, field: RdvEditableField, 
     valueInputOption: "RAW",
     requestBody: { values: [[writeValue]] },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 
   return { ok: true };
 }
@@ -273,4 +291,5 @@ export async function deleteRdvRow(rowIndex: number): Promise<void> {
     spreadsheetId: spreadsheetId!,
     requestBody: { ranges },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 }

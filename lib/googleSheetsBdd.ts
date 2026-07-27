@@ -1,7 +1,10 @@
 import { type sheets_v4 } from "googleapis";
 import { BDD_EDITABLE_FIELDS, type BddRow, type BddUpdateResult } from "@/lib/types";
 import { buildPlateVariants } from "@/lib/plateVariants";
-import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash } from "@/lib/googleSheetsClient";
+import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, withCache, invalidateCache } from "@/lib/googleSheetsClient";
+
+const ROWS_CACHE_KEY = "rows:BDD";
+const HEADERS_CACHE_KEY = "headers:BDD";
 
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
@@ -25,14 +28,16 @@ function columnIndexToLetter(oneBasedIndex: number): string {
   return letters;
 }
 
-/** Fetches the real row-1 header list live — never hardcoded, never cached across calls. */
+/** Fetches the real row-1 header list, cached 5min — headers essentially never change. */
 async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: spreadsheetId!,
-    range: `'${BDD_TAB_NAME}'!A1:${HEADER_SCAN_WIDTH}1`,
+  return withCache(HEADERS_CACHE_KEY, 5 * 60_000, async () => {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheetId!,
+      range: `'${BDD_TAB_NAME}'!A1:${HEADER_SCAN_WIDTH}1`,
+    });
+    const row = res.data.values?.[0] ?? [];
+    return row.map((h) => String(h ?? "").trim());
   });
-  const row = res.data.values?.[0] ?? [];
-  return row.map((h) => String(h ?? "").trim());
 }
 
 /**
@@ -71,6 +76,14 @@ function formatCellValue(header: string, raw: unknown): string | number {
  * and filter redundantly on top.
  */
 export async function getSheetRows(immFilter?: string): Promise<BddRow[]> {
+  const rows = await withCache(ROWS_CACHE_KEY, 15_000, () => fetchSheetRows());
+  if (!immFilter) return rows;
+
+  const variants = new Set(buildPlateVariants(immFilter));
+  return rows.filter((r) => variants.has(String(r.IMM ?? "").trim().toUpperCase()));
+}
+
+async function fetchSheetRows(): Promise<BddRow[]> {
   const sheets = getSheetsClient();
 
   const res = await sheets.spreadsheets.values.get({
@@ -83,14 +96,12 @@ export async function getSheetRows(immFilter?: string): Promise<BddRow[]> {
   if (values.length === 0) return [];
 
   const headers = values[0].map((h) => String(h ?? "").trim());
-  const variants = immFilter ? new Set(buildPlateVariants(immFilter)) : null;
   const rows: BddRow[] = [];
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
     const firstCell = row[0];
     if (firstCell == null || String(firstCell).trim() === "") continue;
-    if (variants && !variants.has(String(firstCell).trim().toUpperCase())) continue;
 
     const record: Record<string, string | number> = {};
     headers.forEach((header, colIdx) => {
@@ -151,18 +162,27 @@ export async function updateSheetRow(
     };
   }
 
-  await Promise.all(
-    requestedFields.map((field) => {
-      const colIdx = headers.indexOf(field); // 0-based
-      const colLetter = columnIndexToLetter(colIdx + 1);
-      return sheets.spreadsheets.values.update({
-        spreadsheetId: spreadsheetId!,
-        range: `'${BDD_TAB_NAME}'!${colLetter}${row}`,
-        valueInputOption: "RAW",
-        requestBody: { values: [[updates[field]]] },
-      });
-    })
-  );
+  // One atomic batchUpdate covering every field, not N independent
+  // values.update() calls — matches Parking/Atelier/Depot/RDV's pattern.
+  // Previously this was a Promise.all of separate requests, which could
+  // partially succeed (e.g. field 2 of 3 written, field 3 failing on a
+  // transient error) and leave the row in a mixed state; a single request
+  // either fully succeeds or fully fails.
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: spreadsheetId!,
+    requestBody: {
+      valueInputOption: "RAW",
+      data: requestedFields.map((field) => {
+        const colIdx = headers.indexOf(field); // 0-based
+        const colLetter = columnIndexToLetter(colIdx + 1);
+        return {
+          range: `'${BDD_TAB_NAME}'!${colLetter}${row}`,
+          values: [[updates[field]]],
+        };
+      }),
+    },
+  });
+  invalidateCache(ROWS_CACHE_KEY);
 
   return { ok: true, written: requestedFields };
 }

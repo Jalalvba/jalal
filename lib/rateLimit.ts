@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo";
 
 // Fixed-window rate limiter backed by MongoDB — Vercel's serverless model
@@ -65,5 +66,28 @@ export function clientIp(req: Request): string {
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||
     "unknown"
+  );
+}
+
+/**
+ * One-line rate-limit guard for route handlers: returns a ready-to-return
+ * 429 NextResponse if the caller is over budget, or null if they're clear
+ * to proceed. Collapses the checkRateLimit()-then-429-JSON boilerplate
+ * app/api/article and app/api/export already had inline into something the
+ * 16 Sheets mutation routes (parking/atelier/depot/rdv/bdd) can each apply
+ * in one line, so a runaway script loop or accidental double-submit can't
+ * exhaust the Sheets API's 60 req/min quota unchecked.
+ */
+export async function rateLimitOrNull(
+  req: Request,
+  route: string,
+  limit: number,
+  windowMs: number
+): Promise<NextResponse | null> {
+  const { allowed, retryAfterSeconds } = await checkRateLimit(route, clientIp(req), limit, windowMs);
+  if (allowed) return null;
+  return NextResponse.json(
+    { ok: false, error: `Trop de requêtes. Réessayez dans ${retryAfterSeconds}s.` },
+    { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } }
   );
 }

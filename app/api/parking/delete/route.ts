@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { deletePlate } from "@/lib/googleSheetsParking";
+import { rateLimitOrNull } from "@/lib/rateLimit";
+import { toErrorResponse } from "@/lib/apiError";
 
 export async function POST(req: Request) {
+  const limited = await rateLimitOrNull(req, "parking-delete", 30, 60_000);
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -13,7 +18,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Invalid request body" }, { status: 400 });
   }
 
-  const { rowIndex } = body as { rowIndex?: unknown };
+  const { rowIndex, imm } = body as { rowIndex?: unknown; imm?: unknown };
 
   if (typeof rowIndex !== "number" || !Number.isInteger(rowIndex) || rowIndex < 2) {
     return NextResponse.json(
@@ -21,14 +26,14 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
+  if (typeof imm !== "string" || !imm.trim()) {
+    return NextResponse.json({ ok: false, error: "Missing or invalid 'imm' (must be a non-empty string)" }, { status: 400 });
+  }
 
   try {
-    await deletePlate(rowIndex);
+    await deletePlate(rowIndex, imm);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Failed to delete row" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Failed to delete row");
   }
 }

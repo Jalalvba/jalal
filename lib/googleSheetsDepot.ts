@@ -1,5 +1,5 @@
 import { type sheets_v4 } from "googleapis";
-import { getIMMList, resolveIMM } from "@/lib/googleSheetsParking";
+import { getIMMListSafe, resolveIMM } from "@/lib/googleSheetsParking";
 import type { DepotRow, ParkingAddResponse, ParkingAddResultItem } from "@/lib/types";
 import {
   getSheetsClient,
@@ -7,7 +7,13 @@ import {
   nowToSerial,
   fmtDateOnlyDash,
   fmtDateTime,
+  withCache,
+  invalidateCache,
+  verifyRowIdentity,
 } from "@/lib/googleSheetsClient";
+
+const ROWS_CACHE_KEY = "rows:DEPOT";
+const HEADERS_CACHE_KEY = "headers:DEPOT";
 
 // Tab name, gid (1365327220), column layout and XLOOKUP formulas confirmed
 // by a live spreadsheets.get()/values.get()/FORMULA-render read — not a
@@ -43,13 +49,15 @@ function columnIndexToLetter(oneBasedIndex: number): string {
 
 /** Live header row → column-name lookup, never hardcoded indices. */
 async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: spreadsheetId!,
-    range: `'${DEPOT_TAB}'!A1:${HEADER_RANGE_WIDTH}1`,
-    valueRenderOption: "UNFORMATTED_VALUE",
+  return withCache(HEADERS_CACHE_KEY, 5 * 60_000, async () => {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheetId!,
+      range: `'${DEPOT_TAB}'!A1:${HEADER_RANGE_WIDTH}1`,
+      valueRenderOption: "UNFORMATTED_VALUE",
+    });
+    const row = res.data.values?.[0] ?? [];
+    return row.map((h) => String(h ?? "").trim().toUpperCase());
   });
-  const row = res.data.values?.[0] ?? [];
-  return row.map((h) => String(h ?? "").trim().toUpperCase());
 }
 
 function buildColMap(headers: string[]): Record<string, number> {
@@ -81,6 +89,10 @@ async function getDepotSheetProps(sheets: sheets_v4.Sheets): Promise<{ sheetId: 
  * identical schema.
  */
 export async function getDepotRows(): Promise<DepotRow[]> {
+  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchDepotRows());
+}
+
+async function fetchDepotRows(): Promise<DepotRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
@@ -228,6 +240,11 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
     }
   });
 
+  // Resolved before any grid mutation below: if Mongo is unavailable,
+  // getIMMListSafe() degrades to [] instead of throwing mid-mutation and
+  // leaving the sheet grown with no data written into the new rows.
+  const immList = await getIMMListSafe();
+
   const needed = tokens.length;
   const nextRows: number[] = [];
   const startNewRow = DATA_START_ROW + dataRows.length;
@@ -243,7 +260,6 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
   }
   for (let r = startNewRow; r < startNewRow + needed; r++) nextRows.push(r);
 
-  const immList = await getIMMList();
   const results: ParkingAddResultItem[] = [];
   const nowSerial = nowToSerial();
   const writes: { range: string; values: (string | number)[][] }[] = [];
@@ -295,6 +311,7 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
       spreadsheetId: spreadsheetId!,
       requestBody: { valueInputOption: "USER_ENTERED", data: writes },
     });
+    invalidateCache(ROWS_CACHE_KEY);
   }
 
   return { ok: true, results };
@@ -302,12 +319,20 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
 
 // ─── updateDepotAction ─────────────────────────────────────────────────────
 
-export async function updateDepotAction(rowIndex: number, action: string): Promise<void> {
+export async function updateDepotAction(rowIndex: number, action: string, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
   const actionCol = colMap["ACTION"] ?? 2;
   const tsCol = colMap["TIMESTAMP"] ?? 15;
+
+  await verifyRowIdentity(
+    sheets,
+    spreadsheetId!,
+    `'${DEPOT_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    expectedImm
+  );
 
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: spreadsheetId!,
@@ -319,6 +344,7 @@ export async function updateDepotAction(rowIndex: number, action: string): Promi
       ],
     },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 }
 
 // ─── deleteDepotRow ────────────────────────────────────────────────────────
@@ -328,8 +354,19 @@ export async function updateDepotAction(rowIndex: number, action: string): Promi
  *  clear-cells behavior: empty rows are no longer reused by
  *  addDepotPlates(), so there's no reason to leave a hollowed-out row in
  *  place. */
-export async function deleteDepotRow(rowIndex: number): Promise<void> {
+export async function deleteDepotRow(rowIndex: number, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
+
+  await verifyRowIdentity(
+    sheets,
+    spreadsheetId!,
+    `'${DEPOT_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    expectedImm
+  );
+
   const { sheetId } = await getDepotSheetProps(sheets);
 
   await sheets.spreadsheets.batchUpdate({
@@ -344,6 +381,7 @@ export async function deleteDepotRow(rowIndex: number): Promise<void> {
       ],
     },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 }
 
 // ─── clearDepotAll ─────────────────────────────────────────────────────────
@@ -367,4 +405,5 @@ export async function clearDepotAll(): Promise<void> {
     spreadsheetId: spreadsheetId!,
     requestBody: { ranges: [colRange(immCol), colRange(tsCol), colRange(actionCol)] },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 }

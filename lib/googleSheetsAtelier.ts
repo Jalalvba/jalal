@@ -1,5 +1,5 @@
 import { type sheets_v4 } from "googleapis";
-import { getIMMList, resolveIMM } from "@/lib/googleSheetsParking";
+import { getIMMListSafe, resolveIMM } from "@/lib/googleSheetsParking";
 import type {
   AtelierRow,
   AtelierEditableField,
@@ -7,7 +7,19 @@ import type {
   ParkingAddResultItem,
 } from "@/lib/types";
 import { ATELIER_EDITABLE_FIELDS } from "@/lib/types";
-import { getSheetsClient, serialToUTCDate, nowToSerial, fmtDateTime, fmtDateOnlyDash } from "@/lib/googleSheetsClient";
+import {
+  getSheetsClient,
+  serialToUTCDate,
+  nowToSerial,
+  fmtDateTime,
+  fmtDateOnlyDash,
+  withCache,
+  invalidateCache,
+  verifyRowIdentity,
+} from "@/lib/googleSheetsClient";
+
+const ROWS_CACHE_KEY = "rows:ATELIER";
+const HEADERS_CACHE_KEY = "headers:ATELIER";
 
 // Ported from the AVIS Maroc GAS "Atelier" system (code.gs + RebuildAtelier.gs).
 // Same spreadsheet as PARKING/BDD (TARGET_SHEET_ID in the source matches this
@@ -34,13 +46,15 @@ function columnIndexToLetter(oneBasedIndex: number): string {
 }
 
 async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: spreadsheetId!,
-    range: `'${ATELIER_TAB}'!A1:${HEADER_RANGE_WIDTH}1`,
-    valueRenderOption: "UNFORMATTED_VALUE",
+  return withCache(HEADERS_CACHE_KEY, 5 * 60_000, async () => {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheetId!,
+      range: `'${ATELIER_TAB}'!A1:${HEADER_RANGE_WIDTH}1`,
+      valueRenderOption: "UNFORMATTED_VALUE",
+    });
+    const row = res.data.values?.[0] ?? [];
+    return row.map((h) => String(h ?? "").trim().toUpperCase());
   });
-  const row = res.data.values?.[0] ?? [];
-  return row.map((h) => String(h ?? "").trim().toUpperCase());
 }
 
 function buildColMap(headers: string[]): Record<string, number> {
@@ -82,6 +96,10 @@ async function getAtelierSheetProps(
  * live header row, so it's always ''. Dead code in the source, not ported.
  */
 export async function getAtelierRows(): Promise<AtelierRow[]> {
+  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchAtelierRows());
+}
+
+async function fetchAtelierRows(): Promise<AtelierRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
@@ -239,6 +257,11 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
     }
   });
 
+  // Resolved before any grid mutation below: if Mongo is unavailable,
+  // getIMMListSafe() degrades to [] instead of throwing mid-mutation and
+  // leaving the sheet grown with no data written into the new rows.
+  const immList = await getIMMListSafe();
+
   const needed = tokens.length;
   const nextRows: number[] = [];
   const startNewRow = DATA_START_ROW + dataRows.length;
@@ -254,7 +277,6 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
   }
   for (let r = startNewRow; r < startNewRow + needed; r++) nextRows.push(r);
 
-  const immList = await getIMMList();
   const results: ParkingAddResultItem[] = [];
   const nowSerial = nowToSerial();
   const writes: { range: string; values: (string | number)[][] }[] = [];
@@ -306,6 +328,7 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
       spreadsheetId: spreadsheetId!,
       requestBody: { valueInputOption: "USER_ENTERED", data: writes },
     });
+    invalidateCache(ROWS_CACHE_KEY);
   }
 
   return { ok: true, results };
@@ -321,7 +344,8 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
 export async function updateAtelierField(
   rowIndex: number,
   field: AtelierEditableField,
-  value: string
+  value: string,
+  expectedImm: string
 ): Promise<void> {
   if (!ATELIER_EDITABLE_FIELDS.includes(field)) {
     throw new Error(`Field not editable: ${field}. Editable fields are: ${ATELIER_EDITABLE_FIELDS.join(", ")}.`);
@@ -330,10 +354,18 @@ export async function updateAtelierField(
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
   const fieldCol = colMap[field];
   const tsCol = colMap["TIMESTAMP"];
   if (!fieldCol) throw new Error(`Column '${field}' not found in the live '${ATELIER_TAB}' header row`);
   if (!tsCol) throw new Error(`Column 'TIMESTAMP' not found in the live '${ATELIER_TAB}' header row`);
+
+  await verifyRowIdentity(
+    sheets,
+    spreadsheetId!,
+    `'${ATELIER_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    expectedImm
+  );
 
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: spreadsheetId!,
@@ -345,6 +377,7 @@ export async function updateAtelierField(
       ],
     },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 }
 
 // ─── deleteIMMFromWeb ──────────────────────────────────────────────────────
@@ -354,8 +387,19 @@ export async function updateAtelierField(
  *  clear-cells behavior: empty rows are no longer reused by
  *  addAtelierPlates(), so there's no reason to leave a hollowed-out row in
  *  place. */
-export async function deleteAtelierRow(rowIndex: number): Promise<void> {
+export async function deleteAtelierRow(rowIndex: number, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
+
+  await verifyRowIdentity(
+    sheets,
+    spreadsheetId!,
+    `'${ATELIER_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    expectedImm
+  );
+
   const { sheetId } = await getAtelierSheetProps(sheets);
 
   await sheets.spreadsheets.batchUpdate({
@@ -370,6 +414,7 @@ export async function deleteAtelierRow(rowIndex: number): Promise<void> {
       ],
     },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 }
 
 // ─── clearParkingFromWeb (ported as clearAtelierAll) ──────────────────────
@@ -399,4 +444,5 @@ export async function clearAtelierAll(): Promise<void> {
     spreadsheetId: spreadsheetId!,
     requestBody: { ranges },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 }

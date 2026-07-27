@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { updateRdvField } from "@/lib/googleSheetsRdv";
 import { RDV_EDITABLE_FIELDS, type RdvEditableField } from "@/lib/types";
+import { rateLimitOrNull } from "@/lib/rateLimit";
+import { toErrorResponse } from "@/lib/apiError";
 
 function isEditableField(v: unknown): v is RdvEditableField {
   return typeof v === "string" && (RDV_EDITABLE_FIELDS as readonly string[]).includes(v);
 }
 
 export async function POST(req: Request) {
+  const limited = await rateLimitOrNull(req, "rdv-update", 30, 60_000);
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -40,9 +45,6 @@ export async function POST(req: Request) {
     const result = await updateRdvField(rowIndex, field, value);
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Failed to update field" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Failed to update field");
   }
 }

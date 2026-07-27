@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { updateSheetRow } from "@/lib/googleSheetsBdd";
+import { rateLimitOrNull } from "@/lib/rateLimit";
+import { toErrorResponse } from "@/lib/apiError";
 
 export async function POST(req: Request) {
+  const limited = await rateLimitOrNull(req, "bdd-update", 30, 60_000);
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -42,9 +47,6 @@ export async function POST(req: Request) {
     const result = await updateSheetRow(row, updatesObj as Record<string, string>);
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Failed to update BDD sheet" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Failed to update BDD sheet");
   }
 }

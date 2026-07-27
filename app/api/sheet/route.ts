@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSheetRows as getBddRows } from "@/lib/googleSheetsBdd";
 import { getRlRows } from "@/lib/googleSheetsRl";
 import { getImportRows } from "@/lib/googleSheetsImport";
+import { toErrorResponse } from "@/lib/apiError";
 
 // All three sheet targets are served via the authenticated service-account
 // Sheets API now (lib/googleSheetsBdd.ts / googleSheetsRl.ts /
@@ -32,9 +33,6 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ ok: false, error: "Unknown sheet" }, { status: 400 });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Fetch error" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Fetch error");
   }
 }

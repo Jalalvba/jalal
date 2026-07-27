@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { clearAtelierAll } from "@/lib/googleSheetsAtelier";
+import { rateLimitOrNull } from "@/lib/rateLimit";
+import { toErrorResponse } from "@/lib/apiError";
 
-export async function POST() {
+export async function POST(req: Request) {
+  const limited = await rateLimitOrNull(req, "atelier-clear", 30, 60_000);
+  if (limited) return limited;
+
   try {
     await clearAtelierAll();
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Failed to clear ATELIER sheet" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Failed to clear ATELIER sheet");
   }
 }

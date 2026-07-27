@@ -44,11 +44,11 @@ export function useAddDepotPlates() {
 export function useUpdateDepotAction() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ rowIndex, action }: { rowIndex: number; action: string }) =>
+    mutationFn: ({ rowIndex, action, imm }: { rowIndex: number; action: string; imm: string }) =>
       fetchJson<{ ok: true }>("/api/depot/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rowIndex, action }),
+        body: JSON.stringify({ rowIndex, action, imm }),
       }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
@@ -57,11 +57,11 @@ export function useUpdateDepotAction() {
 export function useDeleteDepotRow() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (rowIndex: number) =>
+    mutationFn: ({ rowIndex, imm }: { rowIndex: number; imm: string }) =>
       fetchJson<{ ok: true }>("/api/depot/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rowIndex }),
+        body: JSON.stringify({ rowIndex, imm }),
       }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });

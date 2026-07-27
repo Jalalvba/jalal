@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { addPlates } from "@/lib/googleSheetsParking";
+import { rateLimitOrNull } from "@/lib/rateLimit";
+import { toErrorResponse } from "@/lib/apiError";
 
 export async function POST(req: Request) {
+  const limited = await rateLimitOrNull(req, "parking-add", 30, 60_000);
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -22,9 +27,6 @@ export async function POST(req: Request) {
     const result = await addPlates(raw);
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Failed to add plates" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Failed to add plates");
   }
 }

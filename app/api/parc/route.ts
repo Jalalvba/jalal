@@ -1,6 +1,7 @@
 // app/api/parc/route.ts
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo";
+import { toErrorResponse } from "@/lib/apiError";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -52,9 +53,6 @@ export async function GET(req: Request) {
       item:  items[0] ?? null,
     });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Query failed" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Query failed");
   }
 }

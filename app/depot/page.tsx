@@ -44,8 +44,8 @@ function DepotCard({
   onDelete,
 }: {
   row: DepotRow;
-  onActionCommit: (rowIndex: number, action: string) => void;
-  onDelete: (rowIndex: number) => void;
+  onActionCommit: (rowIndex: number, action: string, imm: string) => void;
+  onDelete: (rowIndex: number, imm: string) => void;
 }) {
   const [action, setAction] = useEditableState(row.action, [row.rowIndex, row.action, row.timestamp]);
 
@@ -54,7 +54,7 @@ function DepotCard({
       imm={row.imm}
       subtitle={[row.marque, row.model].filter(Boolean).join(" ") + (row.client ? ` | ${row.client}` : "")}
       timestamp={row.timestamp}
-      onDelete={() => onDelete(row.rowIndex)}
+      onDelete={() => onDelete(row.rowIndex, row.imm)}
       deleteTitle="Supprimer cette ligne ?"
     >
       <Field label="Action">
@@ -63,7 +63,7 @@ function DepotCard({
           placeholder="Décrire l'action…"
           onChange={(e) => setAction(e.target.value)}
           onBlur={() => {
-            if (action !== row.action) onActionCommit(row.rowIndex, action);
+            if (action !== row.action) onActionCommit(row.rowIndex, action, row.imm);
           }}
           className="h-auto py-2 text-[11px]"
         />
@@ -106,17 +106,17 @@ export default function DepotPage() {
     }
   }
 
-  async function handleActionCommit(rowIndex: number, action: string) {
+  async function handleActionCommit(rowIndex: number, action: string, imm: string) {
     try {
-      await actionMutation.mutateAsync({ rowIndex, action });
+      await actionMutation.mutateAsync({ rowIndex, action, imm });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur réseau");
     }
   }
 
-  async function handleDelete(rowIndex: number) {
+  async function handleDelete(rowIndex: number, imm: string) {
     try {
-      await deleteMutation.mutateAsync(rowIndex);
+      await deleteMutation.mutateAsync({ rowIndex, imm });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur réseau");
     }

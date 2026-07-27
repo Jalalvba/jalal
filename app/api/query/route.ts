@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo";
 import { escapeRegex } from "@/lib/regex";
+import { toErrorResponse } from "@/lib/apiError";
 import type { ParcDoc } from "@/lib/types";
 
 export async function GET(req: Request) {
@@ -17,7 +18,15 @@ export async function GET(req: Request) {
   try {
     const col = await getCollection<ParcDoc>("parc");
 
-    const regex = { $regex: "^" + escapeRegex(q), $options: "i" };
+    // No $options: "i" — a case-insensitive anchored regex can't use a
+    // standard (binary-collation) B-tree index, so this was silently
+    // forcing a full collection scan on every keystroke despite
+    // Immatriculation/Numéro WW both being indexed. Uppercasing the query
+    // instead (parc's plates are stored uppercase — confirmed live: of
+    // 7830 docs, only 18/35 have any lowercase char in Immatriculation/
+    // Numéro WW respectively) keeps the search "feeling" case-insensitive
+    // to the user while letting Mongo actually use the index.
+    const regex = { $regex: "^" + escapeRegex(q.toUpperCase()) };
 
     const docs = await col
       .find({ $or: [
@@ -61,9 +70,6 @@ export async function GET(req: Request) {
       ww:   docs[0]?.["Numéro WW"]       ? String(docs[0]["Numéro WW"])       : q,
     });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Query failed" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Query failed");
   }
 }

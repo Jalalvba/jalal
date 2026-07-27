@@ -77,8 +77,8 @@ function AtelierCard({
   onDelete,
 }: {
   row: AtelierRow;
-  onFieldCommit: (rowIndex: number, field: AtelierEditableField, value: string) => void;
-  onDelete: (rowIndex: number) => void;
+  onFieldCommit: (rowIndex: number, field: AtelierEditableField, value: string, imm: string) => void;
+  onDelete: (rowIndex: number, imm: string) => void;
 }) {
   const resyncDeps = [row.rowIndex, row.categorie, row.technicien, row.commentaire, row.besoinPiece, row.timestamp];
   const [categorie, setCategorie] = useEditableState(row.categorie, resyncDeps);
@@ -91,7 +91,7 @@ function AtelierCard({
       imm={row.imm}
       subtitle={[row.marque, row.model].filter(Boolean).join(" ") + (row.client ? ` | ${row.client}` : "")}
       timestamp={row.timestamp}
-      onDelete={() => onDelete(row.rowIndex)}
+      onDelete={() => onDelete(row.rowIndex, row.imm)}
     >
       <div className="grid grid-cols-1 gap-2.5 text-[11px] sm:grid-cols-2">
         <Field label="Catégorie">
@@ -99,7 +99,7 @@ function AtelierCard({
             value={categorie}
             onChange={(e) => {
               setCategorie(e.target.value);
-              onFieldCommit(row.rowIndex, "CATÉGORIE", e.target.value);
+              onFieldCommit(row.rowIndex, "CATÉGORIE", e.target.value, row.imm);
             }}
             className={selectClass}
           >
@@ -116,7 +116,7 @@ function AtelierCard({
             value={technicien}
             onChange={(e) => {
               setTechnicien(e.target.value);
-              onFieldCommit(row.rowIndex, "TECHNICIEN", e.target.value);
+              onFieldCommit(row.rowIndex, "TECHNICIEN", e.target.value, row.imm);
             }}
             className={selectClass}
           >
@@ -137,7 +137,7 @@ function AtelierCard({
             placeholder="Taper le suivi…"
             onChange={(e) => setCommentaire(e.target.value)}
             onBlur={() => {
-              if (commentaire !== row.commentaire) onFieldCommit(row.rowIndex, "COMMENTAIRE", commentaire);
+              if (commentaire !== row.commentaire) onFieldCommit(row.rowIndex, "COMMENTAIRE", commentaire, row.imm);
             }}
             className="h-auto py-1.5 text-[11px] focus:border-amber-500"
           />
@@ -148,7 +148,7 @@ function AtelierCard({
             placeholder="Pièce requise…"
             onChange={(e) => setBesoinPiece(e.target.value)}
             onBlur={() => {
-              if (besoinPiece !== row.besoinPiece) onFieldCommit(row.rowIndex, "BESOIN PIÈCE", besoinPiece);
+              if (besoinPiece !== row.besoinPiece) onFieldCommit(row.rowIndex, "BESOIN PIÈCE", besoinPiece, row.imm);
             }}
             className="h-auto py-1.5 text-[11px] focus:border-amber-500"
           />
@@ -193,17 +193,17 @@ export default function AtelierPage() {
     }
   }
 
-  async function handleFieldCommit(rowIndex: number, field: AtelierEditableField, value: string) {
+  async function handleFieldCommit(rowIndex: number, field: AtelierEditableField, value: string, imm: string) {
     try {
-      await fieldMutation.mutateAsync({ rowIndex, field, value });
+      await fieldMutation.mutateAsync({ rowIndex, field, value, imm });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur réseau");
     }
   }
 
-  async function handleDelete(rowIndex: number) {
+  async function handleDelete(rowIndex: number, imm: string) {
     try {
-      await deleteMutation.mutateAsync(rowIndex);
+      await deleteMutation.mutateAsync({ rowIndex, imm });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur réseau");
     }

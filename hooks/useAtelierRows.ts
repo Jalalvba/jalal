@@ -49,15 +49,17 @@ export function useUpdateAtelierField() {
       rowIndex,
       field,
       value,
+      imm,
     }: {
       rowIndex: number;
       field: AtelierEditableField;
       value: string;
+      imm: string;
     }) =>
       fetchJson<{ ok: true }>("/api/atelier/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rowIndex, field, value }),
+        body: JSON.stringify({ rowIndex, field, value, imm }),
       }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
@@ -66,11 +68,11 @@ export function useUpdateAtelierField() {
 export function useDeleteAtelierRow() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (rowIndex: number) =>
+    mutationFn: ({ rowIndex, imm }: { rowIndex: number; imm: string }) =>
       fetchJson<{ ok: true }>("/api/atelier/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rowIndex }),
+        body: JSON.stringify({ rowIndex, imm }),
       }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });

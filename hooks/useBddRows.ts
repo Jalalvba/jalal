@@ -30,12 +30,11 @@ export function useBddRows() {
     queryKey: ROWS_KEY,
     queryFn: () => fetchJson<{ ok: true; rows: BddRow[] }>("/api/bdd"),
     select: (data) => data.rows,
-    // Original page always kicked off a silent background fetchFresh() on
-    // mount even when painting instantly from a fresh localStorage cache —
-    // staleTime: 0 (overriding the 30s default) reproduces that unconditional
-    // refetch-on-mount instead of skipping it when the persisted cache is
-    // still within the global staleTime window.
-    staleTime: 0,
+    // Inherits the provider's 30s default staleTime — the persisted cache
+    // (see hooks/queryClient.tsx) plus TanStack Query's default
+    // refetchOnMount already paint instantly from the last-known cache and
+    // refetch in the background, without forcing an unconditional refetch
+    // on every mount the way staleTime: 0 used to.
   });
 }
 

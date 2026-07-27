@@ -7,7 +7,13 @@ import {
   nowToSerial,
   fmtDateOnlyDash,
   fmtDateTime,
+  withCache,
+  invalidateCache,
+  verifyRowIdentity,
 } from "@/lib/googleSheetsClient";
+
+const ROWS_CACHE_KEY = "rows:PARKING";
+const HEADERS_CACHE_KEY = "headers:PARKING";
 
 // Ported from the AVIS Maroc GAS "Parking" system (code.gs + Parking.gs).
 // Tab name, column layout and XLOOKUP formulas confirmed by a live read of
@@ -30,15 +36,17 @@ function columnIndexToLetter(oneBasedIndex: number): string {
   return letters;
 }
 
-/** Live header row → column-name lookup, never hardcoded indices. */
+/** Live header row → column-name lookup, never hardcoded indices. Cached 5min — headers essentially never change. */
 async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: spreadsheetId!,
-    range: `'${PARKING_TAB}'!A1:O1`,
-    valueRenderOption: "UNFORMATTED_VALUE",
+  return withCache(HEADERS_CACHE_KEY, 5 * 60_000, async () => {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheetId!,
+      range: `'${PARKING_TAB}'!A1:O1`,
+      valueRenderOption: "UNFORMATTED_VALUE",
+    });
+    const row = res.data.values?.[0] ?? [];
+    return row.map((h) => String(h ?? "").trim().toUpperCase());
   });
-  const row = res.data.values?.[0] ?? [];
-  return row.map((h) => String(h ?? "").trim().toUpperCase());
 }
 
 function buildColMap(headers: string[]): Record<string, number> {
@@ -78,6 +86,10 @@ async function getParkingSheetProps(
  * that's ever a Sheets date serial; the rest are plain XLOOKUP text/numbers.
  */
 export async function getParkingRows(): Promise<ParkingRow[]> {
+  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchParkingRows());
+}
+
+async function fetchParkingRows(): Promise<ParkingRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
@@ -187,6 +199,25 @@ export async function getIMMList(): Promise<string[]> {
   return [...set];
 }
 
+/**
+ * Fail-soft wrapper: getIMMList() is a nice-to-have (typo-correction against
+ * the known fleet list, plus the `inParc` flag), not a hard requirement for
+ * writing a plate string into a Sheets cell. A MongoDB outage/timeout used
+ * to throw uncaught out of addPlates()/addAtelierPlates()/addDepotPlates(),
+ * blocking Sheets writes entirely over an unrelated system being down — and
+ * risked leaving orphaned blank rows if the sheet's grid had already been
+ * grown by the time it threw. This degrades to verbatim plate resolution
+ * instead: resolveIMM() with an empty list just uppercases the token as-is.
+ */
+export async function getIMMListSafe(): Promise<string[]> {
+  try {
+    return await getIMMList();
+  } catch (e) {
+    console.error("[getIMMList] Mongo lookup failed, degrading to verbatim plate resolution:", e);
+    return [];
+  }
+}
+
 // ─── resolveIMM_ ───────────────────────────────────────────────────────────
 
 /**
@@ -277,6 +308,11 @@ export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
     }
   });
 
+  // Resolved before any grid mutation below: if Mongo is unavailable,
+  // getIMMListSafe() degrades to [] instead of throwing mid-mutation and
+  // leaving the sheet grown with no data written into the new rows.
+  const immList = await getIMMListSafe();
+
   const needed = tokens.length;
   const nextRows: number[] = [];
   const startNewRow = DATA_START_ROW + dataRows.length;
@@ -292,7 +328,6 @@ export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
   }
   for (let r = startNewRow; r < startNewRow + needed; r++) nextRows.push(r);
 
-  const immList = await getIMMList();
   const results: ParkingAddResultItem[] = [];
   const nowSerial = nowToSerial();
   const writes: { range: string; values: (string | number)[][] }[] = [];
@@ -344,6 +379,7 @@ export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
       spreadsheetId: spreadsheetId!,
       requestBody: { valueInputOption: "USER_ENTERED", data: writes },
     });
+    invalidateCache(ROWS_CACHE_KEY);
   }
 
   return { ok: true, results };
@@ -351,12 +387,20 @@ export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
 
 // ─── updateActionFromWeb ───────────────────────────────────────────────────
 
-export async function updateAction(rowIndex: number, action: string): Promise<void> {
+export async function updateAction(rowIndex: number, action: string, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
   const actionCol = colMap["ACTION"] ?? 2;
   const tsCol = colMap["TIMESTAMP"] ?? 15;
+
+  await verifyRowIdentity(
+    sheets,
+    spreadsheetId!,
+    `'${PARKING_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    expectedImm
+  );
 
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: spreadsheetId!,
@@ -368,6 +412,7 @@ export async function updateAction(rowIndex: number, action: string): Promise<vo
       ],
     },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 }
 
 // ─── deleteIMMFromWeb ──────────────────────────────────────────────────────
@@ -376,8 +421,19 @@ export async function updateAction(rowIndex: number, action: string): Promise<vo
  *  shifting every row below it up by one. Replaces the original's
  *  clear-cells behavior: empty rows are no longer reused by addPlates(), so
  *  there's no reason to leave a hollowed-out row in place. */
-export async function deletePlate(rowIndex: number): Promise<void> {
+export async function deletePlate(rowIndex: number, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"] ?? 1;
+
+  await verifyRowIdentity(
+    sheets,
+    spreadsheetId!,
+    `'${PARKING_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    expectedImm
+  );
+
   const { sheetId } = await getParkingSheetProps(sheets);
 
   await sheets.spreadsheets.batchUpdate({
@@ -392,6 +448,7 @@ export async function deletePlate(rowIndex: number): Promise<void> {
       ],
     },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 }
 
 // ─── clearParkingFromWeb ───────────────────────────────────────────────────
@@ -415,4 +472,5 @@ export async function clearAll(): Promise<void> {
     spreadsheetId: spreadsheetId!,
     requestBody: { ranges: [colRange(immCol), colRange(tsCol), colRange(actionCol)] },
   });
+  invalidateCache(ROWS_CACHE_KEY);
 }

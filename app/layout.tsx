@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { ThemeProvider } from "next-themes";
 import { AppQueryProvider } from "@/hooks/queryClient";
 import { LIGHT_START_HOUR, LIGHT_END_HOUR } from "@/lib/themeDefault";
@@ -43,16 +44,34 @@ const noFlashScript = `(function() {
   } catch (e) {}
 })();`;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Set by proxy.ts on every request as the `x-nonce` request header, so the
+  // inline script below carries the same nonce the CSP response header
+  // allows — without it, a nonce-based script-src would block this script
+  // entirely.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="fr" suppressHydrationWarning>
       <body className="antialiased">
-        <script dangerouslySetInnerHTML={{ __html: noFlashScript }} />
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="theme" disableTransitionOnChange>
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: noFlashScript }} />
+        {/* next-themes renders its own inline no-flash script server-side —
+            that script doesn't go through Next's automatic nonce
+            propagation (only Next's own framework scripts get that), so it
+            needs the nonce passed explicitly or a nonce-based CSP would
+            block it. Confirmed next-themes@0.4.6 supports this prop. */}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
+          storageKey="theme"
+          disableTransitionOnChange
+          nonce={nonce}
+        >
           <AppQueryProvider>{children}</AppQueryProvider>
         </ThemeProvider>
       </body>

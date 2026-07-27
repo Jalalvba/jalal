@@ -1,6 +1,7 @@
 // app/api/ds/history/route.ts
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo";
+import { toErrorResponse } from "@/lib/apiError";
 import type { Document } from "mongodb";
 
 function parseYear(yearStr: string | null): { start?: Date; end?: Date } {
@@ -207,9 +208,6 @@ export async function GET(req: Request) {
       items: merged,
     });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Query failed" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Query failed");
   }
 }

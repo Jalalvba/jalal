@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo";
 import { escapeRegex } from "@/lib/regex";
+import { toErrorResponse } from "@/lib/apiError";
 import type { ParcDoc } from "@/lib/types";
 
 export async function GET(req: Request) {
@@ -18,7 +19,10 @@ export async function GET(req: Request) {
   try {
     const col = await getCollection<ParcDoc>("parc");
 
-    const regex = { $regex: "^" + escapeRegex(q), $options: "i" };
+    // See app/api/query/route.ts's identical fix for why: dropping
+    // $options: "i" and uppercasing the query lets Mongo use the existing
+    // Immatriculation/Numéro WW indexes instead of a full collection scan.
+    const regex = { $regex: "^" + escapeRegex(q.toUpperCase()) };
 
     const docs = await col
       .find({ $or: [{ Immatriculation: regex }, { "Numéro WW": regex }] })
@@ -34,9 +38,6 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ ok: true, results });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Query failed", results: [] },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Query failed", 500, { results: [] });
   }
 }

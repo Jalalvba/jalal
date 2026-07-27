@@ -48,3 +48,6 @@ cookies.txt
 
 # OAuth client secret downloaded from Google Cloud Console
 secret.json
+
+# generated full-source context dumps (for feeding to other tools/models)
+gemini_context.md

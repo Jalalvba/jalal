@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import type { Line, DsHistoryItem, ParcItem, CpItem } from "@/lib/types";
 import { fmtDate, fmtNum } from "@/lib/format";
 import { checkRateLimit, clientIp } from "@/lib/rateLimit";
+import { toErrorResponse } from "@/lib/apiError";
 
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -97,10 +98,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     return await generateExport(req);
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Export failed" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Export failed");
   }
 }
 

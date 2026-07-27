@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { deleteRdvRow } from "@/lib/googleSheetsRdv";
+import { rateLimitOrNull } from "@/lib/rateLimit";
+import { toErrorResponse } from "@/lib/apiError";
 
 export async function POST(req: Request) {
+  const limited = await rateLimitOrNull(req, "rdv-delete", 30, 60_000);
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -26,9 +31,6 @@ export async function POST(req: Request) {
     await deleteRdvRow(rowIndex);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Failed to delete row" },
-      { status: 500 }
-    );
+    return toErrorResponse(e, "Failed to delete row");
   }
 }
