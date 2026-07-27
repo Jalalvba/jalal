@@ -116,16 +116,15 @@ const LINE_FIELDS: LineField[] = [
   { key: "code_art",          label: "Code art" },
   { key: "designation_conso", label: "Désig. conso." },
   { key: "qte",               label: "Qté" },
-  { key: "mt_ht",             label: "Mt HT" },
 ];
 
 const DEFAULT_CARD_VISIBLE = new Set<keyof DsHistoryItem>([
   "N°DS","Date DS","ENTITE","KM","Description","Techniciens","Fournisseur",
 ]);
-const DEFAULT_LINE_VISIBLE = new Set<keyof Line>(["cmd_num","designation_conso","qte","mt_ht"]);
+const DEFAULT_LINE_VISIBLE = new Set<keyof Line>(["cmd_num","designation_conso","qte"]);
 const CARD_GROUPS = ["Identification","Localisation","DS Info","Intervenants"];
 const TOP_BAR_KEYS = new Set(["Date DS","KM"]);
-const NUM_LINE_KEYS = new Set(["qte","mt_ht"]);
+const NUM_LINE_KEYS = new Set(["qte"]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -154,7 +153,6 @@ function formatSuggestion(s: SearchResult): string {
 function displayLineValue(line: Line, key: keyof Line): string {
   const v = line[key];
   if (v == null) return "—";
-  if (key === "mt_ht") return fmtNum(v as number, 2);
   if (key === "qte") return String(v);
   return String(v).trim() || "—";
 }
@@ -363,9 +361,8 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
 
 // ─── Lines Table ──────────────────────────────────────────────────────────────
 
-function LinesTable({ lines, orderedLineFields, totalMtHt, visibleLineFields }: {
+function LinesTable({ lines, orderedLineFields }: {
   lines: Line[]; orderedLineFields: LineField[];
-  totalMtHt?: number | null; visibleLineFields: Set<keyof Line>;
 }) {
   if (!lines.length || !orderedLineFields.length) return null;
   return (
@@ -387,31 +384,12 @@ function LinesTable({ lines, orderedLineFields, totalMtHt, visibleLineFields }: 
                   : f.key==="code_art" ? "font-mono text-xs font-medium text-card-foreground"
                   : "text-muted-foreground"
                 }`}>
-                  {f.key === "cmd_num" ? (
-                    <span className="flex items-center gap-1.5">
-                      {l.price_source === "bc"
-                        ? <span className="rounded-lg px-1 py-0.5 text-micro font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">BC</span>
-                        : <span className="rounded-lg px-1 py-0.5 text-micro font-bold bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground">DS</span>
-                      }
-                      {displayLineValue(l, f.key)}
-                    </span>
-                  ) : displayLineValue(l, f.key)}
+                  {displayLineValue(l, f.key)}
                 </td>
               ))}
             </tr>
           ))}
         </tbody>
-        {lines.length > 1 && visibleLineFields.has("mt_ht") && totalMtHt != null && (
-          <tfoot>
-            <tr className="border-t-2 border-border bg-muted font-semibold dark:border-border dark:bg-card">
-              {orderedLineFields.map((f, i) => (
-                <td key={f.key} className={`px-3 py-2 text-xs ${NUM_LINE_KEYS.has(f.key) ? "text-right tabular-nums" : ""}`}>
-                  {f.key === "mt_ht" ? fmtNum(totalMtHt, 2) : i === 0 ? "Total" : ""}
-                </td>
-              ))}
-            </tr>
-          </tfoot>
-        )}
       </table>
     </div>
   );
@@ -1157,12 +1135,6 @@ export default function Home() {
                 </div>
                 {/* RIGHT: MAD · Site · N°DS · Type DS · Affectation */}
                 <div className="flex flex-wrap items-center gap-2">
-                  {(() => {
-                    const bcTotal = it.lines?.filter(l => l.price_source === "bc" && l.mt_ht != null).reduce((s, l) => s + (l.mt_ht ?? 0), 0) ?? 0;
-                    return bcTotal > 0 ? (
-                      <span className="text-sm font-semibold tabular-nums">{fmtNum(bcTotal, 2)} MAD</span>
-                    ) : null;
-                  })()}
                   <span className="text-sm font-bold tracking-tight">{nds}</span>
                 </div>
               </div>
@@ -1194,8 +1166,6 @@ export default function Home() {
                   <LinesTable
                     lines={it.lines}
                     orderedLineFields={orderedLineFields}
-                    totalMtHt={it.lines?.filter(l => l.price_source === "bc" && l.mt_ht != null).reduce((s, l) => s + (l.mt_ht ?? 0), 0) ?? 0}
-                    visibleLineFields={visibleLineFields}
                   />
                 </div>
               ) : null}

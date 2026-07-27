@@ -51,7 +51,6 @@ function getCardValue(item: DsItem, key: string): string {
 function getLineValue(line: Line, key: string): string {
   const v = (line as Record<string, unknown>)[key];
   if (v == null) return "—";
-  if (key === "mt_ht") return fmtNum(v as number, 2);
   if (key === "qte") return String(v);
   return String(v).trim() || "—";
 }
@@ -74,7 +73,6 @@ const COLORS = {
   rowAlt: "F5F8FC",
   border: "C5D3E0",
   labelFg: "555555",
-  totalBg: "D5E8F0",
 };
 
 const PAGE_W = 9360; // A4 content width in DXA with 1" margins
@@ -129,7 +127,7 @@ async function generateExport(req: Request): Promise<NextResponse> {
     const MID   = c(68,  68,  68);
     const WHITE = c(255, 255, 255);
 
-    const numKeys    = new Set(["qte","mt_ht"]);
+    const numKeys    = new Set(["qte"]);
     const topSet     = new Set(topBarKeys);
     const MAND_DS    = new Set(["Description","Techniciens","ENTITE"]);
     const infoSet    = new Set(visibleCardFields.filter(k => k !== "N°DS" && !topSet.has(k)));
@@ -455,10 +453,9 @@ async function generateExport(req: Request): Promise<NextResponse> {
   function buildLinesTable(
     lines: Line[],
     fields: string[],
-    labels: Record<string, string>,
-    totalMtHt?: number | null
+    labels: Record<string, string>
   ) {
-    const numKeys = new Set(["qte", "mt_ht"]);
+    const numKeys = new Set(["qte"]);
     const colW = Math.floor(PAGE_W / Math.max(fields.length, 1));
     const colWidths = fields.map((_, i) =>
       i === fields.length - 1 ? PAGE_W - colW * (fields.length - 1) : colW
@@ -511,34 +508,6 @@ async function generateExport(req: Request): Promise<NextResponse> {
     );
 
     const rows: InstanceType<typeof TableRow>[] = [headerRow, ...dataRows];
-
-    if (lines.length > 1 && totalMtHt != null && fields.includes("mt_ht")) {
-      rows.push(
-        new TableRow({
-          children: fields.map((key, i) =>
-            new TableCell({
-              borders,
-              width: { size: colWidths[i], type: WidthType.DXA },
-              shading: { fill: COLORS.totalBg, type: ShadingType.CLEAR },
-              margins: { top: 60, bottom: 60, left: 100, right: 100 },
-              children: [
-                new Paragraph({
-                  alignment: numKeys.has(key) ? AlignmentType.RIGHT : AlignmentType.LEFT,
-                  children: [
-                    new TextRun({
-                      text: key === "mt_ht" ? fmtNum(totalMtHt, 2) : i === 0 ? "Total" : "",
-                      bold: true,
-                      size: 18,
-                      font: "Arial",
-                    }),
-                  ],
-                }),
-              ],
-            })
-          ),
-        })
-      );
-    }
 
     return new Table({
       width: { size: PAGE_W, type: WidthType.DXA },

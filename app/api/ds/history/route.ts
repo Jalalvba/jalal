@@ -130,82 +130,15 @@ export async function GET(req: Request) {
     { $limit: limit },
   ];
 
-  // ── BC price join ───────────────────────────────────────────────────────
-  // Was a $lookup with let+pipeline+$expr correlating each DS group's whole
-  // `lines` array against "bc" — confirmed via explain() to never use bc's
-  // {CMD Num, Code article} index regardless of shape (a correlated
-  // let-bound subquery just doesn't get the index here, even for plain
-  // scalar equality: "indexesUsed": [], "collectionScans": N), forcing a
-  // full 56K-doc scan of "bc" per DS group (or, in an unwind-first attempt,
-  // per line — confirmed empirically WORSE: 11.7s vs 6.9s on a 226-line
-  // plate). A standalone, non-correlated query against the same fields DOES
-  // use the index (confirmed via explain: IXSCAN) — so this now collects
-  // every (cmd_num, code_art) pair up front and does ONE plain $or query
-  // against "bc", then merges PU values back onto the lines in application
-  // code. Same "first match wins, no explicit tie-break" semantics as
-  // before for any duplicate (CMD Num, Code article) pairs in "bc".
-  type LineDoc = { cmd_num?: string; code_art?: string; designation_conso?: string; qte?: unknown };
-  type GroupDoc = { lines: LineDoc[]; [key: string]: unknown };
-
-  function collectPairs(items: GroupDoc[]): { cmd: unknown; code: unknown }[] {
-    const seen = new Set<string>();
-    const pairs: { cmd: unknown; code: unknown }[] = [];
-    for (const item of items) {
-      for (const line of item.lines) {
-        const key = JSON.stringify([line.cmd_num, line.code_art]);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        pairs.push({ cmd: line.cmd_num, code: line.code_art });
-      }
-    }
-    return pairs;
-  }
-
-  async function fetchBcMatches(pairs: { cmd: unknown; code: unknown }[]) {
-    const map = new Map<string, { PU: unknown }>();
-    if (pairs.length === 0) return map;
-
-    const bcCol = await getCollection("bc");
-    const docs = await bcCol
-      .find(
-        { $or: pairs.map((p) => ({ "CMD Num": p.cmd, "Code article": p.code })) },
-        { projection: { _id: 0, "CMD Num": 1, "Code article": 1, PU: 1 } }
-      )
-      .toArray();
-
-    for (const doc of docs) {
-      const key = JSON.stringify([doc["CMD Num"], doc["Code article"]]);
-      if (!map.has(key)) map.set(key, { PU: doc["PU"] });
-    }
-    return map;
-  }
-
-  function mergeBcPrices(items: GroupDoc[], bcMatches: Map<string, { PU: unknown }>): GroupDoc[] {
-    return items.map((item) => ({
-      ...item,
-      lines: item.lines.map((line) => {
-        const match = bcMatches.get(JSON.stringify([line.cmd_num, line.code_art]));
-        return {
-          ...line,
-          mt_ht: match ? match.PU : undefined,
-          price_source: match ? "bc" : "ds",
-        };
-      }),
-    }));
-  }
-
   try {
     const col = await getCollection("ds");
-    const items = (await col.aggregate(pipeline).toArray()) as unknown as GroupDoc[];
-
-    const bcMatches = await fetchBcMatches(collectPairs(items));
-    const merged = mergeBcPrices(items, bcMatches);
+    const items = await col.aggregate(pipeline).toArray();
 
     return NextResponse.json({
       ok: true,
       imm,
-      count: merged.length,
-      items: merged,
+      count: items.length,
+      items,
     });
   } catch (e) {
     return toErrorResponse(e, "Query failed");

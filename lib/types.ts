@@ -11,8 +11,6 @@ export type Line = {
   code_art?: string;
   designation_conso?: string;
   qte?: number;
-  mt_ht?: number | null;
-  price_source?: "bc" | "ds";
 };
 
 export type DsHistoryItem = {
