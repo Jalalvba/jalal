@@ -15,6 +15,7 @@ import {
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { Card } from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Combobox } from "@/components/ui/combobox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -338,9 +339,7 @@ export default function SuiviRlPage() {
 
       <div className="px-3 py-3">
         {displayError && (
-          <div className="mb-3 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-300">
-            {displayError}
-          </div>
+          <Alert className="mb-3">{displayError}</Alert>
         )}
 
         {rowsQuery.isPending && (

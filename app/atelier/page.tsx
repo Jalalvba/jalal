@@ -11,6 +11,7 @@ import { RecordCard } from "@/components/fleet/RecordCard";
 import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
 import { useEditableState } from "@/hooks/useEditableState";
 import { useParkingImmList } from "@/hooks/useParkingRows";
 import {
@@ -255,9 +256,7 @@ export default function AtelierPage() {
 
       <div className="px-3 py-3">
         {displayError && (
-          <div className="mb-3 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-300">
-            {displayError}
-          </div>
+          <Alert className="mb-3">{displayError}</Alert>
         )}
 
         {rowsQuery.isPending && (

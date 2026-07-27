@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { fmtDate, fmtNum } from "@/lib/format"
 import { ThemeToggle } from "@/components/fleet/ThemeToggle"
+import { Alert } from "@/components/ui/alert"
 
 type ArticleResult = {
   "CMD Num":             string
@@ -142,9 +143,7 @@ export default function ArticlePage() {
           </div>
 
           {error && (
-            <div className="mt-3 rounded-xl border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-300">
-              {error}
-            </div>
+            <Alert className="mt-3">{error}</Alert>
           )}
         </div>
 

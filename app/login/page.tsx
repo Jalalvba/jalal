@@ -1,4 +1,5 @@
 import { ThemeToggle } from "@/components/fleet/ThemeToggle";
+import { Alert } from "@/components/ui/alert";
 
 const ERROR_MESSAGES: Record<string, string> = {
   state: "Session expirée ou requête invalide — veuillez réessayer.",
@@ -23,11 +24,7 @@ export default async function LoginPage({
         </div>
         <p className="text-muted-foreground text-sm mb-8">AVIS Maroc — Gestion de flotte</p>
 
-        {errorMessage && (
-          <p className="text-red-400 text-sm mb-4 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">
-            {errorMessage}
-          </p>
-        )}
+        {errorMessage && <Alert className="mb-4">{errorMessage}</Alert>}
 
         <a
           href="/api/auth/google"
