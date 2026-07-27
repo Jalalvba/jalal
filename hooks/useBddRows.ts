@@ -51,6 +51,19 @@ export function useUpdateBddRow() {
   });
 }
 
+export function useDeleteBddRow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ row, imm }: { row: number; imm: string }) =>
+      fetchJson<{ ok: true }>("/api/bdd/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ row, imm }),
+      }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+  });
+}
+
 /**
  * Matches the original page's handleRowSaved(): patch the just-saved fields
  * into the cached rows immediately (instant UI feedback) rather than waiting

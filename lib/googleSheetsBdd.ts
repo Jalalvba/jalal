@@ -1,7 +1,14 @@
 import { type sheets_v4 } from "googleapis";
 import { BDD_EDITABLE_FIELDS, type BddRow, type BddUpdateResult } from "@/lib/types";
 import { buildPlateVariants } from "@/lib/plateVariants";
-import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, withCache, invalidateCache } from "@/lib/googleSheetsClient";
+import {
+  getSheetsClient,
+  serialToUTCDate,
+  fmtDateOnlySlash,
+  withCache,
+  invalidateCache,
+  verifyRowIdentity,
+} from "@/lib/googleSheetsClient";
 
 const ROWS_CACHE_KEY = "rows:BDD";
 const HEADERS_CACHE_KEY = "headers:BDD";
@@ -38,6 +45,19 @@ async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
     const row = res.data.values?.[0] ?? [];
     return row.map((h) => String(h ?? "").trim());
   });
+}
+
+/** Same pattern as googleSheetsParking.ts's getParkingSheetProps() — the numeric sheetId a deleteDimension request needs (distinct from the spreadsheet-wide spreadsheetId). */
+async function getBddSheetProps(sheets: sheets_v4.Sheets): Promise<{ sheetId: number }> {
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId: spreadsheetId!,
+    fields: "sheets.properties",
+  });
+  const props = res.data.sheets?.find((s) => s.properties?.title === BDD_TAB_NAME)?.properties;
+  if (!props || props.sheetId == null) {
+    throw new Error(`Sheet tab '${BDD_TAB_NAME}' not found`);
+  }
+  return { sheetId: props.sheetId };
 }
 
 /**
@@ -185,4 +205,44 @@ export async function updateSheetRow(
   invalidateCache(ROWS_CACHE_KEY);
 
   return { ok: true, written: requestedFields };
+}
+
+/**
+ * Genuinely deletes the row (Sheets "delete row" — DeleteDimensionRequest),
+ * shifting every row below it up by one — same mechanism as
+ * googleSheetsParking.ts's deletePlate()/Atelier's/Depot's equivalents.
+ * verifyRowIdentity() runs first so a client-held `row` that's gone stale
+ * (another delete renumbered the sheet since the client last loaded) is
+ * refused with a 409 rather than deleting the wrong vehicle's row.
+ */
+export async function deleteBddRow(row: number, expectedImm: string): Promise<void> {
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const immColIdx = headers.indexOf("IMM"); // 0-based
+  if (immColIdx === -1) {
+    throw new Error("Column 'IMM' not found in the live BDD sheet header row");
+  }
+
+  await verifyRowIdentity(
+    sheets,
+    spreadsheetId!,
+    `'${BDD_TAB_NAME}'!${columnIndexToLetter(immColIdx + 1)}${row}`,
+    expectedImm
+  );
+
+  const { sheetId } = await getBddSheetProps(sheets);
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: spreadsheetId!,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: row - 1, endIndex: row },
+          },
+        },
+      ],
+    },
+  });
+  invalidateCache(ROWS_CACHE_KEY);
 }

@@ -26,7 +26,7 @@ import { InlineEditText } from "@/components/fleet/InlineEditText";
 import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
 import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
 import { cn } from "@/components/ui/utils";
-import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate } from "@/hooks/useBddRows";
+import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate, useDeleteBddRow } from "@/hooks/useBddRows";
 import { useVehicleZone } from "@/hooks/useVehicleZone";
 import { ZoneBadges } from "@/components/fleet/ZoneBadges";
 
@@ -63,7 +63,7 @@ const READONLY_HEADERS = BDD_HEADERS.filter(
 
 // ─── Card ───────────────────────────────────────────────────────────────────
 
-function BddCard({ row }: { row: BddRow }) {
+function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: string) => void }) {
   const updateMutation = useUpdateBddRow();
   const applyOptimisticUpdate = useOptimisticBddUpdate();
   const zone = useVehicleZone(row.IMM);
@@ -83,6 +83,7 @@ function BddCard({ row }: { row: BddRow }) {
       imm={row.IMM}
       subtitle={[row.client, row.modele].filter(Boolean).join(" · ")}
       className={flagStyle ? `border-l-4 ${flagStyle.border}` : ""}
+      onDelete={() => onDelete(row._row, row.IMM)}
       headerLeft={
         <>
           {row.date && <span className="font-mono text-xs text-muted-foreground">{row.date}</span>}
@@ -188,6 +189,7 @@ const EMPTY_ROWS: BddRow[] = [];
 
 export default function SuiviRlPage() {
   const rowsQuery = useBddRows();
+  const deleteMutation = useDeleteBddRow();
 
   const rows = rowsQuery.data ?? EMPTY_ROWS;
   const [search, setSearch] = useState("");
@@ -195,6 +197,16 @@ export default function SuiviRlPage() {
   const [activeFleet, setActiveFleet] = useState<Fleet>("INTERNE");
   const [activePrestataire, setActivePrestataire] = useState("TOUS");
   const [activeFlag, setActiveFlag] = useState("TOUS");
+  const [error, setError] = useState("");
+
+  async function handleDelete(row: number, imm: string) {
+    try {
+      await deleteMutation.mutateAsync({ row, imm });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur réseau");
+      setTimeout(() => setError(""), 5000);
+    }
+  }
 
   const fleetFiltered = useMemo(() => {
     if (activeFleet === "TOUS") {
@@ -256,7 +268,10 @@ export default function SuiviRlPage() {
   // show (fetchFresh(silent=false) on a cold load); a background refresh
   // failing while stale cached rows were already on screen stayed silent.
   // Mirrored here by only showing the banner when there are no rows to show.
-  const displayError = rows.length === 0 && rowsQuery.error instanceof Error ? rowsQuery.error.message : "";
+  // `error` (delete-action failures) is surfaced unconditionally, same as
+  // Parking/Atelier/Depot's `error || fetchError` pattern.
+  const fetchError = rows.length === 0 && rowsQuery.error instanceof Error ? rowsQuery.error.message : "";
+  const displayError = error || fetchError;
   const updatedLabel = rowsQuery.dataUpdatedAt
     ? `${rowsQuery.isFetching ? "cache · " : ""}${formatAge(rowsQuery.dataUpdatedAt)}`
     : "";
@@ -343,7 +358,7 @@ export default function SuiviRlPage() {
 
         <div className="flex flex-col gap-2">
           {searched.map((row) => (
-            <BddCard key={row._row} row={row} />
+            <BddCard key={row._row} row={row} onDelete={handleDelete} />
           ))}
         </div>
 
