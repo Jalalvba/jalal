@@ -61,7 +61,7 @@ export function RecordCard({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 hover:bg-red-500/10 hover:text-red-400"
+                className="hover:bg-red-500/10 hover:text-red-400"
                 title="Supprimer"
               >
                 <Trash2 className="h-4 w-4" />
