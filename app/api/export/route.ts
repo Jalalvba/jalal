@@ -75,7 +75,7 @@ const COLORS = {
   labelFg: "555555",
 };
 
-const PAGE_W = 9360; // A4 content width in DXA with 1" margins
+const PAGE_W = 10466; // A4 content width in DXA with 0.5" margins (matches the PDF branch's existing 0.5" ML)
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
@@ -213,28 +213,28 @@ async function generateExport(req: Request): Promise<NextResponse> {
 
     // ── Title ──
     drawText(`Historique DS — ${immat}`, ML, cy, PW, fontB, 16, NAVY);
-    cy += 22;
+    cy += 18;
     drawText(`Généré le ${now}  ·  ${count} dossier${count > 1 ? "s" : ""}`, ML, cy, PW, fontR, 8, GRAY);
-    cy += 16;
+    cy += 13;
 
     const secHead = (label: string, forceNewPage = false) => {
       if (forceNewPage) { page = newPage(); cy = 36; }
-      cy += 8;
+      cy += 6;
       drawText(label, ML, cy, PW, fontB, 10, NAVY);
-      cy += 14;
+      cy += 12;
       hLine(cy);
-      cy += 5;
+      cy += 4;
     };
 
     const kvRow = (label: string, value: string) => {
-      needPage(15);
+      needPage(13);
       const LW = 140;
-      fillRect(ML,      cy, LW,      15, LIGHT);
-      fillRect(ML + LW, cy, PW - LW, 15, WHITE);
-      strokeRect(ML, cy, PW, 15);
-      drawText(label, ML + 4,      cy + 4, LW - 8,      fontB, 7.5, MID);
-      drawText(value, ML + LW + 4, cy + 4, PW - LW - 8, fontR, 7.5, DARK);
-      cy += 15;
+      fillRect(ML,      cy, LW,      13, LIGHT);
+      fillRect(ML + LW, cy, PW - LW, 13, WHITE);
+      strokeRect(ML, cy, PW, 13);
+      drawText(label, ML + 4,      cy + 3, LW - 8,      fontB, 7.5, MID);
+      drawText(value, ML + LW + 4, cy + 3, PW - LW - 8, fontR, 7.5, DARK);
+      cy += 13;
     };
 
     // ── Parc ──
@@ -245,12 +245,12 @@ async function generateExport(req: Request): Promise<NextResponse> {
     if (contracts && contracts.length > 0) {
       secHead(`Contrats CP (${contracts.length})`);
       contracts.forEach(cp => {
-        needPage(90);
+        needPage(78);
         const cpY = cy;
-        fillRect(ML, cy, PW, 16, NAVY);
+        fillRect(ML, cy, PW, 14, NAVY);
         const refStr = sanitize(`${cp.ww ?? cp.imm ?? "—"}${cp.type ? "  ·  " + cp.type : ""}`);
-        drawText(refStr, ML + 5, cy + 4, PW - 10, fontB, 8, WHITE);
-        cy += 20;
+        drawText(refStr, ML + 5, cy + 3, PW - 10, fontB, 8, WHITE);
+        cy += 17;
         const CW4 = Math.floor(PW / 4);
         const CW3 = Math.floor(PW / 3);
         const row1: [string,string][] = [
@@ -269,39 +269,43 @@ async function generateExport(req: Request): Promise<NextResponse> {
           drawText(label, x + 3, cy,     CW4 - 6, fontR, 6.5, GRAY);
           drawText(val,   x + 3, cy + 8, CW4 - 6, fontB, 7.5, DARK);
         });
-        cy += 18;
+        cy += 15;
         row2.forEach(([label, val], i) => {
           const x = ML + i * CW3;
           drawText(label, x + 3, cy,     CW3 - 6, fontR, 6.5, GRAY);
           drawText(val,   x + 3, cy + 8, CW3 - 6, fontB, 7.5, DARK);
         });
-        cy += 18;
+        cy += 15;
         strokeRect(ML, cpY, PW, cy - cpY);
-        cy += 6;
+        cy += 5;
       });
     }
 
     // ── DS cards ──
-    secHead(`Dossiers de service (${count})`, true);
+    // No forced page break here (unlike before) — letting cards flow onto
+    // whatever space is left on the current page instead of always jumping
+    // to a fresh one, which used to leave a near-empty first page whenever
+    // the vehicle/contracts section didn't fill it.
+    secHead(`Dossiers de service (${count})`);
 
     for (const it of items) {
       const lc    = it.lines?.length ?? 0;
       const fRows = Math.ceil(infoFields.length / 3);
-      const estH  = 20 + fRows * 16 + (lc > 0 ? 14 + lc * 12 + 14 : 0) + 10;
+      const estH  = 18 + fRows * 14 + (lc > 0 ? 11 + lc * 11 + 12 : 0) + 8;
       needPage(estH);
 
       const cardY = cy;
 
       // header
-      fillRect(ML, cy, PW, 18, NAVY);
+      fillRect(ML, cy, PW, 16, NAVY);
       const lStr = [
         visibleCardFields.includes("Date DS") && it["Date DS"] ? fmtDate(it["Date DS"]) : "",
         visibleCardFields.includes("KM") && it.KM != null      ? fmtNum(it.KM) + " km"  : "",
       ].filter(Boolean).join("  ·  ");
       const rStr = it["N°DS"];
-      drawText(lStr, ML + 5,    cy + 5, PW/2 - 10, fontB, 8,   WHITE, "left");
-      drawText(rStr, ML + PW/2, cy + 5, PW/2 - 5,  fontR, 7.5, WHITE, "right");
-      cy += 22;
+      drawText(lStr, ML + 5,    cy + 4, PW/2 - 10, fontB, 8,   WHITE, "left");
+      drawText(rStr, ML + PW/2, cy + 4, PW/2 - 5,  fontR, 7.5, WHITE, "right");
+      cy += 18;
 
       // field grid 3 cols
       const CW   = Math.floor(PW / 3);
@@ -312,38 +316,38 @@ async function generateExport(req: Request): Promise<NextResponse> {
         drawText(cardFieldLabels[key] ?? key, x + 3, rowY,     CW - 6, fontR, 6.5, GRAY);
         drawText(getCardValue(it, key),       x + 3, rowY + 8, CW - 6, fontB, 7.5, DARK);
         ci++;
-        if (ci >= 3) { ci = 0; rowY += 16; }
+        if (ci >= 3) { ci = 0; rowY += 14; }
       }
-      cy = rowY + (ci > 0 ? 16 : 0) + 4;
+      cy = rowY + (ci > 0 ? 14 : 0) + 3;
 
       // lines
       if (lc > 0 && visibleLineFields.length > 0) {
         drawText(`LIGNES (${lc})`, ML, cy, PW, fontB, 7, NAVY);
-        cy += 11;
+        cy += 9;
         const colW = Math.floor(PW / visibleLineFields.length);
 
-        fillRect(ML, cy, PW, 13, NAVY);
+        fillRect(ML, cy, PW, 11, NAVY);
         visibleLineFields.forEach((k, i) => {
-          drawText(lineFieldLabels[k] ?? k, ML + i*colW + 2, cy + 3,
+          drawText(lineFieldLabels[k] ?? k, ML + i*colW + 2, cy + 2,
             colW - 4, fontB, 6.5, WHITE, numKeys.has(k) ? "right" : "left");
         });
-        cy += 13;
+        cy += 11;
 
         it.lines!.forEach((line, li) => {
-          if (li % 2 === 1) fillRect(ML, cy, PW, 12, ALT);
-          hLine(cy + 12);
+          if (li % 2 === 1) fillRect(ML, cy, PW, 11, ALT);
+          hLine(cy + 11);
           visibleLineFields.forEach((k, i) => {
-            drawText(getLineValue(line, k), ML + i*colW + 2, cy + 2,
+            drawText(getLineValue(line, k), ML + i*colW + 2, cy + 1.5,
               colW - 4, fontR, 7, DARK, numKeys.has(k) ? "right" : "left");
           });
-          cy += 12;
+          cy += 11;
         });
 
-        cy += 2;
+        cy += 1;
       }
 
       strokeRect(ML, cardY, PW, cy - cardY);
-      cy += 8;
+      cy += 6;
     }
 
     // ── page numbers ──
@@ -426,7 +430,7 @@ async function generateExport(req: Request): Promise<NextResponse> {
 
   function sectionHeading(text: string) {
     return new Paragraph({
-      spacing: { before: 200, after: 60 },
+      spacing: { before: 120, after: 40 },
       border: {
         bottom: { style: BorderStyle.SINGLE, size: 4, color: COLORS.sectionFg, space: 1 },
       },
@@ -549,7 +553,7 @@ async function generateExport(req: Request): Promise<NextResponse> {
   children.push(
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
-      spacing: { before: 0, after: 120 },
+      spacing: { before: 0, after: 80 },
       children: [
         new TextRun({
           text: `Historique DS — ${immat}`,
@@ -564,7 +568,7 @@ async function generateExport(req: Request): Promise<NextResponse> {
 
   children.push(
     new Paragraph({
-      spacing: { after: 300 },
+      spacing: { after: 160 },
       children: [
         new TextRun({
           text: `Généré le ${now}  ·  ${count} dossier${count > 1 ? "s" : ""}`,
@@ -583,14 +587,12 @@ async function generateExport(req: Request): Promise<NextResponse> {
   const mandatoryParcFields = vehicleMetaFields.filter(f => (parcMandatoryKeys ?? []).includes(f.key));
   children.push(buildVehicleTable(vehicle, mandatoryParcFields.length ? mandatoryParcFields : vehicleMetaFields));
 
-  children.push(new Paragraph({ spacing: { before: 200, after: 0 }, children: [] }));
-
   // ── CP contracts ──
   const contracts = payload.contracts ?? [];
   if (contracts.length > 0) {
     children.push(
       new Paragraph({
-        spacing: { before: 200, after: 80 },
+        spacing: { before: 120, after: 60 },
         children: [new TextRun({ text: `Contrats CP (${contracts.length})`, bold: true, size: 24, color: COLORS.headerBg, font: "Arial" })],
         border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: COLORS.headerBg } },
       })
@@ -599,7 +601,7 @@ async function generateExport(req: Request): Promise<NextResponse> {
       const refLine = [cp.ww ?? cp.imm ?? "—", cp.type ?? ""].filter(Boolean).join("  |  ");
       children.push(
         new Paragraph({
-          spacing: { before: 160, after: 40 },
+          spacing: { before: 100, after: 30 },
           children: [new TextRun({ text: refLine, bold: true, size: 20, color: COLORS.headerBg, font: "Arial" })],
         })
       );
@@ -633,7 +635,6 @@ async function generateExport(req: Request): Promise<NextResponse> {
         })
       );
     });
-    children.push(new Paragraph({ spacing: { before: 200, after: 0 }, children: [] }));
   }
 
   // DS items — only fields the user has checked visible in the UI
@@ -648,7 +649,7 @@ async function generateExport(req: Request): Promise<NextResponse> {
     children.push(
       new Paragraph({
         heading: HeadingLevel.HEADING_2,
-        spacing: { before: idx === 0 ? 0 : 400, after: 80 },
+        spacing: { before: idx === 0 ? 0 : 220, after: 60 },
         children: [
           new TextRun({ text: it["N°DS"], bold: true, size: 26, color: COLORS.headerBg, font: "Arial" }),
           ...(topParts.length
@@ -670,7 +671,7 @@ async function generateExport(req: Request): Promise<NextResponse> {
     if (it.lines?.length && visibleLineFields.length > 0) {
       children.push(
         new Paragraph({
-          spacing: { before: 140, after: 60 },
+          spacing: { before: 80, after: 40 },
           children: [
             new TextRun({
               text: `Lignes (${it.lines.length})`,
@@ -695,7 +696,7 @@ async function generateExport(req: Request): Promise<NextResponse> {
         properties: {
           page: {
             size: { width: 11906, height: 16838 },
-            margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+            margin: { top: 720, right: 720, bottom: 720, left: 720 },
           },
         },
         headers: {
