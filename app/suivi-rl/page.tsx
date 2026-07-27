@@ -14,7 +14,8 @@ import {
 } from "@/lib/types";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
-import { Card } from "@/components/ui/card";
+import { RecordCard } from "@/components/fleet/RecordCard";
+import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Combobox } from "@/components/ui/combobox";
@@ -76,13 +77,14 @@ function BddCard({ row }: { row: BddRow }) {
 
   const flagStyle = FLAG_STYLE[row.flag] ?? null;
   const dot = prestataireDotClass(row.prestataire);
-  const populatedReadonly = READONLY_HEADERS.filter((h) => String(row[h] ?? "").trim());
 
   return (
-    <Card className={flagStyle ? `border-l-4 ${flagStyle.border}` : ""}>
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className={`font-mono text-sm font-semibold ${ZONE_COLORS.bdd.accentText}`}>{row.IMM}</span>
+    <RecordCard
+      imm={row.IMM}
+      subtitle={[row.client, row.modele].filter(Boolean).join(" · ")}
+      className={flagStyle ? `border-l-4 ${flagStyle.border}` : ""}
+      headerLeft={
+        <>
           {row.date && <span className="font-mono text-xs text-muted-foreground">{row.date}</span>}
           <InlineEditSelect
             value={row.flag}
@@ -112,7 +114,9 @@ function BddCard({ row }: { row: BddRow }) {
             )}
           />
           <ZoneBadges {...zone} />
-        </div>
+        </>
+      }
+      headerRight={
         <InlineEditSelect
           value={row.ETAT}
           options={ETAT_OPTIONS}
@@ -133,12 +137,8 @@ function BddCard({ row }: { row: BddRow }) {
             </button>
           )}
         />
-      </div>
-
-      {(row.client || row.modele) && (
-        <div className="mb-2 truncate text-xs text-muted-foreground">{[row.client, row.modele].filter(Boolean).join(" · ")}</div>
-      )}
-
+      }
+    >
       <div className="flex flex-col gap-2">
         <InlineEditSelect
           value={row["Catégorie"]}
@@ -175,17 +175,8 @@ function BddCard({ row }: { row: BddRow }) {
         />
       </div>
 
-      {populatedReadonly.length > 0 && (
-        <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
-          {populatedReadonly.map((h) => (
-            <div key={h} className="whitespace-pre-line text-micro leading-snug text-muted-foreground">
-              <span className="mr-1 text-micro font-bold uppercase text-muted-foreground">{h}:</span>
-              {String(row[h])}
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
+      <ReadonlyFieldList fields={READONLY_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))} />
+    </RecordCard>
   );
 }
 
