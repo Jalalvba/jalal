@@ -399,7 +399,7 @@ export const RDV_EDITABLE_FIELDS = [
 export type RdvEditableField = (typeof RDV_EDITABLE_FIELDS)[number];
 
 export type RdvAddInput = {
-  date: string; // dd/mm/yyyy, written USER_ENTERED so Sheets parses it as a real date
+  date: string; // yyyy-mm-dd (isoDateToSerial's expected shape); written RAW as a precomputed serial, not USER_ENTERED
   heure: string;
   clients: string;
   vehicule: string;
@@ -409,7 +409,48 @@ export type RdvAddInput = {
   convoyeur: string;
 };
 
-export type RdvAddResponse = { ok: true; rowIndex: number } | { ok: false; error: string };
+// The 17-name CONVOYEUR dropdown list, confirmed byte-for-byte against the
+// live ONE_OF_LIST data validation rule on the monthly appointment-calendar
+// tabs (source: CONFIG.CONVOYEURS in the generating Apps Script).
+export const RDV_CONVOYEURS = [
+  "KHACHI Taha",
+  "DRIOUICH Mohamad",
+  "RAJI Ahmed",
+  "DANAMI Hamza",
+  "ZIAD Youssef",
+  "MAOUID Ayoub",
+  "AITMASAUD Khalid",
+  "AOUCHAR Jalal",
+  "ELBAZ Aziz",
+  "HANANI Mehdi",
+  "ZAMRANI Lahbib",
+  "NADIF Adil",
+  "ZARHLOUL Ilias",
+  "ABAANI Oussama",
+  "ELMAJDI Amine",
+  "JIRARI Mohamed",
+  "HAJBI Hakim",
+] as const;
+
+// Matches the monthly tabs' own CUSTOM_FORMULA data validation exactly:
+// either 6 digits + 2 letters (980867WW) or 4-5 digits + 1 letter + 1 digit
+// (79421-B-7).
+export const RDV_MATRICULE_REGEX = /^([0-9]{6}[A-Za-z]{2}|[0-9]{4,5}-[A-Za-z]-[0-9])$/;
+
+// Outcome of writing into the monthly appointment-calendar tab (the durable
+// source — see lib/googleSheetsRdvMonthly.ts). `written: false` carries a
+// human-readable reason (out-of-range date, tab not generated yet, etc.).
+export type MonthlyWriteResult = { written: true; tab: string; row: number } | { written: false; error: string };
+
+export type RdvAddResponse =
+  | {
+      ok: true;
+      rowIndex?: number; // flat "RDV" tab row index — present only when flatTab.written is true
+      monthlyTab: MonthlyWriteResult;
+      flatTab: { written: boolean };
+      warning?: string; // set when the monthly tab wrote OK but the flat-tab mirror didn't
+    }
+  | { ok: false; error: string };
 
 export type RdvUpdateResult = { ok: true } | { ok: false; error: string };
 

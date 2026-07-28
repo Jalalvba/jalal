@@ -9,6 +9,7 @@ import {
   withCache,
   invalidateCache,
 } from "@/lib/googleSheetsClient";
+import { addAppointmentToMonthlyTab } from "@/lib/googleSheetsRdvMonthly";
 
 const ROWS_CACHE_KEY = "rows:RDV";
 const HEADERS_CACHE_KEY = "headers:RDV";
@@ -154,12 +155,69 @@ async function fetchRdvRows(): Promise<RdvRow[]> {
 // ─── addRdvRow ─────────────────────────────────────────────────────────────
 
 /**
- * Appends one brand-new appointment row. Reuses the first row with a blank
- * Date column (e.g. one freed by deleteRdvRow()) before growing the sheet —
- * same empty-row-reuse convention as Atelier/Parking's addPlates(), just
- * without any plate-dedup logic since repeats are expected here.
+ * Two-step write, in this order:
+ *  1. The monthly appointment-calendar tab (a SEPARATE spreadsheet,
+ *     GOOGLE_RDV_SHEETS_ID) — the durable source. An external Apps Script
+ *     periodically rebuilds this flat "RDV" tab FROM those monthly tabs, so
+ *     anything written only here would be silently destroyed on the next
+ *     sync (see lib/googleSheetsRdvMonthly.ts's file header for the full
+ *     risk writeup).
+ *  2. This flat "RDV" tab — a best-effort fast-read mirror for
+ *     getRdvRows()/useVehicleZone. If step 1 fails, nothing is written
+ *     anywhere and a clean error is returned. If step 1 succeeds but step 2
+ *     fails (after one retry), the durable write is NOT rolled back — the
+ *     appointment is safely saved in the calendar, just not yet reflected
+ *     in the app's own fast-read cache — and a partial-success response
+ *     with a warning is returned instead of a hard failure.
  */
+/**
+ * writeToFlatTab() can reject (a thrown Google API error), not just resolve
+ * with `{ error }` — this normalizes both into the same shape so a Sheets
+ * API failure doesn't crash past the partial-success handling below and
+ * surface as a raw 500 instead.
+ */
+async function tryWriteToFlatTab(input: RdvAddInput): Promise<{ rowIndex: number } | { error: string }> {
+  try {
+    return await writeToFlatTab(input);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function addRdvRow(input: RdvAddInput): Promise<RdvAddResponse> {
+  const monthlyTab = await addAppointmentToMonthlyTab(input);
+  if (!monthlyTab.written) {
+    return { ok: false, error: monthlyTab.error };
+  }
+
+  let flatTabResult = await tryWriteToFlatTab(input);
+  if ("error" in flatTabResult) {
+    console.error(`[RDV] Flat-tab mirror write failed after monthly-tab write succeeded, retrying once: ${flatTabResult.error}`);
+    flatTabResult = await tryWriteToFlatTab(input);
+  }
+
+  if ("error" in flatTabResult) {
+    console.error(`[RDV] Flat-tab mirror write failed twice, giving up: ${flatTabResult.error}`);
+    return {
+      ok: true,
+      monthlyTab,
+      flatTab: { written: false },
+      warning:
+        "Rendez-vous enregistré dans le calendrier mensuel, mais la mise à jour du miroir rapide a échoué — il sera synchronisé au prochain \"Synchroniser\" du classeur, ou rechargez la page dans quelques instants.",
+    };
+  }
+
+  return { ok: true, rowIndex: flatTabResult.rowIndex, monthlyTab, flatTab: { written: true } };
+}
+
+/**
+ * Appends one brand-new appointment row to the flat "RDV" tab. Reuses the
+ * first row with a blank Date column (e.g. one freed by deleteRdvRow())
+ * before growing the sheet — same empty-row-reuse convention as
+ * Atelier/Parking's addPlates(), just without any plate-dedup logic since
+ * repeats are expected here.
+ */
+async function writeToFlatTab(input: RdvAddInput): Promise<{ rowIndex: number } | { error: string }> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
@@ -197,7 +255,7 @@ export async function addRdvRow(input: RdvAddInput): Promise<RdvAddResponse> {
 
   const dateSerial = isoDateToSerial(input.date);
   if (dateSerial == null) {
-    return { ok: false, error: `Date invalide: "${input.date}" (attendu yyyy-mm-dd).` };
+    return { error: `Date invalide: "${input.date}" (attendu yyyy-mm-dd).` };
   }
 
   const values: Record<string, string | number> = {
@@ -233,7 +291,7 @@ export async function addRdvRow(input: RdvAddInput): Promise<RdvAddResponse> {
   });
   invalidateCache(ROWS_CACHE_KEY);
 
-  return { ok: true, rowIndex: targetRow };
+  return { rowIndex: targetRow };
 }
 
 // ─── updateRdvField ────────────────────────────────────────────────────────

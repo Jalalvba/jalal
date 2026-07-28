@@ -54,6 +54,7 @@ notes):
 | `IRON_SESSION_SECRET` | Encrypts the session cookie, ≥32 chars |
 | `GOOGLE_SERVICE_ACCOUNT_KEY_B64` | Base64-encoded service account JSON, grants Sheets/Drive access |
 | `GOOGLE_SHEETS_ID` | The spreadsheet ID every `lib/googleSheets*.ts` module reads/writes |
+| `GOOGLE_RDV_SHEETS_ID` | A **separate** spreadsheet ("Calendrier des rendez-vous quotidiens") holding the monthly appointment-calendar tabs — not the same file as `GOOGLE_SHEETS_ID`. See §5's RDV entry. Local dev only for now, not yet set in Vercel. |
 | `GOOGLE_DRIVE_FOLDER_ID` | Only needed for the optional `scripts/test-service-account.ts` diagnostic |
 | `VERCEL_OIDC_TOKEN` | Populated automatically by `vercel env pull`/`vercel dev` — not set by hand |
 
