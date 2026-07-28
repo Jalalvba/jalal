@@ -1,5 +1,5 @@
 import { type sheets_v4 } from "googleapis";
-import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult } from "@/lib/types";
+import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult } from "@/lib/types";
 import { RDV_EDITABLE_FIELDS } from "@/lib/types";
 import {
   getSheetsClient,
@@ -8,8 +8,10 @@ import {
   isoDateToSerial,
   withCache,
   invalidateCache,
+  columnIndexToLetter,
 } from "@/lib/googleSheetsClient";
-import { addAppointmentToMonthlyTab } from "@/lib/googleSheetsRdvMonthly";
+import { addAppointmentToMonthlyTab, updateAppointmentInMonthlyTab, clearAppointmentInMonthlyTab } from "@/lib/googleSheetsRdvMonthly";
+import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY } from "@/lib/rdvIdentity";
 
 const ROWS_CACHE_KEY = "rows:RDV";
 const HEADERS_CACHE_KEY = "headers:RDV";
@@ -27,17 +29,6 @@ if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 const RDV_TAB = "RDV";
 const DATA_START_ROW = 2;
 const HEADER_RANGE_WIDTH = "H"; // 8 real columns, confirmed live, no margin needed
-
-function columnIndexToLetter(oneBasedIndex: number): string {
-  let n = oneBasedIndex;
-  let letters = "";
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    letters = String.fromCharCode(65 + rem) + letters;
-    n = Math.floor((n - 1) / 26);
-  }
-  return letters;
-}
 
 /** Fetches the real row-1 header list, cached 5min — headers essentially never change. */
 async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
@@ -294,60 +285,173 @@ async function writeToFlatTab(input: RdvAddInput): Promise<{ rowIndex: number } 
   return { rowIndex: targetRow };
 }
 
+// ─── Identity-based edit/clear ─────────────────────────────────────────────
+//
+// Never trust a row number from an earlier read here either — even though
+// this flat tab's own writes never shift rows (clear leaves a hollow row,
+// never a real delete), keeping both tabs on the same "re-resolve fresh by
+// content match" discipline is the whole point: a client holding a stale
+// row number for one tab but not the other is exactly the bug this closes.
+
+/** Re-resolves the current row for `snapshot`, scanning the whole flat tab (no day-block scoping — this tab has no blocks). */
+async function findFlatRowByIdentity(snapshot: RdvAddInput, excludeField?: keyof RdvAddInput): Promise<number> {
+  const dateSerial = isoDateToSerial(snapshot.date);
+  if (dateSerial == null) throw new Error(`Date invalide: "${snapshot.date}" (attendu yyyy-mm-dd).`);
+
+  const sheets = getSheetsClient();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId!,
+    range: `'${RDV_TAB}'!A2:${HEADER_RANGE_WIDTH}`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+  const rows = res.data.values ?? [];
+
+  const candidateRows: unknown[][] = [];
+  const rowNumbers: number[] = [];
+  rows.forEach((row, i) => {
+    if (typeof row[0] === "number" && row[0] === dateSerial) {
+      candidateRows.push(row);
+      rowNumbers.push(DATA_START_ROW + i);
+    }
+  });
+
+  return resolveUniqueMatch(candidateRows, rowNumbers, snapshot, excludeField, RDV_TAB);
+}
+
 // ─── updateRdvField ────────────────────────────────────────────────────────
 
-export async function updateRdvField(rowIndex: number, field: RdvEditableField, value: string): Promise<RdvUpdateResult> {
+/**
+ * Two-step write, same order and same partial-failure handling as
+ * addRdvRow(): monthly tab (durable source) first — abort with a clean
+ * error if it can't be resolved (not found or ambiguous), never touching
+ * the flat tab, so the two tabs can't end up disagreeing about which
+ * appointment got edited — then the flat mirror, retried once, degrading
+ * to a warning rather than a hard failure if it still fails.
+ */
+export async function updateRdvField(oldSnapshot: RdvAddInput, field: RdvEditableField, value: string): Promise<RdvUpdateResult> {
   if (!RDV_EDITABLE_FIELDS.includes(field)) {
     return { ok: false, error: `Field not editable: ${field}. Editable fields are: ${RDV_EDITABLE_FIELDS.join(", ")}.` };
   }
 
-  const sheets = getSheetsClient();
-  const headers = await getHeaderRow(sheets);
-  const colMap = buildColMap(headers);
-  const fieldCol = colMap[field];
-  if (!fieldCol) {
-    return { ok: false, error: `Column '${field}' not found in the live '${RDV_TAB}' header row.` };
+  const monthlyTab = await updateAppointmentInMonthlyTab(oldSnapshot, field, value);
+  if (!monthlyTab.written) {
+    return { ok: false, error: monthlyTab.error };
   }
 
-  let writeValue: string | number = value.trim();
-  if (field === "Date") {
-    const serial = isoDateToSerial(value);
-    if (serial == null) return { ok: false, error: `Date invalide: "${value}" (attendu yyyy-mm-dd).` };
-    writeValue = serial;
-  } else if (field === "Matricule") {
-    writeValue = writeValue.toUpperCase();
+  let flatResult = await tryUpdateFlatTab(oldSnapshot, field, value);
+  if ("error" in flatResult) {
+    console.error(`[RDV] Flat-tab mirror update failed after monthly-tab update succeeded, retrying once: ${flatResult.error}`);
+    flatResult = await tryUpdateFlatTab(oldSnapshot, field, value);
   }
 
-  // RAW — see addRdvRow()'s comment: no formulas here, and RAW avoids Sheets
-  // reinterpreting digit-only text (e.g. Contact) as a number.
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: spreadsheetId!,
-    range: `'${RDV_TAB}'!${columnIndexToLetter(fieldCol)}${rowIndex}`,
-    valueInputOption: "RAW",
-    requestBody: { values: [[writeValue]] },
-  });
-  invalidateCache(ROWS_CACHE_KEY);
+  if ("error" in flatResult) {
+    console.error(`[RDV] Flat-tab mirror update failed twice, giving up: ${flatResult.error}`);
+    return {
+      ok: true,
+      monthlyTab,
+      flatTab: { written: false },
+      warning:
+        "Rendez-vous modifié dans le calendrier mensuel, mais la mise à jour du miroir rapide a échoué — il sera synchronisé au prochain \"Synchroniser\" du classeur, ou rechargez la page dans quelques instants.",
+    };
+  }
 
-  return { ok: true };
+  return { ok: true, monthlyTab, flatTab: { written: true } };
 }
 
-// ─── deleteRdvRow ──────────────────────────────────────────────────────────
+async function tryUpdateFlatTab(oldSnapshot: RdvAddInput, field: RdvEditableField, value: string): Promise<{ ok: true } | { error: string }> {
+  try {
+    const row = await findFlatRowByIdentity(oldSnapshot, EDITABLE_TO_INPUT_KEY[field]);
 
-/** Clears all 8 cells for the row, freeing it up for addRdvRow() reuse. */
-export async function deleteRdvRow(rowIndex: number): Promise<void> {
-  const sheets = getSheetsClient();
-  const headers = await getHeaderRow(sheets);
-  const colMap = buildColMap(headers);
+    const sheets = getSheetsClient();
+    const headers = await getHeaderRow(sheets);
+    const colMap = buildColMap(headers);
+    const fieldCol = colMap[field];
+    if (!fieldCol) return { error: `Column '${field}' not found in the live '${RDV_TAB}' header row.` };
 
-  const ranges = RDV_EDITABLE_FIELDS.map((field) => colMap[field])
-    .filter((col): col is number => Boolean(col))
-    .map((col) => `'${RDV_TAB}'!${columnIndexToLetter(col)}${rowIndex}`);
+    let writeValue: string | number = value.trim();
+    if (field === "Date") {
+      const serial = isoDateToSerial(value);
+      if (serial == null) return { error: `Date invalide: "${value}" (attendu yyyy-mm-dd).` };
+      writeValue = serial;
+    } else if (field === "Matricule") {
+      writeValue = writeValue.toUpperCase();
+    }
 
-  if (ranges.length === 0) return;
+    // RAW — see addRdvRow()'s comment: no formulas here, and RAW avoids Sheets
+    // reinterpreting digit-only text (e.g. Contact) as a number.
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: spreadsheetId!,
+      range: `'${RDV_TAB}'!${columnIndexToLetter(fieldCol)}${row}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[writeValue]] },
+    });
+    invalidateCache(ROWS_CACHE_KEY);
 
-  await sheets.spreadsheets.values.batchClear({
-    spreadsheetId: spreadsheetId!,
-    requestBody: { ranges },
-  });
-  invalidateCache(ROWS_CACHE_KEY);
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// ─── clearRdvRow ───────────────────────────────────────────────────────────
+
+/**
+ * Same two-step, monthly-first orchestration as updateRdvField()/addRdvRow().
+ * "Clear" (not delete) on purpose in both tabs — this flat tab's clear
+ * already wiped all 8 columns including Date/Heure (its own reuse scan in
+ * writeToFlatTab() looks for a blank Date), unchanged here; the monthly
+ * tab's clear (lib/googleSheetsRdvMonthly.ts) only wipes C:H, matching
+ * *that* tab's own empty-slot convention (Date/Heure always pre-filled).
+ * Two intentionally different clear behaviors, one per tab.
+ */
+export async function clearRdvRow(snapshot: RdvAddInput): Promise<RdvClearResult> {
+  const monthlyTab = await clearAppointmentInMonthlyTab(snapshot);
+  if (!monthlyTab.written) {
+    return { ok: false, error: monthlyTab.error };
+  }
+
+  let flatResult = await tryClearFlatTab(snapshot);
+  if ("error" in flatResult) {
+    console.error(`[RDV] Flat-tab mirror clear failed after monthly-tab clear succeeded, retrying once: ${flatResult.error}`);
+    flatResult = await tryClearFlatTab(snapshot);
+  }
+
+  if ("error" in flatResult) {
+    console.error(`[RDV] Flat-tab mirror clear failed twice, giving up: ${flatResult.error}`);
+    return {
+      ok: true,
+      monthlyTab,
+      flatTab: { written: false },
+      warning:
+        "Rendez-vous effacé du calendrier mensuel, mais la mise à jour du miroir rapide a échoué — il sera synchronisé au prochain \"Synchroniser\" du classeur, ou rechargez la page dans quelques instants.",
+    };
+  }
+
+  return { ok: true, monthlyTab, flatTab: { written: true } };
+}
+
+async function tryClearFlatTab(snapshot: RdvAddInput): Promise<{ ok: true } | { error: string }> {
+  try {
+    const row = await findFlatRowByIdentity(snapshot);
+
+    const sheets = getSheetsClient();
+    const headers = await getHeaderRow(sheets);
+    const colMap = buildColMap(headers);
+
+    const ranges = RDV_EDITABLE_FIELDS.map((field) => colMap[field])
+      .filter((col): col is number => Boolean(col))
+      .map((col) => `'${RDV_TAB}'!${columnIndexToLetter(col)}${row}`);
+
+    if (ranges.length > 0) {
+      await sheets.spreadsheets.values.batchClear({
+        spreadsheetId: spreadsheetId!,
+        requestBody: { ranges },
+      });
+    }
+    invalidateCache(ROWS_CACHE_KEY);
+
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
 }

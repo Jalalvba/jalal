@@ -1,11 +1,28 @@
 import { NextResponse } from "next/server";
 import { updateRdvField } from "@/lib/googleSheetsRdv";
-import { RDV_EDITABLE_FIELDS, type RdvEditableField } from "@/lib/types";
+import { RDV_EDITABLE_FIELDS, type RdvEditableField, type RdvAddInput } from "@/lib/types";
 import { rateLimitOrNull } from "@/lib/rateLimit";
 import { toErrorResponse } from "@/lib/apiError";
 
+const REQUIRED_IDENTITY_FIELDS: (keyof RdvAddInput)[] = [
+  "date",
+  "heure",
+  "clients",
+  "vehicule",
+  "matricule",
+  "intervention",
+  "contact",
+  "convoyeur",
+];
+
 function isEditableField(v: unknown): v is RdvEditableField {
   return typeof v === "string" && (RDV_EDITABLE_FIELDS as readonly string[]).includes(v);
+}
+
+function isValidIdentity(v: unknown): v is RdvAddInput {
+  if (!v || typeof v !== "object") return false;
+  const rec = v as Record<string, unknown>;
+  return REQUIRED_IDENTITY_FIELDS.every((f) => typeof rec[f] === "string");
 }
 
 export async function POST(req: Request) {
@@ -23,11 +40,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Invalid request body" }, { status: 400 });
   }
 
-  const { rowIndex, field, value } = body as { rowIndex?: unknown; field?: unknown; value?: unknown };
+  const { identity, field, value } = body as { identity?: unknown; field?: unknown; value?: unknown };
 
-  if (typeof rowIndex !== "number" || !Number.isInteger(rowIndex) || rowIndex < 2) {
+  if (!isValidIdentity(identity)) {
     return NextResponse.json(
-      { ok: false, error: "Missing or invalid 'rowIndex' (must be an integer >= 2 — row 1 is the header row)" },
+      { ok: false, error: `Missing or invalid 'identity' (must include: ${REQUIRED_IDENTITY_FIELDS.join(", ")})` },
       { status: 400 }
     );
   }
@@ -42,7 +59,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await updateRdvField(rowIndex, field, value);
+    const result = await updateRdvField(identity, field, value);
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (e) {
     return toErrorResponse(e, "Failed to update field");

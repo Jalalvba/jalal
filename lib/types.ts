@@ -452,7 +452,16 @@ export type RdvAddResponse =
     }
   | { ok: false; error: string };
 
-export type RdvUpdateResult = { ok: true } | { ok: false; error: string };
+// Same two-write shape as RdvAddResponse (monthly tab first — durable
+// source, abort with a clean error if it can't be resolved — then the flat
+// mirror, retried once, degrading to a warning rather than a hard failure).
+export type RdvUpdateResult =
+  | { ok: true; monthlyTab: MonthlyWriteResult; flatTab: { written: boolean }; warning?: string }
+  | { ok: false; error: string };
+
+export type RdvClearResult =
+  | { ok: true; monthlyTab: MonthlyWriteResult; flatTab: { written: boolean }; warning?: string }
+  | { ok: false; error: string };
 
 // ─── DEPOT sheet (Google Sheets, tab "DEPOT", gid=1365327220) ─────────────────
 //

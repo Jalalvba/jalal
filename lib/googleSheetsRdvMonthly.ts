@@ -1,7 +1,8 @@
 import { type sheets_v4 } from "googleapis";
-import type { RdvAddInput, MonthlyWriteResult } from "@/lib/types";
+import type { RdvAddInput, MonthlyWriteResult, RdvEditableField } from "@/lib/types";
 import { RDV_EDITABLE_FIELDS, RDV_CONVOYEURS } from "@/lib/types";
-import { getSheetsClient, isoDateToSerial } from "@/lib/googleSheetsClient";
+import { getSheetsClient, isoDateToSerial, columnIndexToLetter } from "@/lib/googleSheetsClient";
+import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY } from "@/lib/rdvIdentity";
 
 // Writes appointments into the monthly appointment-calendar tabs (e.g.
 // "Juillet 2026") — the DURABLE source of truth, generated and periodically
@@ -301,4 +302,119 @@ export async function addAppointmentToMonthlyTab(input: RdvAddInput): Promise<Mo
 
   const newRow = await insertFallbackRow(sheets, tabName, tabInfo.sheetId, block, input, dateSerial);
   return { written: true, tab: tabName, row: newRow };
+}
+
+// ─── Identity-based edit/clear ─────────────────────────────────────────────
+//
+// Never trust a row number captured from an earlier read — the fallback
+// path above can insertDimension and shift every row below it in this tab
+// at any time. Every edit/clear re-reads the block fresh and re-resolves
+// its target row by content match (lib/rdvIdentity.ts), failing loudly on
+// zero or multiple matches rather than guessing.
+
+/** Re-resolves the current row for `snapshot` within its day's block, scoped to this tab only. */
+async function findRowByIdentity(
+  sheets: sheets_v4.Sheets,
+  tabName: string,
+  snapshot: RdvAddInput,
+  excludeField?: keyof RdvAddInput
+): Promise<number> {
+  const dateSerial = isoDateToSerial(snapshot.date);
+  if (dateSerial == null) throw new Error(`Date invalide: "${snapshot.date}" (attendu yyyy-mm-dd).`);
+
+  const tabInfo = await getTabInfo(sheets, tabName);
+  if (!tabInfo) throw new Error(`L'onglet "${tabName}" n'existe pas.`);
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId!,
+    range: `'${tabName}'!A1:H${tabInfo.rowCount}`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+  const values = res.data.values ?? [];
+
+  const block = findDayBlock(values, dateSerial);
+  if (!block) {
+    throw new Error(`Aucun bloc trouvé pour le ${snapshot.date} dans l'onglet "${tabName}".`);
+  }
+
+  const candidateRows: unknown[][] = [];
+  const rowNumbers: number[] = [];
+  for (let r = block.dataStart; r <= block.dataEnd; r++) {
+    candidateRows.push(values[r - 1] ?? []);
+    rowNumbers.push(r);
+  }
+
+  return resolveUniqueMatch(candidateRows, rowNumbers, snapshot, excludeField, tabName);
+}
+
+/**
+ * Editing Date in place would be a MOVE (a different day-block, possibly a
+ * different row count crossing a weekday/Saturday boundary, possibly a
+ * different monthly tab entirely) — materially more than a same-row field
+ * write. Deliberately out of scope: reject rather than silently doing the
+ * wrong thing. Date stays in RDV_EDITABLE_FIELDS (lib/types.ts) because
+ * that array also drives the flat tab's full-8-column clear — removing it
+ * there would change already-working clear behavior.
+ */
+export async function updateAppointmentInMonthlyTab(
+  oldSnapshot: RdvAddInput,
+  field: RdvEditableField,
+  value: string
+): Promise<MonthlyWriteResult> {
+  if (field === "Date") {
+    return {
+      written: false,
+      error:
+        "La modification de la date n'est pas prise en charge (cela déplacerait le rendez-vous vers un autre bloc, voire un autre onglet) — supprimez et recréez le rendez-vous à la nouvelle date.",
+    };
+  }
+
+  const resolved = resolveTargetTab(oldSnapshot.date);
+  if ("error" in resolved) return { written: false, error: resolved.error };
+  const { tabName } = resolved;
+
+  const sheets = getSheetsClient();
+
+  let row: number;
+  try {
+    row = await findRowByIdentity(sheets, tabName, oldSnapshot, EDITABLE_TO_INPUT_KEY[field]);
+  } catch (e) {
+    return { written: false, error: e instanceof Error ? e.message : String(e) };
+  }
+
+  let writeValue: string | number = value.trim();
+  if (field === "Matricule") writeValue = writeValue.toUpperCase();
+
+  const col = columnIndexToLetter(RDV_EDITABLE_FIELDS.indexOf(field) + 1);
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: spreadsheetId!,
+    range: `'${tabName}'!${col}${row}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[writeValue]] },
+  });
+
+  return { written: true, tab: tabName, row };
+}
+
+/** Clears C:H only, leaving Date/Heure pre-filled — matches this tab's own empty-slot convention, and keeps the row reusable by findEmptyRow() above without a second structural (deleteDimension) operation. */
+export async function clearAppointmentInMonthlyTab(snapshot: RdvAddInput): Promise<MonthlyWriteResult> {
+  const resolved = resolveTargetTab(snapshot.date);
+  if ("error" in resolved) return { written: false, error: resolved.error };
+  const { tabName } = resolved;
+
+  const sheets = getSheetsClient();
+
+  let row: number;
+  try {
+    row = await findRowByIdentity(sheets, tabName, snapshot);
+  } catch (e) {
+    return { written: false, error: e instanceof Error ? e.message : String(e) };
+  }
+
+  await sheets.spreadsheets.values.batchClear({
+    spreadsheetId: spreadsheetId!,
+    requestBody: { ranges: [`'${tabName}'!C${row}:H${row}`] },
+  });
+
+  return { written: true, tab: tabName, row };
 }

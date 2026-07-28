@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse } from "@/lib/types";
+import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult } from "@/lib/types";
 
 // Same pattern as hooks/useAtelierRows.ts. No clear-all mutation — RDV is an
 // append-only appointment log, so unlike Atelier/Parking there's no bulk-wipe
@@ -40,36 +40,59 @@ export function useAddRdvRow() {
   });
 }
 
+/**
+ * `identity` is the appointment's full current-field snapshot (everything
+ * the frontend last read it as, except `field` itself) — the backend
+ * re-resolves the live row from this by content match, in both tabs
+ * independently, rather than trusting any row number. See
+ * lib/googleSheetsRdv.ts's updateRdvField() for the full reasoning.
+ */
 export function useUpdateRdvField() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
-      rowIndex,
+      identity,
       field,
       value,
     }: {
-      rowIndex: number;
+      identity: RdvAddInput;
       field: RdvEditableField;
       value: string;
     }) =>
-      fetchJson<{ ok: true }>("/api/rdv/update", {
+      fetchJson<RdvUpdateResult & { ok: true }>("/api/rdv/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rowIndex, field, value }),
+        body: JSON.stringify({ identity, field, value }),
       }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
 
-export function useDeleteRdvRow() {
+/** Clears (not deletes) the appointment matching `identity`, re-resolved fresh in both tabs — same reasoning as useUpdateRdvField(). */
+export function useClearRdvRow() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (rowIndex: number) =>
-      fetchJson<{ ok: true }>("/api/rdv/delete", {
+    mutationFn: (identity: RdvAddInput) =>
+      fetchJson<RdvClearResult & { ok: true }>("/api/rdv/clear", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rowIndex }),
+        body: JSON.stringify(identity),
       }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
+}
+
+/** Converts a fetched RdvRow (display-formatted) back into the RdvAddInput shape the identity-based update/clear endpoints expect. */
+export function rdvRowToIdentity(row: RdvRow): RdvAddInput {
+  const [d, m, y] = row.date.split("/");
+  return {
+    date: `${y}-${m}-${d}`,
+    heure: row.heure,
+    clients: row.clients,
+    vehicule: row.vehicule,
+    matricule: row.matricule,
+    intervention: row.intervention,
+    contact: row.contact,
+    convoyeur: row.convoyeur,
+  };
 }

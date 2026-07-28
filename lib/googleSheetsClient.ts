@@ -228,6 +228,22 @@ export function isoDateToSerial(iso: string): number | null {
   return dateToSerial(new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d))));
 }
 
+/**
+ * 1-based column index to spreadsheet column letter(s), e.g. 1 → "A",
+ * 27 → "AA". Moved here from lib/googleSheetsRdv.ts once
+ * lib/googleSheetsRdvMonthly.ts needed the same conversion.
+ */
+export function columnIndexToLetter(oneBasedIndex: number): string {
+  let n = oneBasedIndex;
+  let letters = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letters = String.fromCharCode(65 + rem) + letters;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letters;
+}
+
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
