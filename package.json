@@ -20,6 +20,7 @@
     "cmdk": "^1.1.1",
     "docx": "^9.6.0",
     "googleapis": "^173.0.0",
+    "html-to-image": "^1.11.13",
     "iron-session": "^8.0.4",
     "lucide-react": "^1.25.0",
     "mongodb": "^7.1.0",
