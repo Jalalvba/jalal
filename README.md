@@ -19,8 +19,13 @@ the dev server — the app won't start without them.
 
 ## Everything else
 
-See [`CLAUDE.md`](./CLAUDE.md) for the stack, environment variables,
-theming system, authentication/security architecture, and a feature-by-feature
-reference. See [`PROJECT_HISTORY.md`](./PROJECT_HISTORY.md) for the full
-development history and [`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md)
-for the full, code-verified security assessment.
+This repo documents itself for two AI assistants side by side: see
+[`CLAUDE.md`](./CLAUDE.md) for the Claude Code entry point — stack,
+environment variables, theming system, authentication/security
+architecture, and a feature-by-feature reference — and
+[`GEMINI.md`](./GEMINI.md) for the equivalent entry point used by Gemini
+CLI / Antigravity sessions. Both defer to [`AGENTS.md`](./AGENTS.md) for
+the small set of rules that apply no matter which assistant is driving.
+See [`PROJECT_HISTORY.md`](./PROJECT_HISTORY.md) for the full development
+history and [`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md) for
+the full, code-verified security assessment.

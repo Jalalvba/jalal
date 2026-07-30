@@ -2,27 +2,26 @@
 
 @AGENTS.md
 
-Canonical reference for Claude Code sessions in this project — the rules
-imported above apply regardless of which AI assistant is driving; this
-file adds Claude-Code-specific project detail on top. Gemini CLI /
-Antigravity sessions use the equivalent [`GEMINI.md`](./GEMINI.md); if the
-two ever disagree on a fact, that's a doc bug, fix both. Full detail lives
-in the linked documents in §7, not duplicated here.
+Canonical reference for Claude Code sessions — the rules imported above
+apply regardless of which AI assistant is driving; this file adds
+Claude-Code-specific detail on top. Gemini CLI / Antigravity sessions use
+[`GEMINI.md`](./GEMINI.md); if the two disagree, that's a doc bug, fix
+both. Full detail lives in the linked documents in §8, not duplicated here.
 
 ## 1. Project overview
 
 AVIS Maroc fleet management — tracks vehicles across parking, workshop
 (Atelier), storage (Depot), and appointments/convoyage (RDV), backed by a
-live Google Sheet as the system of record for editable operational data,
-with MongoDB holding large read-mostly reference collections (`ds`, `bc`,
-`parc`, `cp`) used for search/lookup and export.
+live Google Sheet as the system of record, with MongoDB holding large
+read-mostly reference collections (`ds`, `bc`, `parc`, `cp`) for
+search/lookup and export.
 
 **Stack:** Next.js App Router (Next 16, React 19) · MongoDB (native
 driver) · Google Sheets API via a service-account JWT client
 (`lib/googleSheetsClient.ts` + per-tab `googleSheets*.ts` modules) ·
-iron-session · TanStack Query · Tailwind CSS v4 + hand-written
-shadcn-pattern primitives on Radix UI. **Deployed on Vercel** —
-`NODE_ENV` gates cookie `secure` and CSP `unsafe-eval` between dev/prod.
+iron-session · TanStack Query · Tailwind v4 + shadcn-pattern primitives on
+Radix UI. **Deployed on Vercel** — `NODE_ENV` gates cookie `secure`/CSP
+`unsafe-eval` between dev/prod.
 
 ## 2. Getting started
 
@@ -34,8 +33,7 @@ pnpm start    # run a production build
 pnpm lint     # eslint
 ```
 
-Copy `.env.example` to `.env.local` and fill in real values (see
-`.env.example` for the up-to-date list):
+Copy `.env.example` to `.env.local` and fill in real values:
 
 | Variable | Purpose |
 |---|---|
@@ -45,14 +43,13 @@ Copy `.env.example` to `.env.local` and fill in real values (see
 | `IRON_SESSION_SECRET` | Encrypts the session cookie, ≥32 chars |
 | `GOOGLE_SERVICE_ACCOUNT_KEY_B64` | Base64-encoded service account JSON, grants Sheets/Drive access |
 | `GOOGLE_SHEETS_ID` | The spreadsheet ID every `lib/googleSheets*.ts` module reads/writes |
-| `GOOGLE_RDV_SHEETS_ID` | **Separate** spreadsheet holding the monthly appointment-calendar tabs — see §5's RDV entry. **Production scope only** on Vercel; a Preview deployment touching RDV code needs its own value added via `vercel env add` |
+| `GOOGLE_RDV_SHEETS_ID` | **Separate** spreadsheet holding the monthly appointment-calendar tabs — see §6's RDV entry. **Production scope only** on Vercel; a Preview deployment touching RDV code needs its own value added via `vercel env add` |
 | `GOOGLE_DRIVE_FOLDER_ID` | Only needed for the optional `scripts/test-service-account.ts` diagnostic |
 | `VERCEL_OIDC_TOKEN` | Auto-populated by `vercel env pull`/`vercel dev` — not set by hand |
 
-`MONGODB_URI`, `IRON_SESSION_SECRET`, and the `GOOGLE_OAUTH_*` pair
-currently only exist in Production scope on Vercel — pull with `vercel
-env pull .env.local --environment=production`, or add dev/preview-scoped
-values via `vercel env add`.
+`MONGODB_URI`, `IRON_SESSION_SECRET`, and `GOOGLE_OAUTH_*` currently only
+exist in Production scope on Vercel — pull with `vercel env pull
+.env.local --environment=production`, or add dev/preview values via `vercel env add`.
 
 ## 3. Theming system
 
@@ -60,15 +57,15 @@ Single app-wide light/dark system — no per-page theme logic. Use the
 tokens below, never a literal `zinc-*`/`bg-black`/`bg-white` class.
 
 - **Mechanism**: [`next-themes`](https://github.com/pacocoursey/next-themes)
-  toggles a `.dark` class on `<html>`; default is **light 7am–7pm, dark
-  otherwise** (local time) via `lib/themeDefault.ts`'s
-  `getTimeBasedTheme()` (edit `LIGHT_START_HOUR`/`LIGHT_END_HOUR` there
-  to change the cutoff) until the user makes an explicit choice, which
-  sets `localStorage['theme-explicit']` so it sticks across visits. Full
-  wiring detail: PROJECT_HISTORY.md's "Theming" section.
+  toggles `.dark` on `<html>`; default is **light 7am–7pm, dark
+  otherwise** (local time, via `lib/themeDefault.ts`'s
+  `getTimeBasedTheme()` — edit `LIGHT_START_HOUR`/`LIGHT_END_HOUR` there
+  to change the cutoff) until an explicit choice sets
+  `localStorage['theme-explicit']`, which then sticks. Full wiring:
+  PROJECT_HISTORY.md's "Theming" section.
 - **Toggle**: `components/fleet/ThemeToggle.tsx` is the *only* toggle —
-  `variant="pill"` (Home/DS History/Articles/Login) or `variant="icon"`
-  (wired into `ListPageHeader`). Don't build another one.
+  `variant="pill"` or `"icon"` (wired into `ListPageHeader`). Don't build
+  another one.
 
 | Token | Utility classes | Light → Dark | Use for |
 |---|---|---|---|
@@ -79,60 +76,79 @@ tokens below, never a literal `zinc-*`/`bg-black`/`bg-white` class.
 | `input` | `bg-input` | white→zinc-900 | Inputs, textareas |
 | `popover` / `popover-foreground` | `bg-popover` / `text-popover-foreground` | white→zinc-950 / zinc-900→zinc-100 | Dropdowns, `Combobox`, `AlertDialog` |
 
-**Deliberate literal-color exceptions** (not bugs, don't tokenize): zone/
-brand accents (sky/amber/emerald/lime/violet/fuchsia — see
-[`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md) for the single-source-of-truth
-mapping), translucent washes (`FLAG_STYLE`, ÉTAT badges, `ZoneBadges`),
-modal-overlay scrims (`bg-black/70` in dialogs/select-sheets), and
-`focus:border-zinc-500` on inputs.
+**Deliberate literal-color exceptions** (not bugs): zone/brand accents
+(sky/amber/emerald/lime/violet/fuchsia — see
+[`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md) for the mapping), translucent
+washes (`FLAG_STYLE`, ÉTAT badges, `ZoneBadges`), modal scrims
+(`bg-black/70`), and `focus:border-zinc-500` on inputs.
 
 **Font**: Inter (body/headings) + JetBrains Mono (`font-mono`,
 identifiers only), via a Google Fonts `@import` in `app/globals.css`. Do
-**not** reintroduce Playfair Display (dropped, 5 headings app-wide wasn't
-enough footprint) or `next/font/google`'s Geist (dropped, was a dead
-fetch — `globals.css`'s own rules always overrode it). Change fonts by
-editing the `--font-*` tokens/`@import` in `globals.css`, not
-`layout.tsx`.
+**not** reintroduce Playfair Display (dropped, too little footprint) or
+Geist (dropped, was a dead fetch). Change fonts via the `--font-*`
+tokens/`@import` in `globals.css`, not `layout.tsx`.
 
 ## 4. Authentication & security
 
 - **Auth**: single-user Google OAuth only (`app/api/auth/google/*`) — ID
-  token cryptographically verified, then checked against one hardcoded
-  constant, `lib/googleOAuth.ts`'s `AUTHORIZED_EMAIL`. No User model, no
-  allowlist, no registration.
-- **Every request is gated by `proxy.ts`** via an iron-session cookie
-  (`session.isLoggedIn`, sealed, 7-day expiry). Only `/login`,
-  `/api/auth/google*`, and static assets are excluded, via anchored
-  exact/prefix matching (not a loose `startsWith()`).
-- **CSRF**: the OAuth flow uses a standard cookie-bound `state` token.
-  The app's own mutation routes have no separate CSRF token — they rely
-  on the session cookie's `sameSite: lax`, an implicit but real
-  protection.
-- **Sheets writes**: `verifyRowIdentity()` mandatory before every
-  update/delete (see [`AGENTS.md`](./AGENTS.md) rule 3) — 409s on a
-  stale client-held `rowIndex` instead of overwriting the wrong row.
-- **Mongo regex**: `escapeRegex()` mandatory on any user-input `$regex`
-  (see [`AGENTS.md`](./AGENTS.md) rule 4).
-- **Rate limiting**: `lib/rateLimit.ts`, Mongo-backed atomic `$inc`. 17
-  Sheets mutation routes at 30 req/min; `/api/article`+`/api/export` at
-  20 req/5min.
-- **Secrets**: nothing committed anywhere in tracked files (verified via
-  full history search); `.gitignore` excludes all `.env*` but
-  `.env.example`.
+  token verified, then checked against one hardcoded constant,
+  `lib/googleOAuth.ts`'s `AUTHORIZED_EMAIL`. No User model/allowlist.
+- **Every request gated by `proxy.ts`** via an iron-session cookie
+  (`session.isLoggedIn`, sealed, 7-day expiry) — only `/login`,
+  `/api/auth/google*`, and static assets excluded (anchored matching).
+- **CSRF**: OAuth flow uses a cookie-bound `state` token; the app's own
+  mutation routes rely on `sameSite: lax` instead of a separate token.
+- **Sheets writes / Mongo regex**: `verifyRowIdentity()` and
+  `escapeRegex()` are mandatory (see [`AGENTS.md`](./AGENTS.md) rules 3–4).
+- **Rate limiting**: `lib/rateLimit.ts`, Mongo atomic `$inc` — 17 Sheets
+  mutation routes at 30 req/min; article/export at 20 req/5min.
+- **Secrets**: nothing committed anywhere (verified via full history
+  search); `.gitignore` excludes all `.env*` but `.env.example`.
 - **HTTP headers**: `X-Frame-Options`/`nosniff`/`Referrer-Policy`/HSTS +
   a per-request nonce'd CSP, confirmed live on every response path.
 
 **Known, deliberate limitations** (not gaps to "fix"): single hardcoded
-auth email, implicit (not per-route-token) CSRF, no fallback if Google
-OAuth is down, spoofable rate-limit IP headers outside Vercel, and
-Articles' search regex isn't prefix-indexable. Full file/line-cited
-detail, including checks run live against a server:
-[`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md).
+auth email, implicit CSRF, no OAuth fallback, spoofable rate-limit IP
+headers outside Vercel, and non-prefix-indexable Articles search regex.
+Full file/line-cited detail: [`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md).
 
-## 5. Feature / data model reference
+## 5. Multi-tool workflow: Gemini/Antigravity is read-only
+
+This project uses two AI tools with strictly separated roles. Kept in
+sync with [`AGENTS.md`](./AGENTS.md)'s copy of this section — if they
+ever diverge, that's a doc bug, fix both.
+
+- **Claude Code**: the ONLY tool permitted to write, edit, or execute
+  changes in this repository. All code changes, file edits, commits, and
+  test runs happen exclusively through Claude Code.
+- **Antigravity CLI / Gemini**: READ-ONLY audit and research tool. No
+  exceptions.
+
+**Hard rules for Gemini/Antigravity sessions:**
+1. Never write, edit, delete, or modify any file, or run any write
+   operation against MongoDB, Google Sheets, Google Drive, Gmail, or any
+   other connected Google API/service — read-only access, always.
+2. Never claim something is true without citing where it was verified
+   (a file/line, a live Sheet-tab read, a query result) — not assumed,
+   not remembered from a prior session, not inferred from a filename.
+3. Every session must end with a single, ready-to-use prompt for Claude
+   Code to execute, summarizing findings and the recommended action —
+   the only output the human should need to copy.
+4. If a task requires an actual change, decline explicitly and hand back
+   the prompt for Claude Code instead of attempting it.
+5. **Claude Code must independently verify any Gemini/Antigravity-sourced
+   finding against the real, live codebase/data before acting on it** —
+   same as any other unverified claim. A read-only audit tool can still
+   be wrong or stale; verification stays required regardless of source.
+
+**After any change** (either tool's handoff): `git status`,
+`pnpm exec tsc --noEmit`, `pnpm lint`, then commit small and often so a
+mistake is trivially revertible (`git revert`).
+
+## 6. Feature / data model reference
 
 Each feature is a page + API routes + a `lib/googleSheets*.ts` module
-against one tab of the same Sheet, except DS History/Articles (MongoDB).
+against one Sheet tab, except DS History/Articles (MongoDB).
 
 | Feature | Files | Notes |
 |---|---|---|
@@ -144,28 +160,21 @@ against one tab of the same Sheet, except DS History/Articles (MongoDB).
 | DS History | `app/ds-history/page.tsx`, `/api/ds/history`, `/api/parc`, `/api/cp`, `/api/query*`, `/api/sheet` | Plate-only Mongo search (`ds`/`bc`) + `VehicleCard` (`parc`/`cp`) + `SheetCard` (BDD/RL/Import tabs). |
 | Articles / Export | `app/articles/page.tsx`, `/api/article`, `/api/export` | Mongo article/BC search, PDF/DOCX export. Rate-limited 20 req/5min. |
 
-**RDV-specific rules** (load-bearing, not optional):
-- Writes use `RAW`, never `USER_ENTERED` — the latter strips leading
-  zeros from digit-only phone numbers.
-- Every add/update/clear is a **dual write**: `googleSheetsRdvMonthly.ts`
-  (the monthly calendar tab, real source of truth) always before
-  `googleSheetsRdv.ts` (the flat "RDV" mirror) — mirror-only writes are
-  silently destroyed on the next GAS rebuild.
-- Never trust a client-held `rowIndex` for update/clear —
-  `lib/rdvIdentity.ts`'s `resolveUniqueMatch()` re-resolves the target
-  row by full-content match on every write, throwing rather than
-  guessing on an ambiguous match.
+**RDV-specific rules** (load-bearing): writes use `RAW`, never
+`USER_ENTERED` (strips leading zeros from phone numbers); every
+add/update/clear **dual-writes** `googleSheetsRdvMonthly.ts` (monthly
+tab, real source of truth) before `googleSheetsRdv.ts` (flat mirror —
+mirror-only writes are destroyed on the next GAS rebuild); update/clear
+never trust a client-held `rowIndex` — `lib/rdvIdentity.ts`'s
+`resolveUniqueMatch()` re-resolves the row by full-content match,
+throwing on an ambiguous match rather than guessing.
 
 **Zone badges**: `useVehicleZone(imm)` checks Parking/Atelier/RDV/Depot
-membership by reusing each page's already-loaded React Query cache. A
-plate in multiple zones renders all matching badges — a real fact about
-the data, not something to collapse.
+membership via each page's already-loaded React Query cache; a plate in
+multiple zones renders all matching badges. Full per-feature history and
+reasoning: [`PROJECT_HISTORY.md`](./PROJECT_HISTORY.md).
 
-Full per-feature history and reasoning (why RDV's page was rebuilt, why
-the BC-price lookup was restructured, etc.): see
-[`PROJECT_HISTORY.md`](./PROJECT_HISTORY.md).
-
-## 6. Conventions to follow
+## 7. Conventions to follow
 
 The mandatory rules (package manager, styling tokens, Sheets/Mongo write
 safety, auth model) live in [`AGENTS.md`](./AGENTS.md) — not restated
@@ -173,26 +182,19 @@ here. Additional conventions:
 
 - **Don't rebuild a pattern that already exists.** Reuse
   `components/fleet/` (`ListPageHeader`, `RecordCard`, `Field`,
-  `PlateSearchInput`, `PlateFilterInput`, `ZoneBadges`,
-  `InlineEditSelect`/`InlineEditText`/`InlineEditCombobox`) and
-  `components/ui/` (Button, Input, Dialog, AlertDialog, Combobox, Badge,
-  ToggleGroup, Sheet, Card) instead of new one-off markup — they exist
-  because Parking/Atelier/Depot/BDD used to duplicate ~95% of this
-  independently.
+  `PlateSearchInput`, `PlateFilterInput`, `ZoneBadges`, `InlineEdit*`)
+  and `components/ui/` (Button, Input, Dialog, AlertDialog, Combobox,
+  Badge, ToggleGroup, Sheet, Card) instead of new markup — they exist
+  because Parking/Atelier/Depot/BDD used to duplicate ~95% of this.
 - **One shared Sheets client, not per-tab copies.**
   `lib/googleSheetsClient.ts` holds the shared JWT client,
   `verifyRowIdentity()`, retry/caching, and `ApiError`/
   `toErrorResponse()` — every `googleSheets*.ts` module builds on this.
 
-## 7. Where to find more detail
+## 8. Where to find more detail
 
-- **[`AGENTS.md`](./AGENTS.md)** — the mandatory cross-assistant rules,
-  imported at the top of this file.
-- **[`GEMINI.md`](./GEMINI.md)** — the equivalent entry point for Gemini
-  CLI / Antigravity sessions.
-- **[`PROJECT_HISTORY.md`](./PROJECT_HISTORY.md)** — the full
-  commit-by-commit feature timeline and the reasoning behind decisions.
-- **[`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md)** — the
-  full, file-and-line-cited security verification §4 summarizes.
-- **[`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md)** — color/typography/
-  radius/error-banner conventions §3 summarizes.
+- **[`AGENTS.md`](./AGENTS.md)** — mandatory cross-assistant rules, imported at the top of this file.
+- **[`GEMINI.md`](./GEMINI.md)** — the equivalent entry point for Gemini CLI / Antigravity sessions.
+- **[`PROJECT_HISTORY.md`](./PROJECT_HISTORY.md)** — full commit-by-commit feature timeline and reasoning.
+- **[`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md)** — full, file/line-cited security verification.
+- **[`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md)** — color/typography/radius/error-banner conventions.
