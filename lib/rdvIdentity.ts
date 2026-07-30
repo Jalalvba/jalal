@@ -95,9 +95,12 @@ function rowMatchesIdentity(row: unknown[], snapshot: RdvAddInput, excludeField?
 
 /**
  * Scans candidate rows (already narrowed to the right date/block by the
- * caller) for identity matches. Throws RdvIdentityError — never returns a
- * "closest match" — if the result isn't exactly one row. `rowNumbers[i]`
- * must be the 1-based sheet row `candidateRows[i]` came from.
+ * caller) for identity matches. Zero matches is a normal, expected outcome
+ * for a pure lookup — the caller decides what "not found" means for its own
+ * operation — so this returns null rather than throwing. More than one
+ * match is never safe to guess between (never returns a "closest match"),
+ * so that case still throws RdvIdentityError. `rowNumbers[i]` must be the
+ * 1-based sheet row `candidateRows[i]` came from.
  */
 export function resolveUniqueMatch(
   candidateRows: unknown[][],
@@ -105,16 +108,13 @@ export function resolveUniqueMatch(
   snapshot: RdvAddInput,
   excludeField: keyof RdvAddInput | undefined,
   tabLabel: string
-): number {
+): number | null {
   const matches = candidateRows
     .map((row, i) => ({ row, rowNum: rowNumbers[i] }))
     .filter(({ row }) => rowMatchesIdentity(row, snapshot, excludeField));
 
   if (matches.length === 0) {
-    throw new RdvIdentityError(
-      `Ce rendez-vous a changé depuis son chargement (aucune correspondance trouvée dans "${tabLabel}") — rechargez la page et réessayez.`,
-      "not_found"
-    );
+    return null;
   }
   if (matches.length > 1) {
     throw new RdvIdentityError(

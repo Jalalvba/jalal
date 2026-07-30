@@ -2,7 +2,7 @@ import { type sheets_v4 } from "googleapis";
 import type { RdvAddInput, MonthlyWriteResult, RdvEditableField } from "@/lib/types";
 import { RDV_EDITABLE_FIELDS, RDV_CONVOYEURS } from "@/lib/types";
 import { getSheetsClient, isoDateToSerial, columnIndexToLetter } from "@/lib/googleSheetsClient";
-import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY } from "@/lib/rdvIdentity";
+import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY, RdvIdentityError } from "@/lib/rdvIdentity";
 
 // Writes appointments into the monthly appointment-calendar tabs (e.g.
 // "Juillet 2026") — the DURABLE source of truth, generated and periodically
@@ -344,7 +344,14 @@ async function findRowByIdentity(
     rowNumbers.push(r);
   }
 
-  return resolveUniqueMatch(candidateRows, rowNumbers, snapshot, excludeField, tabName);
+  const rowNum = resolveUniqueMatch(candidateRows, rowNumbers, snapshot, excludeField, tabName);
+  if (rowNum == null) {
+    throw new RdvIdentityError(
+      `Ce rendez-vous a changé depuis son chargement (aucune correspondance trouvée dans "${tabName}") — rechargez la page et réessayez.`,
+      "not_found"
+    );
+  }
+  return rowNum;
 }
 
 /**

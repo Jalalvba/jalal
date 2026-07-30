@@ -11,7 +11,7 @@ import {
   columnIndexToLetter,
 } from "@/lib/googleSheetsClient";
 import { addAppointmentToMonthlyTab, updateAppointmentInMonthlyTab, clearAppointmentInMonthlyTab } from "@/lib/googleSheetsRdvMonthly";
-import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY } from "@/lib/rdvIdentity";
+import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY, RdvIdentityError } from "@/lib/rdvIdentity";
 
 const ROWS_CACHE_KEY = "rows:RDV";
 const HEADERS_CACHE_KEY = "headers:RDV";
@@ -315,7 +315,14 @@ async function findFlatRowByIdentity(snapshot: RdvAddInput, excludeField?: keyof
     }
   });
 
-  return resolveUniqueMatch(candidateRows, rowNumbers, snapshot, excludeField, RDV_TAB);
+  const rowNum = resolveUniqueMatch(candidateRows, rowNumbers, snapshot, excludeField, RDV_TAB);
+  if (rowNum == null) {
+    throw new RdvIdentityError(
+      `Ce rendez-vous a changé depuis son chargement (aucune correspondance trouvée dans "${RDV_TAB}") — rechargez la page et réessayez.`,
+      "not_found"
+    );
+  }
+  return rowNum;
 }
 
 // ─── updateRdvField ────────────────────────────────────────────────────────
