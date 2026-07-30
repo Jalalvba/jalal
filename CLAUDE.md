@@ -54,7 +54,7 @@ notes):
 | `IRON_SESSION_SECRET` | Encrypts the session cookie, ≥32 chars |
 | `GOOGLE_SERVICE_ACCOUNT_KEY_B64` | Base64-encoded service account JSON, grants Sheets/Drive access |
 | `GOOGLE_SHEETS_ID` | The spreadsheet ID every `lib/googleSheets*.ts` module reads/writes |
-| `GOOGLE_RDV_SHEETS_ID` | A **separate** spreadsheet ("Calendrier des rendez-vous quotidiens") holding the monthly appointment-calendar tabs — not the same file as `GOOGLE_SHEETS_ID`. See §5's RDV entry. Local dev only for now, not yet set in Vercel. |
+| `GOOGLE_RDV_SHEETS_ID` | A **separate** spreadsheet ("Calendrier des rendez-vous quotidiens") holding the monthly appointment-calendar tabs — not the same file as `GOOGLE_SHEETS_ID`. See §5's RDV entry. Set in Vercel's **Production scope only** (not Preview) — a preview deployment touching RDV code will fail without adding a preview-scoped value via `vercel env add`. |
 | `GOOGLE_DRIVE_FOLDER_ID` | Only needed for the optional `scripts/test-service-account.ts` diagnostic |
 | `VERCEL_OIDC_TOKEN` | Populated automatically by `vercel env pull`/`vercel dev` — not set by hand |
 
@@ -129,7 +129,10 @@ amber, emerald, lime, violet, fuchsia, etc.), translucent colored washes
 (`bg-emerald-500/10`, `bg-red-500/10`, `FLAG_STYLE` in `lib/types.ts`, ETAT
 badges, `ZoneBadges`) — these are intentional data-driven distinctions that
 already read fine in both themes since a translucent color blends with
-whatever's behind it. The one neutral exception left un-tokenized is
+whatever's behind it. Modal/dialog overlay scrims (`bg-black/70` in
+`alert-dialog.tsx`/`dialog.tsx`/`select-sheet.tsx`) are the same kind of
+deliberate exception — a dark scrim should look identical regardless of
+theme. The one neutral exception left un-tokenized is
 `focus:border-zinc-500` on inputs/comboboxes — a neutral mid-gray focus ring
 that works acceptably in both themes without needing its own token.
 
@@ -202,7 +205,7 @@ concurrent-write path into it to protect, so no equivalent mechanism exists
 there (not a gap — it isn't needed given the current design).
 
 **Rate limiting**: `lib/rateLimit.ts` is a Mongo-backed, atomic (`$inc`)
-fixed-window limiter. All 16 Sheets mutation routes (Parking/Atelier/Depot/
+fixed-window limiter. All 17 Sheets mutation routes (Parking/Atelier/Depot/
 RDV/BDD add/update/delete/clear/action) allow 30 requests/minute per route;
 `/api/article` and `/api/export` allow 20 requests/5 minutes.
 
@@ -278,25 +281,90 @@ and Articles, which read MongoDB reference collections instead).
   `/api/depot/*`) — a structural clone of Parking (same columns, same
   XLOOKUP formulas, only ACTION editable), same real-row-deletion delete
   behavior.
-- **RDV** (`lib/googleSheetsRdv.ts`, `/api/rdv/*`) — an appointment/
-  convoyage log (Date/Heure/Clients/Véhicule/Matricule/Intervention/
-  Contact/CONVOYEUR). Unlike Parking/Atelier/Depot, rows are never deduped
-  by plate — the same vehicle legitimately has many appointments — so
-  adding always appends a new row. Writes use `RAW` (not `USER_ENTERED`)
-  specifically because `USER_ENTERED` was found to silently strip leading
-  zeros from pure-digit phone numbers. There is **no standalone `/rdv`
-  page** — it was removed once RDV data (zone badge + RDV/CONVOYEUR/
-  Intervention fields) was surfaced directly on BDD cards instead; the data
-  layer and API routes remain for any future direct RDV CRUD need.
-- **DS History** (`app/ds-history/page.tsx`, `/api/ds/history`) — searches
-  MongoDB's `ds`/`bc` collections by plate only (VIN/Année/Limite inputs
-  were deliberately dropped). Its BC-price lookup was rewritten to avoid a
-  correlated `$lookup` that couldn't use an index regardless of query
-  shape — collecting the needed `(cmd_num, code_art)` pairs up front and
-  joining in application code instead, cutting heavy-plate response time
-  from ~7s to ~150–250ms. Also shows the BDD Immobilisation card (editable
-  via the same BDD hooks as Suivi RL) and Parking/Atelier/RDV/Depot zone
-  badges on its Vehicle card.
+- **RDV** (`app/rdv/page.tsx`, `lib/googleSheetsRdv.ts`,
+  `lib/googleSheetsRdvMonthly.ts`, `lib/rdvIdentity.ts`, `/api/rdv/*`) — an
+  appointment/convoyage log (Date/Heure/Clients/Véhicule/Matricule/
+  Intervention/Contact/CONVOYEUR), with its own linked home nav card.
+  **Has a standalone `/rdv` page** — a day-grouped table (one table per
+  selected day, matching the monthly calendar tab's own visual shape) with
+  a date picker, inline field edit, and a clear (not delete) action per
+  appointment; the Date column itself is intentionally read-only, since
+  changing it would move the appointment to a different day-block (and
+  possibly a different monthly tab) — clear + re-add via `AddRdvDialog` is
+  the workaround for moving a date. (A previous version of this page was
+  removed once RDV data was surfaced contextually on BDD cards instead;
+  it was later rebuilt with materially more functionality — this is the
+  current, real state, not the removed one.)
+  Unlike Parking/Atelier/Depot, rows are never deduped by plate — the same
+  vehicle legitimately has many appointments — so adding always appends a
+  new row. Writes use `RAW` (not `USER_ENTERED`) specifically because
+  `USER_ENTERED` was found to silently strip leading zeros from pure-digit
+  phone numbers.
+  Every add/update/clear is a **dual write**: `lib/googleSheetsRdvMonthly.ts`
+  writes into the monthly appointment-calendar tab (e.g. "Juillet 2026") in
+  `GOOGLE_RDV_SHEETS_ID` — the durable source of truth an external Google
+  Apps Script periodically rebuilds — always *before* `lib/googleSheetsRdv.ts`
+  writes the same change into the flat "RDV" mirror tab in the main
+  spreadsheet; writing only to the flat tab would be silently destroyed on
+  the GAS script's next rebuild. Update/clear never trust a client-held row
+  number: `lib/rdvIdentity.ts`'s `resolveUniqueMatch()` re-resolves the
+  target row on every write by matching full row content fresh against the
+  candidate rows for that date, throwing rather than guessing if the match
+  is ambiguous or not found — a row shifting under a stale cached row index
+  (the monthly tab's insertDimension fallback can do this at any time) can't
+  silently edit the wrong appointment.
+  An "Exporter" button next to the date picker downloads the selected day's
+  table as a PNG (`rdv-<date>.png`, for sharing in WhatsApp) — client-side
+  only, no server round-trip. It renders a dedicated off-screen `ExportTable`
+  (plain markup, not the live interactive table, so delete icons/InlineEdit
+  chrome and the live table's `overflow-x-auto` clipping are excluded by
+  construction) via `html-to-image` — chosen over `html2canvas`, which
+  throws on Tailwind v4's oklch/oklab color functions.
+  The interaction model was then reworked: the old per-row trash icon (both
+  layouts) was replaced by a single "Effacer" button in the top action bar,
+  enabled only once an appointment is selected via a new `SelectToggle` —
+  tapping a row (desktop table) or a card toggles `selectedRowIndex`, a
+  UI-only selection value that the actual clear mutation never trusts
+  directly (it still re-derives identity through the existing
+  `rdvRowToIdentity()`/`resolveUniqueMatch()` path). Below the `sm:`
+  breakpoint the day view renders stacked `MobileRdvCard`s (same
+  `InlineEditText`/`InlineEditSelect` wiring as the table, just
+  re-laid-out) instead of the table, which remains for `sm:` and up. A
+  plate-search box above the table filters across every loaded
+  appointment on every day, not just the selected day — an exact single
+  match jumps the date picker to that day and pre-selects the row;
+  multiple matches render a date-grouped picker to choose from; no
+  matches surface the existing inline error banner.
+- **DS History** (`app/ds-history/page.tsx`, `/api/ds/history`) — its
+  primary search is MongoDB's `ds`/`bc` collections by plate only (VIN/
+  Année/Limite inputs were deliberately dropped). Its BC-price lookup was
+  rewritten to avoid a correlated `$lookup` that couldn't use an index
+  regardless of query shape — collecting the needed `(cmd_num, code_art)`
+  pairs up front and joining in application code instead, cutting
+  heavy-plate response time from ~7s to ~150–250ms.
+  Beyond that primary search, the page also assembles two more card
+  clusters from other sources, all keyed off the same plate:
+  - **`VehicleCard`** — merges MongoDB's `parc` (vehicle master data) and
+    `cp` (contracts) collections, read via `/api/parc` and `/api/cp`
+    (`app/api/parc/route.ts`, `app/api/cp/route.ts`). Plate/WW-suggest
+    autocomplete for the page's search box is backed by `/api/query` and
+    `/api/query/search`, both querying `parc`'s indexed `Immatriculation`/
+    `Numéro WW` fields via an uppercased, prefix-anchored `escapeRegex()`
+    filter (dropping `$options: "i"` so the query can actually use the
+    index instead of forcing a collection scan).
+  - **`SheetCard`** — merges three Google Sheets sources fetched through
+    `/api/sheet?sheet=bdd|rl|import` (`app/api/sheet/route.ts`): the BDD
+    tab (same rows/hooks Suivi RL edits — editing either page's
+    Immobilisation card updates the same row), the **"RL" tab**
+    (`lib/googleSheetsRl.ts` — véhicule de remplacement / replacement-
+    vehicle records), and the **"Import" tab** (`lib/googleSheetsImport.ts`
+    — Assistance import events; a 26,381-row tab too large to read/filter
+    in JS the way the smaller tabs are, so it does a targeted two-step
+    read: scan only the "Immatricule" column for matching row numbers,
+    then batch-fetch just those full rows).
+  The BDD Immobilisation card itself is editable via the same BDD hooks as
+  Suivi RL; the Vehicle card also shows Parking/Atelier/RDV/Depot zone
+  badges.
 - **Articles / Export** (`app/articles/page.tsx`, `/api/article`,
   `/api/export`) — searches MongoDB's article/BC data and generates
   PDF/DOCX exports (`docx`, `pdf-lib`). Rate-limited at 20 requests/5
@@ -354,3 +422,8 @@ collapse or hide.
   file-and-line-cited security verification this document's §4 summarizes,
   including checks confirmed live against a running server rather than
   just read from config.
+- **[`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md)** — the grep/count-verified
+  color, typography, radius, and error-banner conventions behind this
+  document's §3 (and the shared-component conventions in §6); consult it
+  directly for the reasoning behind specific accent-color/radius/spacing
+  choices.

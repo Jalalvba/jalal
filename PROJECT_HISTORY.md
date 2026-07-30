@@ -1,7 +1,7 @@
 # Project history
 
 Permanent record of this project's development history, built directly from
-`git log --oneline --all` (82 commits, `df5a4c3` → `c5d688f`) with diffs
+`git log --oneline main` (97 commits, `df5a4c3` → `c546f1d`) with diffs
 inspected wherever a commit message needed clarification. Every claim below
 cites the commit(s) it's based on — nothing here is inferred beyond what a
 commit message or its diff actually states.
@@ -76,7 +76,15 @@ mislabeled DATE_DS-formula column) while re-syncing `BDD_HEADERS`/`BddRow`
 to the sheet's actual live columns and adding new RDV/CONVOYEUR/Intervention
 columns; `6757ffd` then restored `date_ds` as a read-only field after the
 sheet owner manually corrected that column's header text back from the
-duplicate "Technicien" label.
+duplicate "Technicien" label. `c0c3258` adds real row delete
+(`deleteBddRow()`, `app/api/bdd/delete/route.ts`, `useDeleteBddRow()`),
+mirroring Parking/Atelier/Depot exactly (`DeleteDimensionRequest`, gated
+by `verifyRowIdentity()` so a stale client-held row index 409s instead of
+deleting the wrong vehicle's row) — wired into each Suivi RL card via
+`RecordCard`'s `onDelete`. *Per the commit's own message, this landed
+verified only via UI inspection (button renders, confirm dialog opens),
+not a real round-trip against live data — worth a real delete/undo check
+before relying on it in production if that hasn't happened since.*
 
 ### Parking
 
@@ -143,6 +151,71 @@ its home nav card as redundant — the data layer
 since `useVehicleZone.ts` still depends on it for the zone-badge check and
 the API routes remain available for future direct RDV CRUD.
 
+**The standalone page came back**, materially rebuilt, in a 3-commit pass
+once the durable-storage gap below was found. `6334120` discovers that the
+flat "RDV" tab isn't actually the system of record: it's a GAS-managed
+mirror that gets wholesale rebuilt from the monthly calendar tabs
+(`GOOGLE_RDV_SHEETS_ID`, e.g. "Juillet 2026") on every sheet
+"Synchroniser" run — anything the app had been writing only to the flat
+tab would be silently destroyed on the next sync. `addRdvRow()` is changed
+to write the monthly tab first (locating the correct day's block by
+pattern-scanning header rows, falling back to `insertDimension` when a
+block is full), then the flat tab as a fast-read mirror, degrading to a
+warning rather than a hard failure if only the mirror write fails; a
+read+add-only `/rdv` page and `AddRdvDialog` return, with edit/clear
+deliberately left out of this pass since the existing `rowIndex`-based
+versions only ever touched the flat tab. `34f5191` closes that gap:
+`lib/rdvIdentity.ts`'s `resolveUniqueMatch()` replaces row-number-based
+edit/clear entirely, re-scanning both tabs for an exact full-row content
+match (date-scoped, whitespace-normalized so the flat tab's cleaned values
+and the monthly tab's raw cells compare equal) at write time and refusing
+to guess — zero matches or more than one both fail loudly instead of
+picking a "closest" row. This wasn't a theoretical concern: checking real
+live data before choosing the match fields turned up a genuine duplicate
+pair in the monthly tab differing only by Convoyeur, confirming the
+ambiguous-match error path is a real case, not defensive-only code.
+`d1dcd28` replaces the card list with a day-grouped table (one table per
+selected day, matching the monthly tab's own visual shape) plus a date
+picker, wiring inline edit through the new identity-based mutations — no
+row-number handling anywhere in the page component. `2fea470` adds a
+client-side "Exporter" button that downloads the selected day's table as
+`rdv-<date>.png` for sharing in WhatsApp. It renders a dedicated
+off-screen `ExportTable` (plain markup, not the live interactive table,
+so delete icons/InlineEdit chrome are excluded and the live table's
+`overflow-x-auto` wrapper can't clip the capture) using `html-to-image`,
+picked after `html2canvas` was found to throw "unsupported color function
+oklab" on Tailwind v4's oklch-based palette classes while `html-to-image`
+(SVG `foreignObject`-based, so the browser's own CSS engine renders it)
+handled both semantic tokens and oklch utilities correctly in both
+themes. The off-screen node uses `position: fixed` + `width: max-content`
+rather than `display:none`/`visibility:hidden` (which would clone as
+invisible) or `width: auto` (which was found to shrink-to-fit against the
+*viewport* rather than its own content, producing a narrower capture on
+mobile for identical data) — verified byte-identical dimensions across
+desktop/375px-mobile/dark mode after the fix. `skipFonts: true` avoids a
+console error from `html-to-image` otherwise trying to fetch this app's
+Google Fonts `@import`, which the CSP's `connect-src` blocks.
+
+`c546f1d` reworked the page's interaction model on the same day: the
+per-row trash icon (previously the only delete control, in the table's
+actions column) was removed in favor of a top action bar "Effacer"
+button, enabled only when an appointment is selected via a new
+`SelectToggle` — tapping a row (desktop table) or a card (the new mobile
+layout) toggles `selectedRowIndex`, a pure UI selection state that
+`handleClear` never trusts directly; it still re-derives the mutation's
+actual row identity through the existing
+`rdvRowToIdentity()`/`resolveUniqueMatch()` path from `34f5191`, so the
+interaction change carries zero risk to the write-safety guarantees built
+in that earlier commit. Below the `sm:` breakpoint, the day view now
+renders stacked `MobileRdvCard`s (same `InlineEditText`/`InlineEditSelect`
+wiring as the table, just re-laid-out for a narrow screen) instead of the
+table, which remains for `sm:` and up. A new plate-search box above the
+table filters across every loaded appointment on every day, not just the
+selected day's `dayRows` — a single match jumps the date picker to that
+appointment's day and pre-selects it; multiple matches render a
+date-grouped picker to choose from; no matches surface the existing
+inline error banner.
+
 ### DS History
 
 Search input was progressively simplified: `08a456d` reduced it to
@@ -166,6 +239,23 @@ went from 6.6–7.3s down to 127–244ms on the two heaviest plates (39357-B-7,
 197–589ms across all 6. Zone badges (Parking/Atelier, later RDV/Depot) were
 added to DS History's Vehicle card in `0a04f2e` and extended in `1248eb8`/
 `bae93f8`.
+
+That BC-price join was later removed entirely, not just its display:
+`323497a` deletes the whole `$lookup`-replacement code path
+(`collectPairs`/`fetchBcMatches`/`mergeBcPrices`) from `/api/ds/history`,
+plus every downstream consumer — `Line.mt_ht`/`price_source` from
+`lib/types.ts`, the Mt HT line column/BC-DS source badge/MAD total on the
+page itself, and the by-then-dead `totalMtHt`/`mt_ht` handling in both the
+PDF and DOCX export builders (the DOCX total-row branch was already
+unreachable — `totalMtHt` was never passed a value at any call site). The
+`bc` Mongo collection itself is untouched: `app/api/article/route.ts` still
+uses it independently for Articles' own price lookups, a fully separate
+code path. `24e34cd` then tightens the PDF/DOCX export layout unrelated to
+that removal — dropped dead spacer paragraphs, tighter heading/section
+spacing, page margins cut from 1" to 0.5" to match the PDF branch, and
+removal of a forced page-break that was leaving a near-empty first page —
+verified against a real 14-DS-entry export payload (PDF 4→3 pages, DOCX
+5→4 pages, no entries lost).
 
 ### Zone badges
 
@@ -219,7 +309,52 @@ resolve correctly). Stage 2 (`71bc6e7`) consolidates every toggle into one
 and wires it into every page that previously had none (Parking/Atelier/
 Depot/Suivi RL via `ListPageHeader`, Articles, Login). Component-library and
 page migrations to the semantic tokens follow in `b20a26c` and `4be5402`
-(Parking/Atelier/Depot/Suivi RL/Articles/Login).
+(Parking/Atelier/Depot/Suivi RL/Articles/Login). `420941f` fixes a
+false-positive hydration warning the no-flash inline script's nonce
+attribute triggered on every load: browsers intentionally blank a
+`nonce` attribute on DOM read-back once set (so it can't be exfiltrated
+via injected script), which made React's hydration diff see
+`server="<real nonce>"` vs. `client=""`; the fix applies the same
+`suppressHydrationWarning` next-themes' own inline script already uses
+for this exact case.
+
+### Design system, round 2
+
+A second, narrower audit (`6cb1f1b`, `DESIGN_SYSTEM.md` — a persistent
+doc, unlike the deleted `AUDIT_REPORT.md`) found color, typography, radius,
+and error-banner drift that had accumulated since the first theming pass,
+fixed across 7 commits: `f7eeb33` introduces `lib/constants/zones.ts` as
+the single source for each zone's accent color (previously duplicated
+across `ZoneBadges`, each list page's header, Suivi RL's card, and
+`NavCard`), fixing a real Atelier badge-color mismatch (violet vs. the
+page/nav's amber) and reassigning BDD/Suivi RL to violet so its own
+nav/header agree — retiring red as a brand color, reserved from here on
+for destructive/error/urgent semantics only. `873ad79` fixes
+`RecordCard`'s delete button, the one place in the app that fought
+`Button`'s shared icon size down to `h-9 w-9` instead of using its
+`h-10 w-10` default. `e321bad` extracts a shared `Alert` component from 7
+near-duplicated inline error banners — 4 of them (Parking/Atelier/Depot/
+Suivi RL) were hardcoded to dark-mode reds with no `dark:` variant at all,
+rendering dark-red-on-dark-red in light mode, a real legibility bug rather
+than pure style drift. `eb5960c` retires 10 ungoverned one-off
+`rounded`/`rounded-md` call sites into the declared 3-tier radius scale.
+`0fb7fc6` adds a `--text-micro` token and replaces 28 call sites of 3 ad
+hoc arbitrary text sizes (`text-[9px]`/`[10px]`/`[11px]`) across 13 files.
+`9837433` drops Playfair Display (5 heading tags app-wide was judged not
+enough footprint to justify a second display face) and consolidates
+`--font-display`/`--font-body` onto Inter alongside JetBrains Mono; also
+defines `--font-sans` so Tailwind's `font-sans` utility itself resolves to
+Inter instead of falling back to the system default, fixing
+`ListPageHeader`'s page title (a proper-noun label) which had been
+rendering in `font-mono`. `f14af4e` finishes the token migration on the
+last two holdout pages (Home, DS History), leaving `etatStyle`'s
+per-value literal colors as-is (a documented data-driven exception, same
+as `FLAG_STYLE`/`ZoneBadges`). `e6f28c7` migrates Suivi RL — the one list
+page still hand-rolling its own card header and a readonly-field block
+duplicated from the later-extracted `ReadonlyFieldList` — onto
+`RecordCard`, extending it with optional `headerLeft`/`headerRight` slots
+and an optional `onDelete` (used two commits later by `c0c3258`'s BDD
+delete).
 
 ### Authentication
 
@@ -308,12 +443,24 @@ above) is the largest standalone performance fix in the project.
 
 ## 4. Documentation index
 
-- **`SECURITY_VERIFICATION.md`** — the authoritative, live-verified record
-  of this app's actual security controls (authentication, session/cookie
-  settings, CSRF, write-safety, input validation, rate limiting, secrets
-  handling, and HTTP headers — the last checked with real `curl -I` output,
-  not just read from config). Consult that file directly for security
-  claims; this document only summarizes what was built and when.
+- **`SECURITY_VERIFICATION.md`** (added `c0fd269`) — the authoritative,
+  live-verified record of this app's actual security controls
+  (authentication, session/cookie settings, CSRF, write-safety, input
+  validation, rate limiting, secrets handling, and HTTP headers — the last
+  checked with real `curl -I` output, not just read from config). Consult
+  that file directly for security claims; this document only summarizes
+  what was built and when.
+- **`DESIGN_SYSTEM.md`** (added `6cb1f1b`) — the grep/count-verified
+  inventory behind the "Design system, round 2" pass above (color,
+  typography, radius, and error-banner drift, plus the token-based
+  proposal that pass implemented). A persistent doc, unlike the deleted
+  `AUDIT_REPORT.md` below.
+- **`CLAUDE.md`** (consolidated `8620d86`) — merges the theming doc with
+  condensed, source-linked summaries of this file's architecture/feature
+  timeline and `SECURITY_VERIFICATION.md`'s security assessment, plus
+  setup instructions and shared-component conventions. The canonical
+  single entry point for a new session; this file remains the detailed,
+  commit-cited source of truth it summarizes.
 - **`AUDIT_REPORT.md`** — referenced throughout early commit messages
   (e.g. `f59cb47`'s "audit §8.1", `150918f`'s "audit 10") as the source of
   the original repo-wide audit's findings. It was a scratch/working

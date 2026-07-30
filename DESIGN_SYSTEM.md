@@ -1,10 +1,13 @@
 # Design System — Audit & Proposal
 
-Status: **proposal only, nothing in this document has been implemented.**
-Every finding below was verified fresh against the code on `main`
-(commit `8620d86`) on 2026-07-27 — grepped and counted, not recalled or
-assumed. File:line citations are given throughout so each claim can be
-re-checked directly.
+Status: **implemented.** Every finding below was addressed across 8
+follow-up commits (`f7eeb33`…`e6f28c7`, 2026-07-27) — see
+PROJECT_HISTORY.md's "Design system, round 2" section for the
+commit-by-commit summary. The findings themselves were verified fresh
+against the code on `main` (commit `8620d86`) on 2026-07-27 — grepped and
+counted, not recalled or assumed. File:line citations are given
+throughout so each claim can be re-checked directly (against the
+pre-fix state they describe).
 
 ---
 

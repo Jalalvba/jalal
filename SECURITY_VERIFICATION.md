@@ -205,8 +205,8 @@ requests). TTL index expires old window docs.
 
 Verified real call sites and limits by grepping every call site, not from
 memory of the commit message:
-- **16 Sheets mutation routes** (atelier/parking/depot/rdv/bdd
-  add/update/delete/clear/action) — **all 16 use `30, 60_000`** → 30
+- **17 Sheets mutation routes** (atelier/parking/depot/rdv/bdd
+  add/update/delete/clear/action) — **all 17 use `30, 60_000`** → 30
   req/min, identical across every one.
 - `app/api/article/route.ts:7-8,17-21`: `RATE_LIMIT = 20`,
   `RATE_WINDOW_MS = 5 * 60 * 1000` → 20 req/5min.
@@ -265,7 +265,7 @@ returning connection refused).
 
 ### 9. What is NOT protected / honest gaps
 
-- **No app-level CSRF token on the 16 Sheets mutation routes.** These rely
+- **No app-level CSRF token on the 17 Sheets mutation routes.** These rely
   on `sameSite: lax` session cookies as the actual defense: a `lax`
   cookie isn't sent on cross-site POST/fetch/XHR (only top-level GET
   navigations), so a third-party page can't forge an authenticated
