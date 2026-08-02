@@ -84,7 +84,7 @@ export async function GET(request: Request) {
           Année: {
             $cond: {
               if:   { $ifNull: ["$Date BC", false] },
-              then: { $year: { $toDate: "$Date BC" } },
+              then: { $year: "$Date BC" },
               else: null,
             },
           },
