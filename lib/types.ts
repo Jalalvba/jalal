@@ -494,3 +494,60 @@ export type DepotRow = {
   technicein: string;
   founisseur: string;
 };
+
+// ─── Fleet Data Import (external pipeline, ~/import → import-red.vercel.app) ──
+//
+// This app never talks to Mongo/Drive for the import itself — it proxies
+// two endpoints on a separate Vercel project (see app/api/trigger-import
+// and app/api/import-status). Shapes below are normalized server-side from
+// that project's own response shapes (run.py's run_all() for the trigger
+// call, lib/pipeline_log.py's PipelineLogger.to_document() for the
+// per-run status document) — confirmed by reading that project's source
+// directly, not guessed from its HTTP docs.
+//
+// One important asymmetry: the trigger call's own response only carries a
+// compact "step:status" string per step (no timestamp, no detail text) —
+// full step detail only exists in the per-run status document. So
+// app/api/trigger-import/route.ts calls /api/status for each run_id
+// *after* the trigger call resolves (every run has already finished by
+// then) to backfill real timestamps/detail before handing the combined
+// result to the browser.
+
+export type ImportPipelineStepStatus = "started" | "success" | "failed" | "skipped";
+
+export type ImportPipelineStep = {
+  step: string;
+  status: ImportPipelineStepStatus;
+  detail: string;
+  /** ISO 8601 (normalized from the backend's Python `str(datetime)` form), or null if unavailable. */
+  timestamp: string | null;
+};
+
+export type ImportPipelineResult = {
+  label: string;
+  filename: string;
+  /** Module name — "ds" | "cp" | "parc" | "bc". */
+  pipeline: string;
+  run_id: string;
+  status: ImportPipelineStepStatus | "running";
+  started_at: string | null;
+  finished_at: string | null;
+  steps: ImportPipelineStep[];
+  /**
+   * Set when /api/status couldn't be fetched for this run (e.g. it isn't
+   * deployed on the backend yet — see app/api/trigger-import/route.ts's
+   * comment) — `steps` above is then reconstructed from the trigger
+   * response's compact "step:status" strings only, with no real detail/
+   * timestamp. Surfaced in the UI rather than left implicit, so degraded
+   * data never looks identical to the real thing.
+   */
+  stepDetailWarning?: string;
+};
+
+export type TriggerImportResponse =
+  | { ok: true; success: boolean; results: ImportPipelineResult[] }
+  | { ok: false; error: string };
+
+export type ImportStatusResponse =
+  | { ok: true; run: ImportPipelineResult }
+  | { ok: false; error: string };

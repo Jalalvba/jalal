@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { logout } from "@/app/login/actions";
 import { ThemeToggle } from "@/components/fleet/ThemeToggle";
+import { ImportTrigger, LastImportCard } from "@/components/fleet/ImportTrigger";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 
 function HomeIcon({ children }: { children: React.ReactNode }) {
@@ -150,6 +151,14 @@ export default function Home() {
               </svg>
             }
           />
+        </div>
+
+        {/* Fleet data import */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
+          <ImportTrigger />
+          <div className="sm:w-64">
+            <LastImportCard />
+          </div>
         </div>
       </div>
     </div>

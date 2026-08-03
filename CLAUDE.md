@@ -159,6 +159,22 @@ against one Sheet tab, except DS History/Articles (MongoDB).
 | RDV | `app/rdv/page.tsx`, `lib/googleSheetsRdv.ts`, `lib/googleSheetsRdvMonthly.ts`, `lib/rdvIdentity.ts`, `/api/rdv/*` | Day-grouped table + mobile stacked cards, date picker, cross-day plate search, PNG export. Rules below. |
 | DS History | `app/ds-history/page.tsx`, `/api/ds/history`, `/api/parc`, `/api/cp`, `/api/query*`, `/api/sheet` | Plate-only Mongo search (`ds`/`bc`) + `VehicleCard` (`parc`/`cp`) + `SheetCard` (BDD/RL/Import tabs). |
 | Articles / Export | `app/articles/page.tsx`, `/api/article`, `/api/export` | Mongo article/BC search, PDF/DOCX export. Rate-limited 20 req/5min. |
+| Fleet Data Import | `components/fleet/ImportTrigger.tsx` (used from `app/page.tsx`), `/api/trigger-import`, `/api/import-status` | Button that proxies a **separate** Vercel project (`~/import`, deployed at `https://import-red.vercel.app`) which runs the DS/CP/PARC/BC Drive→Mongo ETL — this repo has no Drive/ETL code of its own. Rules below. |
+
+**Fleet Data Import rules**: `/api/trigger-import` calls that project's
+token-gated `GET /api?token=...` (blocks ~60–90s until all 4 pipelines
+finish), then backfills real per-step timestamps/detail via its
+unauthenticated `GET /api/status?run_id=...` for each run (the trigger
+response itself only carries a compact `"step:status"` string per step).
+`IMPORT_PIPELINE_TOKEN` (this repo's env var) must exactly match that
+project's `PIPELINE_TRIGGER_SECRET` — see `.env.example`'s comment; set
+via `vercel env add IMPORT_PIPELINE_TOKEN` on **this** project, not
+`~/import`. `/api/import-status` re-looks-up a past run's detail
+read-only, no token needed (`run_id` is an unguessable UUID4). Full
+backend documentation — pipeline internals, skip-if-unchanged logic,
+`?force=true`, the `pipeline_runs` Mongo schema — lives in that
+project's own `CLAUDE.md` (`~/import/CLAUDE.md`, a separate repo — not
+a relative link since it isn't part of this one), not duplicated here.
 
 **RDV-specific rules** (load-bearing): writes use `RAW`, never
 `USER_ENTERED` (strips leading zeros from phone numbers); every
