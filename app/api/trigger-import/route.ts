@@ -22,7 +22,9 @@ const IMPORT_API_BASE = "https://import-red.vercel.app";
 type RawTriggerResult = {
   label: string;
   filename: string;
-  status: "success" | "failed" | "skipped";
+  // Confirmed against ~/import/run.py's run_all() directly — never a bare
+  // "skipped", see lib/types.ts's ImportPipelineRunStatus comment.
+  status: "success" | "failed" | "skipped_absent" | "skipped_unchanged";
   run_id: string;
   steps: string[]; // "step:status" — no timestamp/detail, see lib/types.ts's comment
 };

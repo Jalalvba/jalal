@@ -523,13 +523,24 @@ export type ImportPipelineStep = {
   timestamp: string | null;
 };
 
+// Distinct from ImportPipelineStepStatus above — this is the top-level
+// per-pipeline run status, not a step status. Confirmed against
+// ~/import/run.py's run_all() (its own docstring + the literal "status":
+// ... dict values) directly: never a bare "skipped" — "skipped_absent"
+// (file not in the Drive folder at all) and "skipped_unchanged" (unchanged
+// since the last successful run) are distinct outcomes callers should tell
+// apart. "running" is added here only for /api/status's in-progress poll
+// (PipelineLogger.status starts "running" until finish() is called), never
+// a value the trigger route itself can return.
+export type ImportPipelineRunStatus = "success" | "failed" | "skipped_absent" | "skipped_unchanged" | "running";
+
 export type ImportPipelineResult = {
   label: string;
   filename: string;
   /** Module name — "ds" | "cp" | "parc" | "bc". */
   pipeline: string;
   run_id: string;
-  status: ImportPipelineStepStatus | "running";
+  status: ImportPipelineRunStatus;
   started_at: string | null;
   finished_at: string | null;
   steps: ImportPipelineStep[];

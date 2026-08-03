@@ -12,7 +12,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import type { ImportPipelineResult, ImportPipelineStep } from "@/lib/types";
+import type { ImportPipelineResult, ImportPipelineRunStatus, ImportPipelineStep } from "@/lib/types";
 
 const LAST_RUN_STORAGE_KEY = "jalal:last-import";
 
@@ -21,7 +21,12 @@ type Phase = "idle" | "running" | "replaying" | "done" | "error";
 type FlatLine = {
   pipeline: string;
   step: string;
-  status: ImportPipelineStep["status"] | "running" | "warning";
+  // Step-level statuses (started/success/failed/skipped) from real step
+  // lines, plus "warning" for the injected stepDetailWarning line, plus
+  // ImportPipelineRunStatus for the "no steps recorded" fallback line,
+  // which carries the pipeline's own run status (success/failed/
+  // skipped_absent/skipped_unchanged/running) instead of a step status.
+  status: ImportPipelineStep["status"] | ImportPipelineRunStatus | "warning";
   detail: string;
   timestamp: string | null;
 };
@@ -48,6 +53,8 @@ function statusColor(status: FlatLine["status"]): string {
       return "text-emerald-400";
     case "started":
     case "skipped":
+    case "skipped_absent":
+    case "skipped_unchanged":
     case "running":
       return "text-amber-400";
     case "failed":
@@ -88,7 +95,10 @@ function flattenLines(results: ImportPipelineResult[]): FlatLine[] {
         : [
             {
               pipeline: r.pipeline.toUpperCase(),
-              step: r.status === "skipped" ? "skipped" : "no steps recorded",
+              // Real status string doubles as the label here (e.g.
+              // "skipped_unchanged" vs "skipped_absent") so the two skip
+              // reasons stay distinguishable even with no step detail.
+              step: r.status === "success" || r.status === "failed" ? "no steps recorded" : r.status,
               status: r.status,
               detail: "",
               timestamp: r.finished_at,
@@ -101,8 +111,17 @@ function flattenLines(results: ImportPipelineResult[]): FlatLine[] {
 
 function buildSummary(results: ImportPipelineResult[], durationSec: number): { ok: boolean; text: string } {
   const failed = results.filter((r) => r.status === "failed");
-  const skipped = results.filter((r) => r.status === "skipped");
   const succeeded = results.filter((r) => r.status === "success");
+  // Two distinct skip reasons (confirmed against ~/import/run.py's
+  // run_all() directly): "skipped_unchanged" (nothing changed since the
+  // last successful run — the common case) vs "skipped_absent" (an
+  // expected file wasn't in the Drive folder at all — worth calling out
+  // separately since it usually means something's actually wrong upstream,
+  // not just "up to date"). Grouped together for the aggregate count below
+  // but the absent ones get their own callout.
+  const skippedUnchanged = results.filter((r) => r.status === "skipped_unchanged");
+  const skippedAbsent = results.filter((r) => r.status === "skipped_absent");
+  const skippedTotal = skippedUnchanged.length + skippedAbsent.length;
 
   if (failed.length > 0) {
     const detail = failed
@@ -115,15 +134,28 @@ function buildSummary(results: ImportPipelineResult[], durationSec: number): { o
     return { ok: false, text: `❌ Import failed after ${durationSec}s — ${detail}` };
   }
 
-  if (skipped.length > 0) {
-    const names = skipped.map((r) => r.pipeline.toUpperCase()).join(", ");
+  const absentNote =
+    skippedAbsent.length > 0
+      ? ` — ${skippedAbsent.map((r) => r.pipeline.toUpperCase()).join(", ")} file${
+          skippedAbsent.length > 1 ? "s" : ""
+        } not found in Drive`
+      : "";
+
+  if (succeeded.length === results.length) {
+    return { ok: true, text: `✅ All ${results.length} pipelines completed successfully in ${durationSec}s` };
+  }
+
+  if (succeeded.length === 0) {
     return {
       ok: true,
-      text: `✅ Import completed in ${durationSec}s — ${succeeded.length} succeeded, ${skipped.length} skipped (${names})`,
+      text: `⏭️ All ${results.length} pipelines already up to date in ${durationSec}s — no changes since last run${absentNote}`,
     };
   }
 
-  return { ok: true, text: `✅ All ${results.length} pipelines completed successfully in ${durationSec}s` };
+  return {
+    ok: true,
+    text: `✅ Import complete in ${durationSec}s — ${succeeded.length} updated, ${skippedTotal} already up to date${absentNote}`,
+  };
 }
 
 function persistLastRun(summary: LastRunSummary) {
