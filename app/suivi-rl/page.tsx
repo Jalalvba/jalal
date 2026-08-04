@@ -40,6 +40,74 @@ function formatAge(dataUpdatedAt: number): string {
   return `il y a ${Math.floor(minutes / 60)}h`;
 }
 
+function DlIcon({ spinning }: { spinning?: boolean }) {
+  return spinning
+    ? <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" className="animate-spin"><circle cx="8" cy="8" r="6" strokeDasharray="28" strokeDashoffset="10"/></svg>
+    : <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 12h10M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+}
+
+// ─── PDF export (server-side via /api/bdd/export) — sends exactly the rows
+// currently on screen (post-cascade, post-search), never the full dataset.
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "") // strip accents
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function downloadBddPdf(
+  rows: BddRow[],
+  activeFilters: { label: string; value: string }[],
+  searchTerm: string,
+  setExporting: (v: boolean) => void
+) {
+  setExporting(true);
+  try {
+    const res = await fetch("/api/bdd/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: rows.map((r) => ({
+          IMM: r.IMM,
+          client: r.client,
+          modele: r.modele,
+          ETAT: r.ETAT,
+          Emplacement: r.Emplacement,
+          prestataire: r.prestataire,
+          flag: r.flag,
+          "Catégorie": r["Catégorie"],
+          Technicien: r.Technicien,
+          date_fin_contrat: r.date_fin_contrat,
+        })),
+        activeFilters,
+        searchTerm: searchTerm || undefined,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error ?? `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const dateSlug = new Date().toISOString().slice(0, 10);
+    const filterSlug = [...activeFilters.map((f) => f.value), searchTerm]
+      .filter(Boolean)
+      .map(slugify)
+      .filter(Boolean)
+      .join("-");
+    a.download = `bdd-export-${dateSlug}${filterSlug ? `-${filterSlug}` : ""}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert(`Erreur export PDF: ${e instanceof Error ? e.message : e}`);
+  } finally {
+    setExporting(false);
+  }
+}
+
 // Server allowlist (lib/types.ts's BDD_EDITABLE_FIELDS) is unchanged — this
 // page just commits one of these keys at a time now instead of bundling
 // all of them into one form submit.
@@ -227,6 +295,7 @@ export default function SuiviRlPage() {
   const [activePrestataire, setActivePrestataire] = useState("TOUS");
   const [activeFlag, setActiveFlag] = useState("TOUS");
   const [error, setError] = useState("");
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   async function handleDelete(row: number, imm: string) {
     try {
@@ -290,6 +359,24 @@ export default function SuiviRlPage() {
     if (!term) return flagFiltered;
     return rows.filter((r) => String(r.IMM ?? "").toUpperCase().includes(term));
   }, [flagFiltered, rows, search]);
+
+  // Mirrors what's actually applied to `searched`: a non-empty search term
+  // bypasses the chip cascade entirely (see the comment above), so the
+  // filter summary shown in the exported PDF must too — otherwise it would
+  // claim chips were applied when they weren't.
+  const activeFilters = useMemo(() => {
+    if (search.trim()) return [];
+    const filters: { label: string; value: string }[] = [];
+    if (activeFleet !== "TOUS") filters.push({ label: "Flotte", value: activeFleet });
+    if (activeEmplacement !== "TOUS") filters.push({ label: "Emplacement", value: activeEmplacement });
+    if (activePrestataire !== "TOUS") filters.push({ label: "Prestataire", value: activePrestataire });
+    if (activeFlag !== "TOUS") filters.push({ label: "Flag", value: activeFlag });
+    return filters;
+  }, [search, activeFleet, activeEmplacement, activePrestataire, activeFlag]);
+
+  function handleExportPdf() {
+    downloadBddPdf(searched, activeFilters, search.trim(), setExportingPdf);
+  }
 
   function selectFleet(f: Fleet) {
     setActiveFleet(f);
@@ -399,6 +486,19 @@ export default function SuiviRlPage() {
             </ToggleGroup>
           </div>
         )}
+
+        <div className="mt-2 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            disabled={searched.length === 0 || exportingPdf}
+            title={searched.length === 0 ? "Aucune ligne à exporter" : "Exporter la liste filtrée en PDF"}
+            className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-400"
+          >
+            <DlIcon spinning={exportingPdf} />
+            {exportingPdf ? "Génération…" : `Export PDF (${searched.length})`}
+          </button>
+        </div>
       </ListPageHeader>
 
       <div className="px-3 py-3">
