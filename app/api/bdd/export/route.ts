@@ -225,24 +225,38 @@ async function buildPdf(
   cy += 6;
 
   // ── Table ──
-  // IMM gets its own larger/bold font — the plate is the one thing fleet
-  // staff actually scan for — while Client/Modèle/Commentaire share the
-  // smaller body size used everywhere else in this export.
-  const IMM_SIZE = 10;
-  const BODY_SIZE = 8;
-  const LINE_H = 11; // matches BODY_SIZE with comfortable leading for wrapped Commentaire lines
-  const CELL_PAD_TOP = 3;
-  const CELL_PAD_BOTTOM = 4;
-  const HEADER_H = 18;
+  // IMM gets a deliberately dominant size — the plate is the one thing
+  // fleet staff scan for "across a desk," not just modestly bigger than
+  // Client/Modèle/Commentaire's shared, also-enlarged body size. Row
+  // padding/line-height are generous too, so 22 rows (a typical filtered
+  // export) actually use most of the page height instead of sitting in a
+  // small dense block above a mostly-blank page.
+  const IMM_SIZE = 20;
+  const BODY_SIZE = 10;
+  const HEADER_SIZE = 10;
+  const LINE_H = 14; // leading for BODY_SIZE-sized wrapped Commentaire lines
+  const CELL_PAD_TOP = 6;
+  const CELL_PAD_BOTTOM = 8;
+  const HEADER_H = 26;
 
-  const columns: { key: keyof BddExportRow; label: string; weight: number }[] = [
-    { key: "IMM", label: "IMM", weight: 1.0 },
-    { key: "client", label: "Client", weight: 1.6 },
-    { key: "modele", label: "Modèle", weight: 1.1 },
-    { key: "commentaire", label: "Commentaire", weight: 2.3 },
+  // IMM's width is fixed in points, not weight-proportional like the rest —
+  // a real plate ("94102-E-1" etc.) measures ~90-95pt at 20pt bold
+  // (confirmed via widthOfTextAtSize on real live plates), so 115pt clears
+  // every real value with room for the cell padding on both sides.
+  // Client/Modèle/Commentaire split whatever width remains, same relative
+  // proportions as before.
+  const IMM_W = 115;
+  const restWeights = { client: 1.6, modele: 1.1, commentaire: 2.3 };
+  const restTotalWeight = restWeights.client + restWeights.modele + restWeights.commentaire;
+  const restW = PW - IMM_W;
+
+  const columns: { key: keyof BddExportRow; label: string; width: number }[] = [
+    { key: "IMM", label: "IMM", width: IMM_W },
+    { key: "client", label: "Client", width: (restWeights.client / restTotalWeight) * restW },
+    { key: "modele", label: "Modèle", width: (restWeights.modele / restTotalWeight) * restW },
+    { key: "commentaire", label: "Commentaire", width: (restWeights.commentaire / restTotalWeight) * restW },
   ];
-  const totalWeight = columns.reduce((s, col) => s + col.weight, 0);
-  const colWidths = columns.map((col) => (col.weight / totalWeight) * PW);
+  const colWidths = columns.map((col) => col.width);
   const colX = columns.map((_, i) => ML + colWidths.slice(0, i).reduce((s, w) => s + w, 0));
   const commentaireIdx = columns.findIndex((col) => col.key === "commentaire");
   const commentaireX = colX[commentaireIdx];
@@ -251,7 +265,7 @@ async function buildPdf(
   function drawTableHeader() {
     fillRect(ML, cy, PW, HEADER_H, NAVY);
     columns.forEach((col, i) => {
-      drawText(col.label, colX[i] + 3, cy + 4, colWidths[i] - 6, fontB, 8, WHITE);
+      drawText(col.label, colX[i] + 3, cy + 6, colWidths[i] - 6, fontB, HEADER_SIZE, WHITE);
     });
     cy += HEADER_H;
   }
@@ -270,7 +284,12 @@ async function buildPdf(
     const commentLines = row.commentaire.trim()
       ? wrapText(row.commentaire, fontR, BODY_SIZE, commentaireW)
       : [];
-    const rowH = Math.max(1, commentLines.length) * LINE_H + CELL_PAD_TOP + CELL_PAD_BOTTOM;
+    // Row must be tall enough for whichever is bigger: the wrapped Commentaire
+    // block, or IMM's own (much larger) font — a 1-line comment alone would
+    // otherwise size the row from LINE_H and leave no room for a 20pt IMM,
+    // pushing it into the row above/below instead of centering cleanly.
+    const contentH = Math.max(IMM_SIZE * 1.1, commentLines.length * LINE_H);
+    const rowH = contentH + CELL_PAD_TOP + CELL_PAD_BOTTOM;
 
     needSpace(rowH);
 
