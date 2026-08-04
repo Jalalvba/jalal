@@ -69,16 +69,24 @@ async function downloadBddPdf(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         rows: rows.map((r) => ({
-          IMM: r.IMM,
-          client: r.client,
-          modele: r.modele,
-          ETAT: r.ETAT,
-          Emplacement: r.Emplacement,
-          prestataire: r.prestataire,
-          flag: r.flag,
-          "Catégorie": r["Catégorie"],
-          Technicien: r.Technicien,
-          date_fin_contrat: r.date_fin_contrat,
+          IMM: String(r.IMM ?? ""),
+          client: String(r.client ?? ""),
+          // Some real vehicle models (Peugeot 208/508/2008/3008, ...) are
+          // literal digit strings, and the sheet sometimes stores them as a
+          // raw number rather than text — formatCellValue() passes numeric
+          // cells through as-is (only date-like headers get converted), so
+          // r.modele can genuinely be a `number` here despite BddRow's `string`
+          // type. String() below is the fix; without it, one such row's
+          // non-string modele fails the export route's strict isValidRow()
+          // check and rejects the WHOLE batch, not just that row.
+          modele: String(r.modele ?? ""),
+          ETAT: String(r.ETAT ?? ""),
+          Emplacement: String(r.Emplacement ?? ""),
+          prestataire: String(r.prestataire ?? ""),
+          flag: String(r.flag ?? ""),
+          "Catégorie": String(r["Catégorie"] ?? ""),
+          Technicien: String(r.Technicien ?? ""),
+          date_fin_contrat: String(r.date_fin_contrat ?? ""),
         })),
         activeFilters,
         searchTerm: searchTerm || undefined,
