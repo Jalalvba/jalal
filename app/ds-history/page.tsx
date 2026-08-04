@@ -556,7 +556,11 @@ function BddEditableRow({ row }: { row: BddRow }) {
   const isIntrouvable = row.Emplacement === "INTROUVABLE";
 
   return (
-    <div className="px-5 py-4">
+    <div
+      className={`px-5 py-4 ${
+        isIntrouvable ? "border border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : ""
+      }`}
+    >
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <InlineEditSelect
           value={row.ETAT}
