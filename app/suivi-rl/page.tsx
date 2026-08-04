@@ -3,12 +3,14 @@
 import { useMemo, useState } from "react";
 import {
   BDD_HEADERS,
+  BDD_ZONE_DETECTION_HEADERS,
   FLAG_STYLE,
   ETAT_OPTIONS,
   FLAG_OPTIONS,
   CATEGORIE_OPTIONS,
   TECHNICIEN_OPTIONS,
   PRESTATAIRE_OPTIONS,
+  EMPLACEMENT_OPTIONS,
   prestataireDotClass,
   type BddRow,
 } from "@/lib/types";
@@ -39,14 +41,17 @@ function formatAge(dataUpdatedAt: number): string {
 }
 
 // Server allowlist (lib/types.ts's BDD_EDITABLE_FIELDS) is unchanged — this
-// page just commits one of these 6 keys at a time now instead of bundling
-// all 6 into one form submit.
-type FieldKey = "ETAT" | "prestataire" | "flag" | "Catégorie" | "commentaire" | "Technicien";
+// page just commits one of these keys at a time now instead of bundling
+// all of them into one form submit.
+type FieldKey = "ETAT" | "prestataire" | "flag" | "Emplacement" | "Catégorie" | "commentaire" | "Technicien";
 
 // Everything shown once, either as one of the always-visible editable rows
 // below or promoted into the client/modele subtitle — the remainder is
 // read-only reference data, rendered dimmer/unlabeled-background to read as
-// clearly non-interactive.
+// clearly non-interactive. ATELIER/DEPOT/PARKING (BDD_ZONE_DETECTION_HEADERS)
+// are excluded here too — they get their own separately-labeled section
+// below rather than being folded into this generic list, since they're a
+// distinct signal (automated) from everything else in here (manual/static).
 const READONLY_HEADERS = BDD_HEADERS.filter(
   (h) =>
     h !== "IMM" &&
@@ -56,9 +61,11 @@ const READONLY_HEADERS = BDD_HEADERS.filter(
     h !== "ETAT" &&
     h !== "prestataire" &&
     h !== "flag" &&
+    h !== "Emplacement" &&
     h !== "commentaire" &&
     h !== "Catégorie" &&
-    h !== "Technicien"
+    h !== "Technicien" &&
+    !(BDD_ZONE_DETECTION_HEADERS as readonly string[]).includes(h)
 );
 
 // ─── Card ───────────────────────────────────────────────────────────────────
@@ -77,12 +84,19 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
 
   const flagStyle = FLAG_STYLE[row.flag] ?? null;
   const dot = prestataireDotClass(row.prestataire);
+  // Emplacement is a human's manual assessment (see lib/types.ts) — INTROUVABLE
+  // means someone has flagged this vehicle as genuinely not located, a real
+  // alert worth the same red treatment ds-history's SheetCard gives RL rows.
+  const isIntrouvable = row.Emplacement === "INTROUVABLE";
 
   return (
     <RecordCard
       imm={row.IMM}
       subtitle={[row.client, row.modele].filter(Boolean).join(" · ")}
-      className={flagStyle ? `border-l-4 ${flagStyle.border}` : ""}
+      className={cn(
+        flagStyle && `border-l-4 ${flagStyle.border}`,
+        isIntrouvable && "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20"
+      )}
       onDelete={() => onDelete(row._row, row.IMM)}
       headerLeft={
         <>
@@ -115,6 +129,7 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
             )}
           />
           <ZoneBadges {...zone} />
+          {isIntrouvable && <Badge variant="error">⚠ Introuvable</Badge>}
         </>
       }
       headerRight={
@@ -141,6 +156,15 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
       }
     >
       <div className="flex flex-col gap-2">
+        <InlineEditSelect
+          value={row.Emplacement}
+          options={EMPLACEMENT_OPTIONS}
+          label="Emplacement"
+          onCommit={commitField("Emplacement")}
+          renderTrigger={(state) => (
+            <FieldRowTrigger label="Emplacement" placeholder="— Choisir —" {...state} />
+          )}
+        />
         <InlineEditSelect
           value={row["Catégorie"]}
           options={CATEGORIE_OPTIONS}
@@ -177,6 +201,10 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
       </div>
 
       <ReadonlyFieldList fields={READONLY_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))} />
+      <ReadonlyFieldList
+        title="Détection de zone (auto)"
+        fields={BDD_ZONE_DETECTION_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))}
+      />
     </RecordCard>
   );
 }
@@ -195,6 +223,7 @@ export default function SuiviRlPage() {
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeFleet, setActiveFleet] = useState<Fleet>("INTERNE");
+  const [activeEmplacement, setActiveEmplacement] = useState("TOUS");
   const [activePrestataire, setActivePrestataire] = useState("TOUS");
   const [activeFlag, setActiveFlag] = useState("TOUS");
   const [error, setError] = useState("");
@@ -215,14 +244,22 @@ export default function SuiviRlPage() {
     return rows.filter((r) => r.ETAT?.toUpperCase() === activeFleet);
   }, [rows, activeFleet]);
 
+  // Fixed 5-value dropdown (EMPLACEMENT_OPTIONS), not derived from what's
+  // currently visible — unlike Prestataire/Flag below, so this chip row
+  // doesn't need its own "visible*" list.
+  const emplacementFiltered = useMemo(
+    () => (activeEmplacement === "TOUS" ? fleetFiltered : fleetFiltered.filter((r) => r.Emplacement === activeEmplacement)),
+    [fleetFiltered, activeEmplacement]
+  );
+
   const visiblePrestataires = useMemo(
-    () => [...new Set(fleetFiltered.map((r) => r.prestataire).filter(Boolean))].sort(),
-    [fleetFiltered]
+    () => [...new Set(emplacementFiltered.map((r) => r.prestataire).filter(Boolean))].sort(),
+    [emplacementFiltered]
   );
 
   const prestataireFiltered = useMemo(
-    () => (activePrestataire === "TOUS" ? fleetFiltered : fleetFiltered.filter((r) => r.prestataire === activePrestataire)),
-    [fleetFiltered, activePrestataire]
+    () => (activePrestataire === "TOUS" ? emplacementFiltered : emplacementFiltered.filter((r) => r.prestataire === activePrestataire)),
+    [emplacementFiltered, activePrestataire]
   );
 
   const visibleFlags = useMemo(
@@ -256,6 +293,12 @@ export default function SuiviRlPage() {
 
   function selectFleet(f: Fleet) {
     setActiveFleet(f);
+    setActiveEmplacement("TOUS");
+    setActivePrestataire("TOUS");
+    setActiveFlag("TOUS");
+  }
+  function selectEmplacement(e: string) {
+    setActiveEmplacement(e);
     setActivePrestataire("TOUS");
     setActiveFlag("TOUS");
   }
@@ -307,6 +350,21 @@ export default function SuiviRlPage() {
             {(["TOUS", "INTERNE", "EXTERNE"] as const).map((f) => (
               <ToggleGroupItem key={f} value={f}>
                 {f}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+        <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
+          <span className="mr-1 flex-shrink-0 text-micro font-bold uppercase text-muted-foreground">Emplacement</span>
+          <ToggleGroup
+            type="single"
+            value={activeEmplacement}
+            onValueChange={(v) => v && selectEmplacement(v)}
+          >
+            <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
+            {EMPLACEMENT_OPTIONS.map((e) => (
+              <ToggleGroupItem key={e} value={e}>
+                {e}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>

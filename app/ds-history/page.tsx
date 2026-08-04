@@ -24,6 +24,8 @@ import {
   CATEGORIE_OPTIONS,
   TECHNICIEN_OPTIONS,
   PRESTATAIRE_OPTIONS,
+  EMPLACEMENT_OPTIONS,
+  BDD_ZONE_DETECTION_HEADERS,
   prestataireDotClass,
   BDD_EDITABLE_FIELDS,
 } from "@/lib/types";
@@ -551,6 +553,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
   }
 
   const dot = prestataireDotClass(row.prestataire);
+  const isIntrouvable = row.Emplacement === "INTROUVABLE";
 
   return (
     <div className="px-5 py-4">
@@ -590,10 +593,18 @@ function BddEditableRow({ row }: { row: BddRow }) {
           )}
         />
         <ZoneBadges {...zone} />
+        {isIntrouvable && <Badge variant="error">⚠ Introuvable</Badge>}
         {row.date && <span className="text-xs text-muted-foreground">{row.date}</span>}
       </div>
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+        <InlineEditSelect
+          value={row.Emplacement}
+          options={EMPLACEMENT_OPTIONS}
+          label="Emplacement"
+          onCommit={commitField("Emplacement")}
+          renderTrigger={(state) => <FieldRowTrigger label="Emplacement" placeholder="— Choisir —" {...state} />}
+        />
         <InlineEditCombobox
           value={row.prestataire}
           options={PRESTATAIRE_OPTIONS}
@@ -633,6 +644,10 @@ function BddEditableRow({ row }: { row: BddRow }) {
           { label: "CONVOYEUR", value: row.CONVOYEUR },
           { label: "Intervention", value: row.Intervention },
         ]}
+      />
+      <ReadonlyFieldList
+        title="Détection de zone (auto)"
+        fields={BDD_ZONE_DETECTION_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))}
       />
     </div>
   );

@@ -110,6 +110,17 @@ export type CpApiResponse = {
 // that header cell back to "date_ds", its actual XLOOKUP-DATE_DS content
 // all along, confirmed live (no duplicate header names remain anywhere in
 // the row) — restored here as a read-only, date-formatted field.
+//
+// Added Emplacement/ATELIER/DEPOT/PARKING (live header re-read, 2026-08).
+// These are two independent signals, not one derived from the other:
+// "Emplacement" is a MANUAL dropdown (EMPLACEMENT_OPTIONS below) — someone's
+// human assessment of where the vehicle actually is — hence it's in
+// BDD_EDITABLE_FIELDS. "ATELIER"/"DEPOT"/"PARKING" are read-only sheet-side
+// XLOOKUP presence flags (value = the vehicle's own IMM if found as a live
+// row in that zone's tab, else blank) — the sheet-side equivalent of what
+// hooks/useVehicleZone.ts already computes client-side. The two can
+// legitimately disagree (stale manual entry, or a failed automated match)
+// — that disagreement is itself useful, not a bug to reconcile away.
 
 export const BDD_HEADERS = [
   "IMM",
@@ -119,6 +130,7 @@ export const BDD_HEADERS = [
   "ETAT",
   "prestataire",
   "flag",
+  "Emplacement",
   "commentaire",
   "Catégorie",
   "Technicien",
@@ -136,6 +148,9 @@ export const BDD_HEADERS = [
   "RDV",
   "CONVOYEUR",
   "Intervention",
+  "ATELIER",
+  "DEPOT",
+  "PARKING",
 ] as const;
 
 export type BddRow = {
@@ -147,6 +162,7 @@ export type BddRow = {
   ETAT: string;
   prestataire: string;
   flag: string;
+  Emplacement: string;
   commentaire: string;
   "Catégorie": string;
   Technicien: string;
@@ -164,20 +180,35 @@ export type BddRow = {
   RDV: string;
   CONVOYEUR: string;
   Intervention: string;
+  ATELIER: string;
+  DEPOT: string;
+  PARKING: string;
 };
 
 // Business-rule allowlist (not derived from the sheet — a deliberate policy:
-// only these 6 of the 22 real columns are writable from this app). Shared
+// only these of the 27 real columns are writable from this app). Shared
 // between the server-side check in lib/googleSheetsBdd.ts and the UI's edit
 // form so both agree on the same set without duplicating the literal list.
 export const BDD_EDITABLE_FIELDS = [
   "ETAT",
   "prestataire",
   "flag",
+  "Emplacement",
   "Catégorie",
   "commentaire",
   "Technicien",
 ] as const;
+
+// Sheet-confirmed dropdown values for the manual "Emplacement" field — a
+// human's assessment of the vehicle's real physical location, exact order
+// as given by the sheet owner.
+export const EMPLACEMENT_OPTIONS = ["ATELIER", "PARKING", "INTROUVABLE", "DEPOT", "EXTERNE"];
+
+// The three read-only, sheet-side XLOOKUP presence flags — kept as their own
+// list so both app/suivi-rl/page.tsx and app/ds-history/page.tsx can render
+// them as a clearly separate "automated zone detection" section rather than
+// folding them into the generic readonly field list.
+export const BDD_ZONE_DETECTION_HEADERS = ["ATELIER", "DEPOT", "PARKING"] as const;
 
 // Shared with app/suivi-rl/page.tsx (and now app/ds-history/page.tsx) so
 // every page renders the same flag exactly the same way — single source of
