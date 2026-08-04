@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["http://192.168.11.110:3000"],
+  allowedDevOrigins: ["http://192.168.11.131:3000"],
   // Verified live: these reach every response path proxy.ts produces
   // (the 401 JSON on unauthenticated API calls, the 307 redirect to
   // /login, and normal page responses) — no need to duplicate them
