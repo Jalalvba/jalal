@@ -17,17 +17,15 @@ const RATE_WINDOW_MS = 5 * 60 * 1000;
 // generating an enormous PDF.
 const MAX_ROWS = 2000;
 
+// Just the 4 identity/reference fields — the filter-axis fields (ETAT,
+// Emplacement, prestataire, flag, Catégorie, Technicien, date_fin_contrat)
+// were dropped from the table: they're already stated in the "Filtres
+// actifs" header line, so repeating them as columns was redundant.
 type BddExportRow = {
   IMM: string;
   client: string;
   modele: string;
-  ETAT: string;
-  Emplacement: string;
-  prestataire: string;
-  flag: string;
-  "Catégorie": string;
-  Technicien: string;
-  date_fin_contrat: string;
+  commentaire: string;
 };
 
 type BddExportPayload = {
@@ -38,10 +36,7 @@ type BddExportPayload = {
 
 function isValidRow(r: unknown): r is BddExportRow {
   if (!r || typeof r !== "object") return false;
-  const keys: (keyof BddExportRow)[] = [
-    "IMM", "client", "modele", "ETAT", "Emplacement",
-    "prestataire", "flag", "Catégorie", "Technicien", "date_fin_contrat",
-  ];
+  const keys: (keyof BddExportRow)[] = ["IMM", "client", "modele", "commentaire"];
   return keys.every((k) => typeof (r as Record<string, unknown>)[k] === "string");
 }
 
@@ -115,9 +110,11 @@ async function buildPdf(
   const fontR = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontB = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  // Landscape A4 — a 10-column table needs the width portrait can't give.
-  const PW_PAGE = 841.89;
-  const PH_PAGE = 595.28;
+  // Portrait A4 — only 4 (narrower) columns now, and portrait's taller page
+  // fits more rows before paginating, which matters more than extra width
+  // now that the wide filter-axis columns are gone.
+  const PW_PAGE = 595.28;
+  const PH_PAGE = 841.89;
   const ML = 36;
   const PW = PW_PAGE - ML * 2;
 
@@ -142,12 +139,12 @@ async function buildPdf(
   const sanitize = (s: string): string =>
     String(s ?? "")
       .replace(/[\r\n\t\x00-\x1f\x7f]/g, " ")
-      .replace(/[     　]/g, " ")
-      .replace(/[‘’ʼ]/g, "'")
-      .replace(/[“”«»]/g, '"')
-      .replace(/[–−]/g, "-")
-      .replace(/[—―]/g, "--")
-      .replace(/[…]/g, "...")
+      .replace(new RegExp("[\\u202f\\u00a0\\u2007\\u2009\\u200a\\u3000]", "g"), " ")
+      .replace(new RegExp("[\\u2018\\u2019\\u02bc]", "g"), "'")
+      .replace(new RegExp("[\\u201c\\u201d\\u00ab\\u00bb]", "g"), '"')
+      .replace(new RegExp("[\\u2013\\u2212]", "g"), "-")
+      .replace(new RegExp("[\\u2014\\u2015]", "g"), "--")
+      .replace(new RegExp("[\\u2026]", "g"), "...")
       .replace(/[^\x20-\xff]/g, "?");
 
   const truncate = (s: string, font: typeof fontR, size: number, maxW: number): string => {
@@ -164,6 +161,43 @@ async function buildPdf(
   ) => {
     const safe = truncate(s, font, size, maxW);
     page.drawText(safe, { x, y: Y(y + size * 0.8), font, size, color });
+  };
+
+  // Word-wraps (no truncation) into as many lines as needed — used only for
+  // Commentaire, the one column allowed to grow a row instead of clipping.
+  // Falls back to hard character-breaking for a single word wider than the
+  // column (rare, but a run-on comment with no spaces would otherwise never
+  // fit at all).
+  const wrapText = (s: string, font: typeof fontR, size: number, maxW: number): string[] => {
+    const words = sanitize(s).split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [""];
+    const lines: string[] = [];
+    let current = "";
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (font.widthOfTextAtSize(candidate, size) <= maxW) {
+        current = candidate;
+        continue;
+      }
+      if (current) lines.push(current);
+      if (font.widthOfTextAtSize(word, size) <= maxW) {
+        current = word;
+      } else {
+        let chunk = "";
+        for (const ch of word) {
+          const next = chunk + ch;
+          if (font.widthOfTextAtSize(next, size) <= maxW) {
+            chunk = next;
+          } else {
+            lines.push(chunk);
+            chunk = ch;
+          }
+        }
+        current = chunk;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
   };
 
   // ── Title + meta ──
@@ -191,36 +225,39 @@ async function buildPdf(
   cy += 6;
 
   // ── Table ──
+  // IMM gets its own larger/bold font — the plate is the one thing fleet
+  // staff actually scan for — while Client/Modèle/Commentaire share the
+  // smaller body size used everywhere else in this export.
+  const IMM_SIZE = 10;
+  const BODY_SIZE = 8;
+  const LINE_H = 11; // matches BODY_SIZE with comfortable leading for wrapped Commentaire lines
+  const CELL_PAD_TOP = 3;
+  const CELL_PAD_BOTTOM = 4;
+  const HEADER_H = 18;
+
   const columns: { key: keyof BddExportRow; label: string; weight: number }[] = [
     { key: "IMM", label: "IMM", weight: 1.0 },
     { key: "client", label: "Client", weight: 1.6 },
-    { key: "modele", label: "Modèle", weight: 1.2 },
-    { key: "ETAT", label: "État", weight: 0.8 },
-    { key: "Emplacement", label: "Emplacement", weight: 1.0 },
-    { key: "prestataire", label: "Prestataire", weight: 1.3 },
-    { key: "flag", label: "Flag", weight: 0.7 },
-    { key: "Catégorie", label: "Catégorie", weight: 2.0 },
-    { key: "Technicien", label: "Technicien", weight: 1.3 },
-    { key: "date_fin_contrat", label: "Fin contrat", weight: 0.9 },
+    { key: "modele", label: "Modèle", weight: 1.1 },
+    { key: "commentaire", label: "Commentaire", weight: 2.3 },
   ];
-  const totalWeight = columns.reduce((s, c) => s + c.weight, 0);
-  const colWidths = columns.map((c) => (c.weight / totalWeight) * PW);
-
-  const ROW_H = 14;
-  const HEADER_H = 16;
+  const totalWeight = columns.reduce((s, col) => s + col.weight, 0);
+  const colWidths = columns.map((col) => (col.weight / totalWeight) * PW);
+  const colX = columns.map((_, i) => ML + colWidths.slice(0, i).reduce((s, w) => s + w, 0));
+  const commentaireIdx = columns.findIndex((col) => col.key === "commentaire");
+  const commentaireX = colX[commentaireIdx];
+  const commentaireW = colWidths[commentaireIdx] - 6;
 
   function drawTableHeader() {
     fillRect(ML, cy, PW, HEADER_H, NAVY);
-    let x = ML;
     columns.forEach((col, i) => {
-      drawText(col.label, x + 3, cy + 3, colWidths[i] - 6, fontB, 7, WHITE);
-      x += colWidths[i];
+      drawText(col.label, colX[i] + 3, cy + 4, colWidths[i] - 6, fontB, 8, WHITE);
     });
     cy += HEADER_H;
   }
 
-  function needRowSpace() {
-    if (cy + ROW_H > PH_PAGE - 40) {
+  function needSpace(h: number) {
+    if (cy + h > PH_PAGE - 40) {
       page = newPage();
       cy = 36;
       drawTableHeader();
@@ -230,14 +267,29 @@ async function buildPdf(
   drawTableHeader();
 
   rows.forEach((row, idx) => {
-    needRowSpace();
-    if (idx % 2 === 1) fillRect(ML, cy, PW, ROW_H, ALT);
-    let x = ML;
-    columns.forEach((col, i) => {
-      drawText(String(row[col.key] ?? ""), x + 3, cy + 2, colWidths[i] - 6, fontR, 7, DARK);
-      x += colWidths[i];
+    const commentLines = row.commentaire.trim()
+      ? wrapText(row.commentaire, fontR, BODY_SIZE, commentaireW)
+      : [];
+    const rowH = Math.max(1, commentLines.length) * LINE_H + CELL_PAD_TOP + CELL_PAD_BOTTOM;
+
+    needSpace(rowH);
+
+    if (idx % 2 === 1) fillRect(ML, cy, PW, rowH, ALT);
+
+    // IMM — deliberately larger + bold, vertically centered in the row.
+    const immY = cy + CELL_PAD_TOP + (rowH - CELL_PAD_TOP - CELL_PAD_BOTTOM - IMM_SIZE) / 2 + IMM_SIZE * 0.15;
+    drawText(row.IMM, colX[0] + 3, immY, colWidths[0] - 6, fontB, IMM_SIZE, NAVY);
+
+    // Client / Modèle — single line, top-aligned, same treatment as before.
+    drawText(row.client, colX[1] + 3, cy + CELL_PAD_TOP + 1, colWidths[1] - 6, fontR, BODY_SIZE, DARK);
+    drawText(row.modele, colX[2] + 3, cy + CELL_PAD_TOP + 1, colWidths[2] - 6, fontR, BODY_SIZE, DARK);
+
+    // Commentaire — wrapped, one line drawn per entry, never truncated.
+    commentLines.forEach((line, li) => {
+      drawText(line, commentaireX + 3, cy + CELL_PAD_TOP + 1 + li * LINE_H, commentaireW, fontR, BODY_SIZE, DARK);
     });
-    cy += ROW_H;
+
+    cy += rowH;
     hLine(cy);
   });
 

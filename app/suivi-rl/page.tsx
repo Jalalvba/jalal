@@ -80,13 +80,7 @@ async function downloadBddPdf(
           // non-string modele fails the export route's strict isValidRow()
           // check and rejects the WHOLE batch, not just that row.
           modele: String(r.modele ?? ""),
-          ETAT: String(r.ETAT ?? ""),
-          Emplacement: String(r.Emplacement ?? ""),
-          prestataire: String(r.prestataire ?? ""),
-          flag: String(r.flag ?? ""),
-          "Catégorie": String(r["Catégorie"] ?? ""),
-          Technicien: String(r.Technicien ?? ""),
-          date_fin_contrat: String(r.date_fin_contrat ?? ""),
+          commentaire: String(r.commentaire ?? ""),
         })),
         activeFilters,
         searchTerm: searchTerm || undefined,
