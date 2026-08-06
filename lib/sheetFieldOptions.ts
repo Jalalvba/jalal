@@ -71,9 +71,24 @@ const FALLBACK: AllSheetFieldOptions = {
   RDV_CONVOYEURS: [...RDV_CONVOYEURS_FALLBACK],
 };
 
-export function getFallbackOptions(): AllSheetFieldOptions {
-  return FALLBACK;
+/** Deep clone — FALLBACK's arrays/objects must never be handed out by reference, since a caller mutating its own "copy" would otherwise corrupt the process-wide fallback every other request also serves. */
+function cloneFallback(): AllSheetFieldOptions {
+  return JSON.parse(JSON.stringify(FALLBACK)) as AllSheetFieldOptions;
 }
+
+export function getFallbackOptions(): AllSheetFieldOptions {
+  return cloneFallback();
+}
+
+/** Per-key last-write timestamp, ISO 8601, or null if that key has no Mongo document yet (still serving its hardcoded fallback). Lets a client detect "the value I'm about to overwrite already changed since I read it" — see updateFieldOptions()'s expectedUpdatedAt param. */
+export type SheetFieldOptionsMeta = Record<OptionKey, string | null>;
+
+export type SheetFieldOptionsResult = {
+  options: AllSheetFieldOptions;
+  /** True only when Mongo itself was unreachable for this read (the whole collection fell back) — NOT true for the normal "this one key has no document yet" per-key fallback, which is expected pre-seed behavior, not an outage. */
+  degraded: boolean;
+  meta: SheetFieldOptionsMeta;
+};
 
 /**
  * Reads every option-set from Mongo in one query, cached via the same
@@ -87,27 +102,47 @@ export function getFallbackOptions(): AllSheetFieldOptions {
  * given key has no document yet (e.g. before the seed script has run) or if
  * Mongo is unreachable entirely — an admin-config outage degrades to
  * "dropdowns serve their last-known-good hardcoded values," never to a page
- * that can't render.
+ * that can't render. `degraded`/`meta` let a caller (the admin UI
+ * specifically) tell that degraded state apart from a normal healthy read,
+ * rather than silently treating fallback data as if it were live Mongo
+ * state — see app/admin/config/page.tsx.
  */
-export async function getAllSheetFieldOptions(): Promise<AllSheetFieldOptions> {
+export async function getAllSheetFieldOptionsWithStatus(): Promise<SheetFieldOptionsResult> {
   try {
     return await withCache(CACHE_KEY, CACHE_TTL_MS, async () => {
       const col = await getCollection<SheetFieldOptionsDoc>(COLLECTION);
       const docs = await col.find({}).toArray();
       const byKey = new Map(docs.map((d) => [d.key, d]));
 
-      const result = { ...FALLBACK };
+      const result = cloneFallback();
+      const meta = {} as SheetFieldOptionsMeta;
       for (const key of OPTION_KEYS) {
         const doc = byKey.get(key);
-        if (!doc) continue; // no document for this key yet -> keep its fallback
+        if (!doc) {
+          meta[key] = null; // no document for this key yet -> keep its fallback
+          continue;
+        }
         (result as unknown as Record<OptionKey, unknown>)[key] = doc.options;
+        // Defensive: every doc this app itself ever writes has updatedAt
+        // set (see updateFieldOptions() below), but a doc missing/carrying
+        // a malformed one (e.g. manually edited in Mongo directly)
+        // shouldn't take the whole read down with it — treat it the same
+        // as "no document yet" for concurrency purposes rather than
+        // throwing and falling back to hardcoded defaults for every key.
+        meta[key] = doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : null;
       }
-      return result;
+      return { options: result, degraded: false, meta };
     });
   } catch (e) {
     console.error("getAllSheetFieldOptions: Mongo unreachable, serving hardcoded fallback", e);
-    return FALLBACK;
+    const meta = Object.fromEntries(OPTION_KEYS.map((k) => [k, null])) as SheetFieldOptionsMeta;
+    return { options: cloneFallback(), degraded: true, meta };
   }
+}
+
+/** Convenience wrapper for callers (lib/googleSheetsRdvMonthly.ts) that only need the option values, not the degraded/meta status. */
+export async function getAllSheetFieldOptions(): Promise<AllSheetFieldOptions> {
+  return (await getAllSheetFieldOptionsWithStatus()).options;
 }
 
 export class OptionsValidationError extends Error {}
@@ -141,6 +176,12 @@ export type UpdateOptionsInput =
   | { key: Exclude<OptionKey, "FLAG_OPTIONS" | "PRESTATAIRE_OPTIONS">; options: string[] }
   | { key: "FLAG_OPTIONS" | "PRESTATAIRE_OPTIONS"; options: ColoredOption[] };
 
+/** Thrown by updateFieldOptions() when expectedUpdatedAt doesn't match the document's real current updatedAt — someone else's write (or this same admin, from another tab) landed since the caller's local `options` state was read. */
+export class OptionsConflictError extends Error {}
+
+/** MongoDB's duplicate-key error code — see the updateOne() comment below for why this doubles as our optimistic-concurrency conflict signal. */
+const MONGO_DUPLICATE_KEY_CODE = 11000;
+
 /**
  * Validates and writes one whole option-set (the admin UI always saves a
  * full replace of a set, not a per-item patch — simpler and matches how
@@ -148,8 +189,21 @@ export type UpdateOptionsInput =
  * successful write so the very next read anywhere in the app — same
  * instance or a different warm one — sees the change immediately instead of
  * waiting out CACHE_TTL_MS.
+ *
+ * `expectedUpdatedAt` — the ISO timestamp (or null, for "no document yet")
+ * the caller last read for this key via getAllSheetFieldOptionsWithStatus()
+ * — is optional for backward compatibility (existing callers/tests that
+ * don't pass it get the old unconditional-overwrite behavior), but
+ * app/api/config/options/route.ts always supplies it. When present, the
+ * write is conditioned on the document still having that exact updatedAt;
+ * if another write landed in between, the condition doesn't match and
+ * OptionsConflictError is thrown instead of silently overwriting.
  */
-export async function updateFieldOptions(input: UpdateOptionsInput, updatedBy: string): Promise<void> {
+export async function updateFieldOptions(
+  input: UpdateOptionsInput,
+  updatedBy: string,
+  expectedUpdatedAt?: string | null
+): Promise<void> {
   if (!(OPTION_KEYS as readonly string[]).includes(input.key)) {
     throw new OptionsValidationError(`Clé inconnue : "${input.key}".`);
   }
@@ -178,6 +232,38 @@ export async function updateFieldOptions(input: UpdateOptionsInput, updatedBy: s
       };
 
   const col = await getCollection<SheetFieldOptionsDoc>(COLLECTION);
-  await col.updateOne({ _id: input.key }, { $set: doc }, { upsert: true });
+
+  if (expectedUpdatedAt === undefined) {
+    // No concurrency check requested — old unconditional-replace behavior.
+    await col.updateOne({ _id: input.key }, { $set: doc }, { upsert: true });
+    invalidateCache(CACHE_KEY);
+    return;
+  }
+
+  // Filter includes the expected updatedAt as an equality condition. If the
+  // live document's updatedAt has since moved on (or a document now exists
+  // where the caller expected none), this filter matches nothing — and
+  // because upsert:true is set, MongoDB attempts to INSERT a new document
+  // instead. That insert collides on the unique _id index (a document with
+  // this _id already exists, just with a different updatedAt), throwing
+  // E11000 — which is exactly the conflict signal we want, detected
+  // atomically by Mongo itself rather than via a separate check-then-write
+  // race on our side.
+  const filter: Record<string, unknown> =
+    expectedUpdatedAt === null
+      ? { _id: input.key, updatedAt: { $exists: false } }
+      : { _id: input.key, updatedAt: new Date(expectedUpdatedAt) };
+
+  try {
+    await col.updateOne(filter, { $set: doc }, { upsert: true });
+  } catch (e) {
+    const code = (e as { code?: number })?.code;
+    if (code === MONGO_DUPLICATE_KEY_CODE) {
+      throw new OptionsConflictError(
+        `"${OPTION_LABELS[input.key]}" a été modifié entre-temps (par un autre onglet ou une autre personne). Rechargez la page et réessayez.`
+      );
+    }
+    throw e;
+  }
   invalidateCache(CACHE_KEY);
 }

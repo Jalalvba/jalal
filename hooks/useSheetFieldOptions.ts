@@ -18,6 +18,12 @@ import {
 // pending. The server-side fallback (Mongo unreachable) and this one
 // (network/query not yet resolved) are two different failure points, both
 // degrading to the same last-known-good values rather than a blank UI.
+//
+// Crucially, this is ONLY ever shown while isLoading is true (or on a fetch
+// failure) — /admin/config specifically must never let a user edit against
+// this data, since a save while it's showing CLIENT_FALLBACK would replace
+// whatever's actually in Mongo with these hardcoded values. See
+// app/admin/config/page.tsx's isLoading gate.
 const CLIENT_FALLBACK: AllSheetFieldOptions = {
   EMPLACEMENT_OPTIONS: EMPLACEMENT_OPTIONS_FALLBACK,
   ETAT_OPTIONS: ETAT_OPTIONS_FALLBACK,
@@ -30,11 +36,25 @@ const CLIENT_FALLBACK: AllSheetFieldOptions = {
 
 const QUERY_KEY = ["config", "options"] as const;
 
-async function fetchOptions(): Promise<AllSheetFieldOptions> {
+type OptionsMeta = Record<OptionKey, string | null>;
+
+type FetchOptionsResult = {
+  options: AllSheetFieldOptions;
+  degraded: boolean;
+  meta: OptionsMeta;
+};
+
+async function fetchOptions(): Promise<FetchOptionsResult> {
   const res = await fetch("/api/config/options");
-  const json = (await res.json()) as { ok: boolean; options?: AllSheetFieldOptions; error?: string };
+  const json = (await res.json()) as {
+    ok: boolean;
+    options?: AllSheetFieldOptions;
+    degraded?: boolean;
+    meta?: OptionsMeta;
+    error?: string;
+  };
   if (!json.ok || !json.options) throw new Error(json.error ?? "Erreur inconnue");
-  return json.options;
+  return { options: json.options, degraded: json.degraded ?? false, meta: json.meta ?? ({} as OptionsMeta) };
 }
 
 /**
@@ -46,6 +66,14 @@ async function fetchOptions(): Promise<AllSheetFieldOptions> {
  * per caller. staleTime matches the server-side cache TTL (options change
  * rarely) so this isn't refetching on every window focus for data that's
  * essentially static.
+ *
+ * `degraded` is true only when the server itself served fallback data
+ * because Mongo was unreachable (not the normal per-key "no document yet"
+ * case) — /admin/config uses it to block edits rather than let a write land
+ * on top of what might be stale fallback data. `isLoading` additionally
+ * covers the client-side "haven't heard back yet" window, which is the more
+ * common trigger for the same class of bug (see C2 in the audit this
+ * responds to).
  */
 export function useSheetFieldOptions() {
   const query = useQuery({
@@ -54,10 +82,12 @@ export function useSheetFieldOptions() {
     staleTime: 5 * 60_000,
   });
 
-  const options = query.data ?? CLIENT_FALLBACK;
+  const options = query.data?.options ?? CLIENT_FALLBACK;
 
   return {
     options,
+    degraded: query.data?.degraded ?? false,
+    meta: query.data?.meta ?? ({} as OptionsMeta),
     isLoading: query.isPending,
     error: query.error instanceof Error ? query.error.message : "",
     refetch: query.refetch,
@@ -72,7 +102,12 @@ export function optionValues(colored: ColoredOption[]): string[] {
 export function useUpdateSheetFieldOptions() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { key: OptionKey; options: string[] | ColoredOption[] }) => {
+    mutationFn: async (input: {
+      key: OptionKey;
+      options: string[] | ColoredOption[];
+      /** The updatedAt this key had when the caller last read it (from useSheetFieldOptions()'s `meta`) — null if the key had no document yet. Lets the server detect a concurrent write and reject with a 409 instead of silently overwriting it. */
+      expectedUpdatedAt: string | null;
+    }) => {
       const res = await fetch("/api/config/options", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

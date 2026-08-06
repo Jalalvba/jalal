@@ -27,7 +27,17 @@ import { cn } from "@/components/ui/utils";
 const PLAIN_KEYS: OptionKey[] = ["EMPLACEMENT_OPTIONS", "ETAT_OPTIONS", "CATEGORIE_OPTIONS", "TECHNICIEN_OPTIONS", "RDV_CONVOYEURS"];
 const COLORED_KEYS: OptionKey[] = ["FLAG_OPTIONS", "PRESTATAIRE_OPTIONS"];
 
-function ChipButton({ children, onRemove, dotColor }: { children: React.ReactNode; onRemove: () => void; dotColor?: PaletteColor | null }) {
+function ChipButton({
+  children,
+  onRemove,
+  dotColor,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onRemove: () => void;
+  dotColor?: PaletteColor | null;
+  disabled?: boolean;
+}) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card py-1 pl-3 pr-1.5 text-micro font-medium text-foreground">
       {dotColor !== undefined && (
@@ -37,7 +47,8 @@ function ChipButton({ children, onRemove, dotColor }: { children: React.ReactNod
       <button
         type="button"
         onClick={onRemove}
-        className="rounded-full p-0.5 text-muted-foreground transition hover:bg-red-500/10 hover:text-red-400"
+        disabled={disabled}
+        className="rounded-full p-0.5 text-muted-foreground transition hover:bg-red-500/10 hover:text-red-400 disabled:pointer-events-none disabled:opacity-40"
         title="Retirer"
       >
         <X className="h-3 w-3" />
@@ -98,11 +109,13 @@ function PlainOptionSet({
   values,
   onSave,
   pending,
+  disabled,
 }: {
   optionKey: OptionKey;
   values: string[];
   onSave: (next: string[]) => Promise<void>;
   pending: boolean;
+  disabled: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [localError, setLocalError] = useState("");
@@ -128,7 +141,7 @@ function PlainOptionSet({
     <SectionCard title={OPTION_LABELS[optionKey]} count={values.length}>
       <div className="flex flex-wrap gap-1.5">
         {values.map((v) => (
-          <ChipButton key={v} onRemove={() => remove(v)}>
+          <ChipButton key={v} onRemove={() => remove(v)} disabled={disabled || pending}>
             {v}
           </ChipButton>
         ))}
@@ -146,8 +159,9 @@ function PlainOptionSet({
           }}
           placeholder="Nouvelle valeur…"
           className="h-9 flex-1 text-sm"
+          disabled={disabled}
         />
-        <Button type="button" size="sm" onClick={add} disabled={pending || !draft.trim()}>
+        <Button type="button" size="sm" onClick={add} disabled={disabled || pending || !draft.trim()}>
           <Plus className="h-3.5 w-3.5" /> Ajouter
         </Button>
       </div>
@@ -162,12 +176,14 @@ function ColoredOptionSet({
   onSave,
   pending,
   allowNoneColor,
+  disabled,
 }: {
   optionKey: OptionKey;
   values: ColoredOption[];
   onSave: (next: ColoredOption[]) => Promise<void>;
   pending: boolean;
   allowNoneColor: boolean;
+  disabled: boolean;
 }) {
   const [draftValue, setDraftValue] = useState("");
   const [draftColor, setDraftColor] = useState<PaletteColor | null>(PALETTE_COLORS[0]);
@@ -194,7 +210,7 @@ function ColoredOptionSet({
     <SectionCard title={OPTION_LABELS[optionKey]} count={values.length}>
       <div className="flex flex-wrap gap-1.5">
         {values.map((o) => (
-          <ChipButton key={o.value} onRemove={() => remove(o.value)} dotColor={o.color}>
+          <ChipButton key={o.value} onRemove={() => remove(o.value)} dotColor={o.color} disabled={disabled || pending}>
             {o.value}
           </ChipButton>
         ))}
@@ -212,9 +228,10 @@ function ColoredOptionSet({
           }}
           placeholder="Nouvelle valeur…"
           className="h-9 flex-1 text-sm"
+          disabled={disabled}
         />
         <ColorSwatchPicker value={draftColor} onChange={setDraftColor} allowNone={allowNoneColor} />
-        <Button type="button" size="sm" onClick={add} disabled={pending || !draftValue.trim()}>
+        <Button type="button" size="sm" onClick={add} disabled={disabled || pending || !draftValue.trim()}>
           <Plus className="h-3.5 w-3.5" /> Ajouter
         </Button>
       </div>
@@ -224,13 +241,27 @@ function ColoredOptionSet({
 }
 
 export default function AdminConfigPage() {
-  const { options, isLoading } = useSheetFieldOptions();
+  const { options, meta, degraded, isLoading } = useSheetFieldOptions();
   const mutation = useUpdateSheetFieldOptions();
   const [error, setError] = useState("");
 
+  // Editing is blocked (not just "options shown as read-only") for two
+  // distinct reasons, both closing the same class of bug (see C1 in the
+  // audit this responds to — a save landing on top of data the UI hasn't
+  // actually confirmed is real yet):
+  //  - isLoading: the query hasn't resolved yet, so `options` above is
+  //    still CLIENT_FALLBACK (hardcoded, not Mongo's real current state).
+  //    Previously the section cards rendered immediately regardless, gated
+  //    only on mutation.isPending, so a click during this window POSTed
+  //    fallback data as if it were current.
+  //  - degraded: the query DID resolve, but the server itself had to serve
+  //    fallback data because Mongo was unreachable for that read — same
+  //    risk, coming from the opposite side.
+  const editingBlocked = isLoading || degraded;
+
   async function save(key: OptionKey, next: string[] | ColoredOption[]) {
     try {
-      await mutation.mutateAsync({ key, options: next });
+      await mutation.mutateAsync({ key, options: next, expectedUpdatedAt: meta[key] ?? null });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur réseau");
       setTimeout(() => setError(""), 4000);
@@ -258,28 +289,42 @@ export default function AdminConfigPage() {
 
         {error && <Alert className="mb-1">{error}</Alert>}
 
-        {isLoading && <div className="py-10 text-center text-sm text-muted-foreground">Chargement…</div>}
+        {degraded && !isLoading && (
+          <Alert className="mb-1" data-testid="config-degraded-banner">
+            ⚠ Impossible de joindre la base — valeurs par défaut affichées, modifications désactivées. Réessayez plus tard.
+          </Alert>
+        )}
 
-        {PLAIN_KEYS.map((key) => (
-          <PlainOptionSet
-            key={key}
-            optionKey={key}
-            values={options[key] as string[]}
-            onSave={(next) => save(key, next)}
-            pending={mutation.isPending}
-          />
-        ))}
+        {isLoading ? (
+          <div className="py-10 text-center text-sm text-muted-foreground" data-testid="config-loading">
+            Chargement…
+          </div>
+        ) : (
+          <>
+            {PLAIN_KEYS.map((key) => (
+              <PlainOptionSet
+                key={key}
+                optionKey={key}
+                values={options[key] as string[]}
+                onSave={(next) => save(key, next)}
+                pending={mutation.isPending}
+                disabled={editingBlocked}
+              />
+            ))}
 
-        {COLORED_KEYS.map((key) => (
-          <ColoredOptionSet
-            key={key}
-            optionKey={key}
-            values={options[key] as ColoredOption[]}
-            onSave={(next) => save(key, next)}
-            pending={mutation.isPending}
-            allowNoneColor={key === "PRESTATAIRE_OPTIONS"}
-          />
-        ))}
+            {COLORED_KEYS.map((key) => (
+              <ColoredOptionSet
+                key={key}
+                optionKey={key}
+                values={options[key] as ColoredOption[]}
+                onSave={(next) => save(key, next)}
+                pending={mutation.isPending}
+                allowNoneColor={key === "PRESTATAIRE_OPTIONS"}
+                disabled={editingBlocked}
+              />
+            ))}
+          </>
+        )}
       </div>
     </div>
   );

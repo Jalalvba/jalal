@@ -28,6 +28,11 @@ export default defineConfig({
       // dummies above, needed just to make the module importable when a
       // test gives it a fully mocked `sheets` client.
       GOOGLE_SHEETS_ID: "test-dummy-sheet-id",
+      // lib/googleOAuth.ts throws at module load if these are unset —
+      // pulled in transitively by app/api/config/options/route.ts (via
+      // AUTHORIZED_EMAIL), same reasoning as the dummies above.
+      GOOGLE_OAUTH_CLIENT_ID: "test-dummy-oauth-client-id",
+      GOOGLE_OAUTH_CLIENT_SECRET: "test-dummy-oauth-client-secret",
     },
   },
   resolve: {

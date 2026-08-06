@@ -20,8 +20,11 @@ import { getCollection } from "@/lib/mongo";
 import { invalidateCache } from "@/lib/googleSheetsClient";
 import {
   getAllSheetFieldOptions,
+  getAllSheetFieldOptionsWithStatus,
+  getFallbackOptions,
   updateFieldOptions,
   OptionsValidationError,
+  OptionsConflictError,
 } from "@/lib/sheetFieldOptions";
 import {
   EMPLACEMENT_OPTIONS_FALLBACK,
@@ -62,7 +65,7 @@ describe("getAllSheetFieldOptions — fallback on Mongo failure", () => {
       find: () => ({
         toArray: () =>
           Promise.resolve([
-            { _id: "TECHNICIEN_OPTIONS", key: "TECHNICIEN_OPTIONS", type: "plain", options: ["NEW GUY"] },
+            { _id: "TECHNICIEN_OPTIONS", key: "TECHNICIEN_OPTIONS", type: "plain", options: ["NEW GUY"], updatedAt: new Date("2026-01-01T00:00:00.000Z"), updatedBy: "test" },
           ]),
       }),
     } as never);
@@ -77,7 +80,7 @@ describe("getAllSheetFieldOptions — fallback on Mongo failure", () => {
       find: () => ({
         toArray: () =>
           Promise.resolve([
-            { _id: "TECHNICIEN_OPTIONS", key: "TECHNICIEN_OPTIONS", type: "plain", options: ["NEW GUY"] },
+            { _id: "TECHNICIEN_OPTIONS", key: "TECHNICIEN_OPTIONS", type: "plain", options: ["NEW GUY"], updatedAt: new Date("2026-01-01T00:00:00.000Z"), updatedBy: "test" },
             // EMPLACEMENT_OPTIONS has no document at all — e.g. seed script
             // hasn't run yet for it.
           ]),
@@ -88,6 +91,49 @@ describe("getAllSheetFieldOptions — fallback on Mongo failure", () => {
 
     expect(options.TECHNICIEN_OPTIONS).toEqual(["NEW GUY"]);
     expect(options.EMPLACEMENT_OPTIONS).toEqual(EMPLACEMENT_OPTIONS_FALLBACK);
+  });
+});
+
+describe("getAllSheetFieldOptionsWithStatus — degraded flag (C2)", () => {
+  // Regression guard for the admin-config bug found in the audit: the GET
+  // response must be able to tell "Mongo unreachable, serving hardcoded
+  // fallback" apart from a normal healthy read, so /admin/config can block
+  // edits rather than silently accept a write built on fallback data.
+  it("Mongo unreachable -> degraded: true, and every key's meta is null", async () => {
+    mockedGetCollection.mockRejectedValue(new Error("MongoServerSelectionError: Server selection timed out"));
+
+    const { options, degraded, meta } = await getAllSheetFieldOptionsWithStatus();
+
+    expect(degraded).toBe(true);
+    expect(options.EMPLACEMENT_OPTIONS).toEqual(EMPLACEMENT_OPTIONS_FALLBACK);
+    expect(meta.EMPLACEMENT_OPTIONS).toBeNull();
+    expect(meta.TECHNICIEN_OPTIONS).toBeNull();
+  });
+
+  it("a healthy read -> degraded: false, even if some individual keys fall back for lack of a document yet", async () => {
+    mockedGetCollection.mockResolvedValue({
+      find: () => ({
+        toArray: () =>
+          Promise.resolve([
+            { _id: "TECHNICIEN_OPTIONS", key: "TECHNICIEN_OPTIONS", type: "plain", options: ["NEW GUY"], updatedAt: new Date("2026-01-01T00:00:00.000Z"), updatedBy: "test" },
+            // EMPLACEMENT_OPTIONS has no document at all — normal pre-seed
+            // state, NOT a Mongo outage.
+          ]),
+      }),
+    } as never);
+
+    const { degraded, meta } = await getAllSheetFieldOptionsWithStatus();
+
+    expect(degraded).toBe(false);
+    expect(meta.TECHNICIEN_OPTIONS).toBe("2026-01-01T00:00:00.000Z");
+    expect(meta.EMPLACEMENT_OPTIONS).toBeNull(); // no document yet, but this alone isn't "degraded"
+  });
+
+  it("getFallbackOptions() returns a deep copy, not a reference to the shared fallback (M9)", () => {
+    const a = getFallbackOptions();
+    const b = getFallbackOptions();
+    a.TECHNICIEN_OPTIONS.push("MUTATED");
+    expect(b.TECHNICIEN_OPTIONS).not.toContain("MUTATED");
   });
 });
 
@@ -140,5 +186,82 @@ describe("updateFieldOptions — validation", () => {
       { upsert: true }
     );
     expect(invalidateCache).toHaveBeenCalledWith("sheetFieldOptions:all");
+  });
+
+  it("trims values before storage (I2 — trim-consistency), not just before the duplicate check", async () => {
+    const updateOne = fakeCollection();
+
+    // Route-layer trimming (app/api/config/options/route.ts) is what
+    // actually strips this in production; this asserts updateFieldOptions
+    // itself doesn't silently re-introduce untrimmed storage if called
+    // directly with an already-untrimmed value from elsewhere.
+    await updateFieldOptions({ key: "EMPLACEMENT_OPTIONS", options: ["ATELIER"] }, "test@example.com");
+
+    expect(updateOne).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ $set: expect.objectContaining({ options: ["ATELIER"] }) }),
+      expect.anything()
+    );
+  });
+});
+
+describe("updateFieldOptions — optimistic concurrency (C2)", () => {
+  function fakeCollectionWithFilterCheck(behavior: "match" | "conflict") {
+    const updateOne = vi.fn().mockImplementation(async () => {
+      if (behavior === "conflict") {
+        const err = new Error("E11000 duplicate key error") as Error & { code: number };
+        err.code = 11000;
+        throw err;
+      }
+      return { acknowledged: true, matchedCount: 1, upsertedCount: 0 };
+    });
+    mockedGetCollection.mockResolvedValue({ updateOne } as never);
+    return updateOne;
+  }
+
+  it("a write whose expectedUpdatedAt matches the live document succeeds", async () => {
+    const updateOne = fakeCollectionWithFilterCheck("match");
+
+    await updateFieldOptions(
+      { key: "EMPLACEMENT_OPTIONS", options: ["ATELIER"] },
+      "test@example.com",
+      "2026-01-01T00:00:00.000Z"
+    );
+
+    expect(updateOne).toHaveBeenCalledWith(
+      { _id: "EMPLACEMENT_OPTIONS", updatedAt: new Date("2026-01-01T00:00:00.000Z") },
+      expect.anything(),
+      { upsert: true }
+    );
+  });
+
+  it("a write whose expectedUpdatedAt no longer matches (someone else wrote since) throws OptionsConflictError, not a silent overwrite", async () => {
+    fakeCollectionWithFilterCheck("conflict");
+
+    await expect(
+      updateFieldOptions(
+        { key: "EMPLACEMENT_OPTIONS", options: ["ATELIER"] },
+        "test@example.com",
+        "2026-01-01T00:00:00.000Z" // stale — the live doc has since moved on
+      )
+    ).rejects.toBeInstanceOf(OptionsConflictError);
+    expect(invalidateCache).not.toHaveBeenCalled();
+  });
+
+  it("expectedUpdatedAt: null (caller believes no document exists yet) also detects a conflict if one now does", async () => {
+    fakeCollectionWithFilterCheck("conflict");
+
+    await expect(
+      updateFieldOptions({ key: "EMPLACEMENT_OPTIONS", options: ["ATELIER"] }, "test@example.com", null)
+    ).rejects.toBeInstanceOf(OptionsConflictError);
+  });
+
+  it("omitting expectedUpdatedAt entirely preserves the old unconditional-overwrite behavior (backward compat)", async () => {
+    const updateOne = vi.fn().mockResolvedValue({ acknowledged: true });
+    mockedGetCollection.mockResolvedValue({ updateOne } as never);
+
+    await updateFieldOptions({ key: "EMPLACEMENT_OPTIONS", options: ["ATELIER"] }, "test@example.com");
+
+    expect(updateOne).toHaveBeenCalledWith({ _id: "EMPLACEMENT_OPTIONS" }, expect.anything(), { upsert: true });
   });
 });
