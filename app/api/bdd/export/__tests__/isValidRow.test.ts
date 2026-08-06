@@ -36,4 +36,23 @@ describe("isValidRow", () => {
   it("rejects a field that is null (not just absent or wrong-typed)", () => {
     expect(isValidRow({ IMM: "12345-B-6", client: null, modele: "208", commentaire: "" })).toBe(false);
   });
+
+  // Regression guard for M6: Opus's audit demonstrated 2000 rows × 20KB
+  // commentaire each took 106s of CPU and produced an 18.7MB PDF — MAX_ROWS
+  // alone didn't bound per-field length. commentaire gets a higher cap
+  // (2000 chars) than the short reference fields (500 chars) since it's
+  // legitimate free text.
+  it("accepts a commentaire right at the 2000-char cap", () => {
+    expect(isValidRow({ IMM: "12345-B-6", client: "Acme", modele: "208", commentaire: "x".repeat(2000) })).toBe(true);
+  });
+
+  it("rejects a commentaire over the 2000-char cap", () => {
+    expect(isValidRow({ IMM: "12345-B-6", client: "Acme", modele: "208", commentaire: "x".repeat(2001) })).toBe(false);
+  });
+
+  it("rejects an IMM/client/modele over the 500-char short-field cap", () => {
+    expect(isValidRow({ IMM: "x".repeat(501), client: "Acme", modele: "208", commentaire: "" })).toBe(false);
+    expect(isValidRow({ IMM: "12345-B-6", client: "x".repeat(501), modele: "208", commentaire: "" })).toBe(false);
+    expect(isValidRow({ IMM: "12345-B-6", client: "Acme", modele: "x".repeat(501), commentaire: "" })).toBe(false);
+  });
 });

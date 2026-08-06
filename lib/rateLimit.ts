@@ -5,9 +5,8 @@ import { getCollection } from "@/lib/mongo";
 // (even under Fluid Compute, which reuses warm instances but gives no
 // guarantee a given sequence of requests lands on the same one) doesn't
 // provide reliable shared memory across invocations, so an in-memory
-// counter (like app/login/actions.ts's own best-effort one) wouldn't give a
-// real limit here. Mongo is the one piece of state every invocation already
-// reaches identically.
+// counter wouldn't give a real limit here. Mongo is the one piece of state
+// every invocation already reaches identically.
 //
 // Keyed by route:identifier:windowBucket, incremented atomically via
 // findOneAndUpdate's $inc — safe under concurrent requests across any
@@ -76,7 +75,7 @@ export async function checkRateLimit(
   return { allowed: count <= limit, retryAfterSeconds };
 }
 
-/** Same x-forwarded-for / x-real-ip precedence as app/login/actions.ts's clientKey(). */
+/** Standard x-forwarded-for / x-real-ip precedence for identifying the caller. */
 export function clientIp(req: Request): string {
   return (
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||

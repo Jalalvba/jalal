@@ -1,5 +1,10 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Explicit rather than relying on the platform default — this is a report
+// generator over at most MAX_ROWS rows of now-length-capped text, which
+// completes in well under a second in practice; 30s is generous headroom,
+// not a tuned-to-the-wire budget.
+export const maxDuration = 30;
 
 import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/rateLimit";
@@ -16,6 +21,15 @@ const RATE_WINDOW_MS = 5 * 60 * 1000;
 // malformed/oversized payload before it costs a Vercel function real time
 // generating an enormous PDF.
 const MAX_ROWS = 2000;
+
+// Per-field length caps — without these, MAX_ROWS alone still allowed
+// MAX_ROWS × an unbounded field length (confirmed live: 2000 rows × 20KB
+// commentaire each took 106s of CPU and produced an 18.7MB PDF). Commentaire
+// specifically can legitimately run to a few paragraphs (real free-text
+// notes), hence its higher cap; IMM/client/modele are short reference
+// fields that never legitimately approach even MAX_FIELD_LENGTH.
+const MAX_FIELD_LENGTH = 500;
+const MAX_COMMENTAIRE_LENGTH = 2000;
 
 // Just the 4 identity/reference fields — the filter-axis fields (ETAT,
 // Emplacement, prestataire, flag, Catégorie, Technicien, date_fin_contrat)
@@ -36,8 +50,12 @@ type BddExportPayload = {
 
 export function isValidRow(r: unknown): r is BddExportRow {
   if (!r || typeof r !== "object") return false;
-  const keys: (keyof BddExportRow)[] = ["IMM", "client", "modele", "commentaire"];
-  return keys.every((k) => typeof (r as Record<string, unknown>)[k] === "string");
+  const obj = r as Record<string, unknown>;
+  const shortKeys: (keyof BddExportRow)[] = ["IMM", "client", "modele"];
+  if (!shortKeys.every((k) => typeof obj[k] === "string" && (obj[k] as string).length <= MAX_FIELD_LENGTH)) {
+    return false;
+  }
+  return typeof obj.commentaire === "string" && obj.commentaire.length <= MAX_COMMENTAIRE_LENGTH;
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
