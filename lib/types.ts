@@ -234,7 +234,7 @@ export const CATEGORIE_OPTIONS = [
   "Atelier chargé — en attente diagnostic",
   "En cours diagnostic par technicien",
   "En réparation atelier",
-  'En réparation externe — décision validée"',
+  "En réparation externe — décision validée",
   "En attente décision Mehdi",
   "En attente PDR",
   "En attente validation pièce",

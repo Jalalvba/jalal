@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { AtelierRow, ParkingAddResultItem, AtelierEditableField } from "@/lib/types";
+import { CATEGORIE_OPTIONS, type AtelierRow, type ParkingAddResultItem, type AtelierEditableField } from "@/lib/types";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { PlateSearchInput } from "@/components/fleet/PlateSearchInput";
@@ -23,21 +23,12 @@ import {
   useClearAtelierAll,
 } from "@/hooks/useAtelierRows";
 
-// ─── Option lists — exact, same values already used by app/suivi-rl/page.tsx's
-// getDropdownLists() equivalent (CFG_PARKING_SHEET.CATEGORIES_LIST / TECHNICIENS_LIST) ──
-
-const CATEGORIE_OPTIONS = [
-  "Atelier chargé — en attente diagnostic",
-  "En cours diagnostic par technicien",
-  "En réparation atelier",
-  "En réparation externe — décision validée",
-  "En attente décision Mehdi",
-  "En attente PDR",
-  "En attente validation pièce",
-  "En attente validation devis prestataire externe",
-  "Chez concessionnaire — expertise externe",
-  "Chez concessionnaire — garantie constructeur",
-];
+// ─── Option lists — CATEGORIE_OPTIONS is shared with app/suivi-rl/page.tsx
+// and app/ds-history/page.tsx via lib/types.ts (was an independently
+// hand-duplicated copy here until it silently drifted a typo out of sync
+// with lib/types.ts's — now a single source of truth). TECHNICIEN_OPTIONS
+// stays local — same values as app/suivi-rl/page.tsx's equivalent, not yet
+// deduplicated. ──
 
 const TECHNICIEN_OPTIONS = [
   "ALI ELGHORABI",
