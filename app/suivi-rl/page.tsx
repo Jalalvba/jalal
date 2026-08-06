@@ -4,14 +4,8 @@ import { useMemo, useState } from "react";
 import {
   BDD_HEADERS,
   BDD_ZONE_DETECTION_HEADERS,
-  FLAG_STYLE,
-  ETAT_OPTIONS,
-  FLAG_OPTIONS,
-  CATEGORIE_OPTIONS,
-  TECHNICIEN_OPTIONS,
-  PRESTATAIRE_OPTIONS,
-  EMPLACEMENT_OPTIONS,
-  prestataireDotClass,
+  getFlagStyle,
+  getPrestataireDotClass,
   type BddRow,
 } from "@/lib/types";
 import { ZONE_COLORS } from "@/lib/constants/zones";
@@ -31,6 +25,7 @@ import { cn } from "@/components/ui/utils";
 import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate, useDeleteBddRow } from "@/hooks/useBddRows";
 import { useVehicleZone } from "@/hooks/useVehicleZone";
 import { ZoneBadges } from "@/components/fleet/ZoneBadges";
+import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
 
 function formatAge(dataUpdatedAt: number): string {
   if (!dataUpdatedAt) return "";
@@ -144,6 +139,7 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
   const updateMutation = useUpdateBddRow();
   const applyOptimisticUpdate = useOptimisticBddUpdate();
   const zone = useVehicleZone(row.IMM);
+  const { options } = useSheetFieldOptions();
 
   function commitField(field: FieldKey) {
     return async (value: string) => {
@@ -152,8 +148,8 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
     };
   }
 
-  const flagStyle = FLAG_STYLE[row.flag] ?? null;
-  const dot = prestataireDotClass(row.prestataire);
+  const flagStyle = getFlagStyle(row.flag, options.FLAG_OPTIONS);
+  const dot = getPrestataireDotClass(row.prestataire, options.PRESTATAIRE_OPTIONS);
   // Emplacement is a human's manual assessment (see lib/types.ts) — INTROUVABLE
   // means someone has flagged this vehicle as genuinely not located, a real
   // alert worth the same red treatment ds-history's SheetCard gives RL rows.
@@ -173,7 +169,7 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
           {row.date && <span className="font-mono text-xs text-muted-foreground">{row.date}</span>}
           <InlineEditSelect
             value={row.flag}
-            options={FLAG_OPTIONS}
+            options={optionValues(options.FLAG_OPTIONS)}
             label="Flag"
             onCommit={commitField("flag")}
             renderTrigger={({ value, pending, justSaved, onOpen }: InlineEditTriggerState) => (
@@ -183,8 +179,8 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
                 disabled={pending}
                 className="flex min-h-8 items-center py-1 disabled:opacity-60"
               >
-                {value && FLAG_STYLE[value] ? (
-                  <Badge className={cn(FLAG_STYLE[value].badge, justSaved && "ring-2 ring-emerald-400")}>{value}</Badge>
+                {value && getFlagStyle(value, options.FLAG_OPTIONS) ? (
+                  <Badge className={cn(getFlagStyle(value, options.FLAG_OPTIONS)!.badge, justSaved && "ring-2 ring-emerald-400")}>{value}</Badge>
                 ) : (
                   <span
                     className={cn(
@@ -205,7 +201,7 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
       headerRight={
         <InlineEditSelect
           value={row.ETAT}
-          options={ETAT_OPTIONS}
+          options={options.ETAT_OPTIONS}
           label="État"
           onCommit={commitField("ETAT")}
           renderTrigger={({ value, pending, justSaved, onOpen }: InlineEditTriggerState) => (
@@ -228,7 +224,7 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
       <div className="flex flex-col gap-2">
         <InlineEditSelect
           value={row.Emplacement}
-          options={EMPLACEMENT_OPTIONS}
+          options={options.EMPLACEMENT_OPTIONS}
           label="Emplacement"
           onCommit={commitField("Emplacement")}
           renderTrigger={(state) => (
@@ -237,7 +233,7 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
         />
         <InlineEditSelect
           value={row["Catégorie"]}
-          options={CATEGORIE_OPTIONS}
+          options={options.CATEGORIE_OPTIONS}
           label="Catégorie"
           onCommit={commitField("Catégorie")}
           renderTrigger={(state) => (
@@ -246,7 +242,7 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
         />
         <InlineEditSelect
           value={row.Technicien}
-          options={TECHNICIEN_OPTIONS}
+          options={options.TECHNICIEN_OPTIONS}
           label="Technicien"
           onCommit={commitField("Technicien")}
           renderTrigger={(state) => (
@@ -255,7 +251,7 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
         />
         <InlineEditCombobox
           value={row.prestataire}
-          options={PRESTATAIRE_OPTIONS}
+          options={optionValues(options.PRESTATAIRE_OPTIONS)}
           onCommit={commitField("prestataire")}
           placeholder="Prestataire…"
           renderTrigger={(state) => (
@@ -288,6 +284,7 @@ const EMPTY_ROWS: BddRow[] = [];
 export default function SuiviRlPage() {
   const rowsQuery = useBddRows();
   const deleteMutation = useDeleteBddRow();
+  const { options } = useSheetFieldOptions();
 
   const rows = rowsQuery.data ?? EMPTY_ROWS;
   const [search, setSearch] = useState("");
@@ -451,7 +448,7 @@ export default function SuiviRlPage() {
             onValueChange={(v) => v && selectEmplacement(v)}
           >
             <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
-            {EMPLACEMENT_OPTIONS.map((e) => (
+            {options.EMPLACEMENT_OPTIONS.map((e) => (
               <ToggleGroupItem key={e} value={e}>
                 {e}
               </ToggleGroupItem>

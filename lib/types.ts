@@ -199,38 +199,135 @@ export const BDD_EDITABLE_FIELDS = [
   "Technicien",
 ] as const;
 
-// Sheet-confirmed dropdown values for the manual "Emplacement" field — a
-// human's assessment of the vehicle's real physical location, exact order
-// as given by the sheet owner.
-export const EMPLACEMENT_OPTIONS = ["ATELIER", "PARKING", "INTROUVABLE", "DEPOT", "EXTERNE"];
-
 // The three read-only, sheet-side XLOOKUP presence flags — kept as their own
 // list so both app/suivi-rl/page.tsx and app/ds-history/page.tsx can render
 // them as a clearly separate "automated zone detection" section rather than
 // folding them into the generic readonly field list.
 export const BDD_ZONE_DETECTION_HEADERS = ["ATELIER", "DEPOT", "PARKING"] as const;
 
-// Shared with app/suivi-rl/page.tsx (and now app/ds-history/page.tsx) so
-// every page renders the same flag exactly the same way — single source of
-// truth, not copies to drift.
-export const FLAG_STYLE: Record<string, { border: string; badge: string }> = {
-  Urgent: { border: "border-l-red-500", badge: "bg-red-500/10 text-red-400 border-red-500/20" },
-  "Prêt": { border: "border-l-emerald-500", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
-  NTR: { border: "border-l-zinc-500", badge: "bg-zinc-500/10 text-zinc-300 border-zinc-500/20" },
-  INST: { border: "border-l-amber-500", badge: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-  REP: { border: "border-l-orange-500", badge: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
-  ESSAI: { border: "border-l-blue-500", badge: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+// ─── Config-driven dropdown options (Stage 1) ─────────────────────────────
+//
+// EMPLACEMENT/ETAT/FLAG/CATEGORIE/TECHNICIEN/PRESTATAIRE/RDV_CONVOYEURS
+// option *values* now live in the Mongo "sheetFieldOptions" collection
+// (lib/sheetFieldOptions.ts), admin-editable at /admin/config — not
+// hardcoded arrays baked into a deploy anymore. Headers/field structure
+// (BDD_HEADERS, BddRow, BDD_EDITABLE_FIELDS above) are explicitly OUT of
+// scope for this stage and stay exactly as they were.
+//
+// The six *_FALLBACK constants below are NOT dead code: lib/sheetFieldOptions.ts's
+// getAllSheetFieldOptions() falls back to these if the Mongo collection is
+// empty or unreachable, so a Mongo outage degrades to "options frozen at
+// their last-known-good hardcoded value" rather than an app that can't
+// render its own dropdowns. They also seed scripts/seed-sheet-field-options.ts's
+// one-time migration — captured here exactly as they were live in the app
+// before this migration, so the seed reflects real values, not new ones.
+
+/** The only six colors any admin-editable option is allowed to carry — matches every color FLAG_STYLE/Prestataire's dot logic actually used before this migration. Picking a 7th requires a code change here, deliberately: this is the design system's palette, not sheet data. */
+export const PALETTE_COLORS = ["red", "emerald", "zinc", "amber", "orange", "blue"] as const;
+export type PaletteColor = (typeof PALETTE_COLORS)[number];
+
+/** A dropdown option that also carries a color (Flag, Prestataire) — the general shape a "colored" sheetFieldOptions document's `options` array holds. `color: null` means "no color assigned" (most Prestataire values). */
+export type ColoredOption = { value: string; color: PaletteColor | null };
+
+// Literal Tailwind class strings, one entry per PaletteColor — kept fully
+// spelled out (no `border-l-${color}-500` template interpolation) so
+// Tailwind's build-time content scanner can find every class textually.
+// This mapping (which Tailwind color a semantic palette name renders as) is
+// a design-system concern, not sheet data — it does NOT move to Mongo.
+export const FLAG_COLOR_CLASSES: Record<PaletteColor, { border: string; badge: string }> = {
+  red: { border: "border-l-red-500", badge: "bg-red-500/10 text-red-400 border-red-500/20" },
+  emerald: { border: "border-l-emerald-500", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
+  zinc: { border: "border-l-zinc-500", badge: "bg-zinc-500/10 text-zinc-300 border-zinc-500/20" },
+  amber: { border: "border-l-amber-500", badge: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
+  orange: { border: "border-l-orange-500", badge: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
+  blue: { border: "border-l-blue-500", badge: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
 };
 
-// Dropdown option lists — exact, given verbatim, not invented. Shared between
-// app/suivi-rl/page.tsx and app/ds-history/page.tsx: both edit the same 6
-// BDD_EDITABLE_FIELDS against the same sheet, so the picker choices must
-// match exactly rather than being two independently-typed literal lists.
-export const ETAT_OPTIONS = ["INTERNE", "EXTERNE", "DISPONIBLE", "ANNULE", "ANNULEE"];
+/** Same reasoning as FLAG_COLOR_CLASSES, for Prestataire's single-dot indicator. */
+export const DOT_COLOR_CLASSES: Record<PaletteColor, string> = {
+  red: "bg-red-500",
+  emerald: "bg-emerald-500",
+  zinc: "bg-zinc-400",
+  amber: "bg-amber-400",
+  orange: "bg-orange-500",
+  blue: "bg-blue-500",
+};
 
-export const FLAG_OPTIONS = ["Urgent", "Prêt", "NTR", "INST", "REP", "ESSAI"];
+/** Looks up `value`'s color in the currently-loaded FLAG_OPTIONS list and resolves it to actual classes — replaces the old static `FLAG_STYLE[value]` lookup, now parameterized by whatever's currently loaded (Mongo-backed or fallback) instead of a hardcoded global. */
+export function getFlagStyle(value: string, flagOptions: ColoredOption[]): { border: string; badge: string } | null {
+  const opt = flagOptions.find((o) => o.value === value);
+  if (!opt?.color) return null;
+  return FLAG_COLOR_CLASSES[opt.color];
+}
 
-export const CATEGORIE_OPTIONS = [
+/** Same as getFlagStyle, for Prestataire's dot — replaces the old static prestataireDotClass(). */
+export function getPrestataireDotClass(value: string, prestataireOptions: ColoredOption[]): string | null {
+  const opt = prestataireOptions.find((o) => o.value === value);
+  if (!opt?.color) return null;
+  return DOT_COLOR_CLASSES[opt.color];
+}
+
+/** Every option-set's Mongo document key — also the traceable name of the *_FALLBACK constant it degrades to. */
+export const OPTION_KEYS = [
+  "EMPLACEMENT_OPTIONS",
+  "ETAT_OPTIONS",
+  "FLAG_OPTIONS",
+  "CATEGORIE_OPTIONS",
+  "TECHNICIEN_OPTIONS",
+  "PRESTATAIRE_OPTIONS",
+  "RDV_CONVOYEURS",
+] as const;
+export type OptionKey = (typeof OPTION_KEYS)[number];
+
+/** Which OPTION_KEYS are {value,color} pairs vs plain strings — the admin UI and the Mongo document schema both branch on this. */
+export const COLORED_OPTION_KEYS: readonly OptionKey[] = ["FLAG_OPTIONS", "PRESTATAIRE_OPTIONS"];
+
+/** Human-readable label per OPTION_KEYS entry, for the /admin/config UI. Pure data (no env/Mongo dependency) so scripts/seed-sheet-field-options.ts can import it without pulling in lib/mongo.ts's module-scope env check. */
+export const OPTION_LABELS: Record<OptionKey, string> = {
+  EMPLACEMENT_OPTIONS: "Emplacement",
+  ETAT_OPTIONS: "État",
+  FLAG_OPTIONS: "Flag",
+  CATEGORIE_OPTIONS: "Catégorie",
+  TECHNICIEN_OPTIONS: "Technicien",
+  PRESTATAIRE_OPTIONS: "Prestataire",
+  RDV_CONVOYEURS: "RDV — Convoyeurs",
+};
+
+/** The shape /api/config/options returns, and what useSheetFieldOptions() exposes to every page that used to import a *_OPTIONS constant directly. */
+export type AllSheetFieldOptions = {
+  EMPLACEMENT_OPTIONS: string[];
+  ETAT_OPTIONS: string[];
+  FLAG_OPTIONS: ColoredOption[];
+  CATEGORIE_OPTIONS: string[];
+  TECHNICIEN_OPTIONS: string[];
+  PRESTATAIRE_OPTIONS: ColoredOption[];
+  RDV_CONVOYEURS: string[];
+};
+
+// Sheet-confirmed dropdown values for the manual "Emplacement" field — a
+// human's assessment of the vehicle's real physical location, exact order
+// as given by the sheet owner. Fallback only — see note above.
+export const EMPLACEMENT_OPTIONS_FALLBACK = ["ATELIER", "PARKING", "INTROUVABLE", "DEPOT", "EXTERNE"];
+
+// Fallback only — see note above. Merges the old FLAG_OPTIONS list and
+// FLAG_STYLE color map into one {value,color}[] (they were always a matched
+// pair — two separately-synced lists was the exact drift risk this
+// migration closes for Flag/Prestataire, same as CATEGORIE/TECHNICIEN's
+// plain-list drift closed earlier this session).
+export const FLAG_OPTIONS_FALLBACK: ColoredOption[] = [
+  { value: "Urgent", color: "red" },
+  { value: "Prêt", color: "emerald" },
+  { value: "NTR", color: "zinc" },
+  { value: "INST", color: "amber" },
+  { value: "REP", color: "orange" },
+  { value: "ESSAI", color: "blue" },
+];
+
+// Fallback only — see note above. Dropdown option lists were exact, given
+// verbatim, not invented; unchanged here, just renamed.
+export const ETAT_OPTIONS_FALLBACK = ["INTERNE", "EXTERNE", "DISPONIBLE", "ANNULE", "ANNULEE"];
+
+export const CATEGORIE_OPTIONS_FALLBACK = [
   "Atelier chargé — en attente diagnostic",
   "En cours diagnostic par technicien",
   "En réparation atelier",
@@ -243,7 +340,7 @@ export const CATEGORIE_OPTIONS = [
   "Chez concessionnaire — garantie constructeur",
 ];
 
-export const TECHNICIEN_OPTIONS = [
+export const TECHNICIEN_OPTIONS_FALLBACK = [
   "ALI ELGHORABI",
   "Said Errakkachi",
   "AMDAOUI OTHMANE",
@@ -258,25 +355,26 @@ export const TECHNICIEN_OPTIONS = [
   "HOUCINE CHARII",
 ];
 
-const PRESTATAIRE_YELLOW = new Set([
+// Fallback only — see note above. Merges the old PRESTATAIRE_OPTIONS list
+// and its two color Sets into one {value,color}[]; entries not in either
+// Set carry color: null (no dot), matching prestataireDotClass()'s old
+// "neither set -> null" fallthrough exactly.
+const PRESTATAIRE_YELLOW_FALLBACK = new Set([
   "amine diag", "pres injection", "simo BV", "EMAA", "nabil", "ELECTRO DIESEL",
   "FATR", "OPTIMUM", "HAMID CLIM", "nabil plaque", "My cherif Pneu", "FAP",
 ]);
-const PRESTATAIRE_GREEN = new Set([
+const PRESTATAIRE_GREEN_FALLBACK = new Set([
   "M-AUTOMOTIV", "CAC", "BUGSHAN", "STELLANTIS", "SMEIA", "BAMOTORS", "JAMEEL", "VOVLO",
 ]);
-export const PRESTATAIRE_OPTIONS = [
+export const PRESTATAIRE_OPTIONS_FALLBACK: ColoredOption[] = [
   "SCAL", "amine diag", "pres injection", "simo BV", "EMAA", "nabil",
   "ELECTRO DIESEL", "FATR", "OPTIMUM", "HAMID CLIM", "nabil plaque",
   "M-AUTOMOTIV", "CAC", "BUGSHAN", "STELLANTIS", "SMEIA", "BAMOTORS",
   "JAMEEL", "VOVLO", "My cherif Pneu", "FAP",
-];
-
-export function prestataireDotClass(val: string): string | null {
-  if (PRESTATAIRE_GREEN.has(val)) return "bg-emerald-500";
-  if (PRESTATAIRE_YELLOW.has(val)) return "bg-amber-400";
-  return null;
-}
+].map((value) => ({
+  value,
+  color: PRESTATAIRE_GREEN_FALLBACK.has(value) ? "emerald" : PRESTATAIRE_YELLOW_FALLBACK.has(value) ? "amber" : null,
+}));
 
 export type BddUpdateResult =
   | { ok: true; written: string[] }
@@ -442,8 +540,10 @@ export type RdvAddInput = {
 
 // The 17-name CONVOYEUR dropdown list, confirmed byte-for-byte against the
 // live ONE_OF_LIST data validation rule on the monthly appointment-calendar
-// tabs (source: CONFIG.CONVOYEURS in the generating Apps Script).
-export const RDV_CONVOYEURS = [
+// tabs (source: CONFIG.CONVOYEURS in the generating Apps Script). Fallback
+// only now — see the "Config-driven dropdown options" note above; the real
+// source is lib/sheetFieldOptions.ts's Mongo-backed loader.
+export const RDV_CONVOYEURS_FALLBACK = [
   "KHACHI Taha",
   "DRIOUICH Mohamad",
   "RAJI Ahmed",

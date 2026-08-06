@@ -18,15 +18,9 @@ import type {
   BddRow,
 } from "@/lib/types";
 import {
-  FLAG_STYLE,
-  ETAT_OPTIONS,
-  FLAG_OPTIONS,
-  CATEGORIE_OPTIONS,
-  TECHNICIEN_OPTIONS,
-  PRESTATAIRE_OPTIONS,
-  EMPLACEMENT_OPTIONS,
+  getFlagStyle,
+  getPrestataireDotClass,
   BDD_ZONE_DETECTION_HEADERS,
-  prestataireDotClass,
   BDD_EDITABLE_FIELDS,
 } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +37,7 @@ import { buildPlateVariants } from "@/lib/plateVariants";
 import type { RlRow } from "@/lib/googleSheetsRl";
 import type { ImportRow } from "@/lib/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/format";
+import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
 
 type FieldKey = (typeof BDD_EDITABLE_FIELDS)[number];
 
@@ -544,6 +539,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
   const updateMutation = useUpdateBddRow();
   const applyOptimisticUpdate = useOptimisticBddUpdate();
   const zone = useVehicleZone(row.IMM);
+  const { options } = useSheetFieldOptions();
 
   function commitField(field: FieldKey) {
     return async (value: string) => {
@@ -552,7 +548,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
     };
   }
 
-  const dot = prestataireDotClass(row.prestataire);
+  const dot = getPrestataireDotClass(row.prestataire, options.PRESTATAIRE_OPTIONS);
   const isIntrouvable = row.Emplacement === "INTROUVABLE";
 
   return (
@@ -564,7 +560,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <InlineEditSelect
           value={row.ETAT}
-          options={ETAT_OPTIONS}
+          options={options.ETAT_OPTIONS}
           label="État"
           onCommit={commitField("ETAT")}
           renderTrigger={({ value, pending, justSaved, onOpen }) => (
@@ -581,13 +577,13 @@ function BddEditableRow({ row }: { row: BddRow }) {
         />
         <InlineEditSelect
           value={row.flag}
-          options={FLAG_OPTIONS}
+          options={optionValues(options.FLAG_OPTIONS)}
           label="Flag"
           onCommit={commitField("flag")}
           renderTrigger={({ value, pending, justSaved, onOpen }) => (
             <button type="button" onClick={onOpen} disabled={pending} className="disabled:opacity-60">
-              {value && FLAG_STYLE[value] ? (
-                <Badge className={`${FLAG_STYLE[value].badge} ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>{value}</Badge>
+              {value && getFlagStyle(value, options.FLAG_OPTIONS) ? (
+                <Badge className={`${getFlagStyle(value, options.FLAG_OPTIONS)!.badge} ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>{value}</Badge>
               ) : (
                 <span className={`rounded-lg border border-dashed border-border px-1.5 py-0.5 text-micro text-muted-foreground ${justSaved ? "ring-2 ring-emerald-400" : ""}`}>
                   + Flag
@@ -604,28 +600,28 @@ function BddEditableRow({ row }: { row: BddRow }) {
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
         <InlineEditSelect
           value={row.Emplacement}
-          options={EMPLACEMENT_OPTIONS}
+          options={options.EMPLACEMENT_OPTIONS}
           label="Emplacement"
           onCommit={commitField("Emplacement")}
           renderTrigger={(state) => <FieldRowTrigger label="Emplacement" placeholder="— Choisir —" {...state} />}
         />
         <InlineEditCombobox
           value={row.prestataire}
-          options={PRESTATAIRE_OPTIONS}
+          options={optionValues(options.PRESTATAIRE_OPTIONS)}
           onCommit={commitField("prestataire")}
           placeholder="Prestataire…"
           renderTrigger={(state) => <FieldRowTrigger label="Prestataire" placeholder="— Aucun —" dot={dot} {...state} />}
         />
         <InlineEditSelect
           value={row["Catégorie"]}
-          options={CATEGORIE_OPTIONS}
+          options={options.CATEGORIE_OPTIONS}
           label="Catégorie"
           onCommit={commitField("Catégorie")}
           renderTrigger={(state) => <FieldRowTrigger label="Catégorie" placeholder="— Choisir —" {...state} />}
         />
         <InlineEditSelect
           value={row.Technicien}
-          options={TECHNICIEN_OPTIONS}
+          options={options.TECHNICIEN_OPTIONS}
           label="Technicien"
           onCommit={commitField("Technicien")}
           renderTrigger={(state) => <FieldRowTrigger label="Technicien" placeholder="— Choisir —" {...state} />}

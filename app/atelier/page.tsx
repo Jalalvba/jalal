@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CATEGORIE_OPTIONS, TECHNICIEN_OPTIONS, type AtelierRow, type ParkingAddResultItem, type AtelierEditableField } from "@/lib/types";
+import type { AtelierRow, ParkingAddResultItem, AtelierEditableField } from "@/lib/types";
 import { ZONE_COLORS } from "@/lib/constants/zones";
+import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { PlateSearchInput } from "@/components/fleet/PlateSearchInput";
 import { PlateFilterInput } from "@/components/fleet/PlateFilterInput";
@@ -23,11 +24,14 @@ import {
   useClearAtelierAll,
 } from "@/hooks/useAtelierRows";
 
-// ─── CATEGORIE_OPTIONS and TECHNICIEN_OPTIONS are both shared with
-// app/suivi-rl/page.tsx and app/ds-history/page.tsx via lib/types.ts —
-// each used to be an independently hand-duplicated copy here (CATEGORIE_OPTIONS
-// had already drifted a stray typo out of sync with lib/types.ts's before
-// that was fixed) — now both import the single source of truth. ──
+// ─── CATEGORIE_OPTIONS and TECHNICIEN_OPTIONS are Mongo-backed now
+// (lib/sheetFieldOptions.ts, admin-editable at /admin/config), loaded via
+// useSheetFieldOptions() — shared with app/suivi-rl/page.tsx and
+// app/ds-history/page.tsx through the same hook, one fetch either way. Used
+// to be an independently hand-duplicated hardcoded copy here (CATEGORIE_OPTIONS
+// had already drifted a stray typo out of sync with lib/types.ts's static
+// list before that was fixed, then briefly a shared static import, now
+// config-driven). ──
 
 const selectClass =
   "h-auto w-full rounded-lg border border-border bg-popover px-2 py-1.5 text-micro font-medium text-popover-foreground outline-none focus:border-amber-500";
@@ -58,6 +62,7 @@ function AtelierCard({
   onFieldCommit: (rowIndex: number, field: AtelierEditableField, value: string, imm: string) => void;
   onDelete: (rowIndex: number, imm: string) => void;
 }) {
+  const { options } = useSheetFieldOptions();
   const resyncDeps = [row.rowIndex, row.categorie, row.technicien, row.commentaire, row.besoinPiece, row.timestamp];
   const [categorie, setCategorie] = useEditableState(row.categorie, resyncDeps);
   const [technicien, setTechnicien] = useEditableState(row.technicien, resyncDeps);
@@ -82,7 +87,7 @@ function AtelierCard({
             className={selectClass}
           >
             <option value="">— Sélectionner —</option>
-            {CATEGORIE_OPTIONS.map((o) => (
+            {options.CATEGORIE_OPTIONS.map((o) => (
               <option key={o} value={o}>
                 {o}
               </option>
@@ -99,7 +104,7 @@ function AtelierCard({
             className={selectClass}
           >
             <option value="">— Sélectionner —</option>
-            {TECHNICIEN_OPTIONS.map((o) => (
+            {options.TECHNICIEN_OPTIONS.map((o) => (
               <option key={o} value={o}>
                 {o}
               </option>

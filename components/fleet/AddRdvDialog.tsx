@@ -3,8 +3,9 @@
 import { useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 import type { RdvAddInput } from "@/lib/types";
-import { RDV_CONVOYEURS, RDV_MATRICULE_REGEX } from "@/lib/types";
+import { RDV_MATRICULE_REGEX } from "@/lib/types";
 import { useAddRdvRow } from "@/hooks/useRdvRows";
+import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,7 @@ export function AddRdvDialog() {
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
   const addMutation = useAddRdvRow();
+  const { options } = useSheetFieldOptions();
   const { min, max } = dateWindow();
 
   function set<K extends keyof RdvAddInput>(key: K, value: RdvAddInput[K]) {
@@ -170,7 +172,7 @@ export function AddRdvDialog() {
           <Field label="Convoyeur">
             <select value={form.convoyeur} onChange={(e) => set("convoyeur", e.target.value)} required className={selectClass}>
               <option value="">— Sélectionner —</option>
-              {RDV_CONVOYEURS.map((name) => (
+              {options.RDV_CONVOYEURS.map((name) => (
                 <option key={name} value={name}>
                   {name}
                 </option>

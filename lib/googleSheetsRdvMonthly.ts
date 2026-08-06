@@ -1,8 +1,9 @@
 import { type sheets_v4 } from "googleapis";
 import type { RdvAddInput, MonthlyWriteResult, RdvEditableField } from "@/lib/types";
-import { RDV_EDITABLE_FIELDS, RDV_CONVOYEURS } from "@/lib/types";
+import { RDV_EDITABLE_FIELDS } from "@/lib/types";
 import { getSheetsClient, isoDateToSerial, columnIndexToLetter } from "@/lib/googleSheetsClient";
 import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY, RdvIdentityError } from "@/lib/rdvIdentity";
+import { getAllSheetFieldOptions } from "@/lib/sheetFieldOptions";
 
 // Writes appointments into the monthly appointment-calendar tabs (e.g.
 // "Juillet 2026") — the DURABLE source of truth, generated and periodically
@@ -154,6 +155,7 @@ function buildRowValues(input: RdvAddInput, dateSerial: number): (string | numbe
  * function-argument separator.
  */
 async function applyRowValidation(sheets: sheets_v4.Sheets, sheetId: number, row: number): Promise<void> {
+  const { RDV_CONVOYEURS } = await getAllSheetFieldOptions();
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: spreadsheetId!,
     requestBody: {

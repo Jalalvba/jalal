@@ -3,7 +3,8 @@
 import { useMemo, useRef, useState } from "react";
 import { Trash2, ImageDown, Search, Check } from "lucide-react";
 import type { RdvRow, RdvEditableField } from "@/lib/types";
-import { RDV_CONVOYEURS, RDV_MATRICULE_REGEX } from "@/lib/types";
+import { RDV_MATRICULE_REGEX } from "@/lib/types";
+import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { AddRdvDialog } from "@/components/fleet/AddRdvDialog";
@@ -168,6 +169,7 @@ function MobileRdvCard({
   commitField: (row: RdvRow, field: RdvEditableField) => (value: string) => Promise<void>;
   commitMatricule: (row: RdvRow) => (value: string) => Promise<void>;
 }) {
+  const { options } = useSheetFieldOptions();
   return (
     <div
       className={cn(
@@ -239,7 +241,7 @@ function MobileRdvCard({
         <div className="min-w-0 flex-1">
           <InlineEditSelect
             value={row.convoyeur}
-            options={[...RDV_CONVOYEURS]}
+            options={options.RDV_CONVOYEURS}
             label="Convoyeur"
             onCommit={commitField(row, "CONVOYEUR")}
             renderTrigger={(state) => <TableCellTrigger {...state} />}
@@ -254,6 +256,7 @@ export default function RdvPage() {
   const rowsQuery = useRdvRows();
   const updateMutation = useUpdateRdvField();
   const clearMutation = useClearRdvRow();
+  const { options } = useSheetFieldOptions();
 
   const [selectedDate, setSelectedDate] = useState(todayIso());
   const [pageError, setPageError] = useState("");
@@ -576,7 +579,7 @@ export default function RdvPage() {
                         <td className="px-3 py-2 min-w-[9rem]">
                           <InlineEditSelect
                             value={row.convoyeur}
-                            options={[...RDV_CONVOYEURS]}
+                            options={options.RDV_CONVOYEURS}
                             label="Convoyeur"
                             onCommit={commitField(row, "CONVOYEUR")}
                             renderTrigger={(state) => <TableCellTrigger {...state} />}
