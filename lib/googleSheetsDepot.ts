@@ -10,6 +10,7 @@ import {
   withCache,
   invalidateCache,
   verifyRowIdentity,
+  columnIndexToLetter,
 } from "@/lib/googleSheetsClient";
 
 const ROWS_CACHE_KEY = "rows:DEPOT";
@@ -35,17 +36,6 @@ if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 const DEPOT_TAB = "DEPOT";
 const DATA_START_ROW = 2;
 const HEADER_RANGE_WIDTH = "O"; // 15 real columns, confirmed live
-
-function columnIndexToLetter(oneBasedIndex: number): string {
-  let n = oneBasedIndex;
-  let letters = "";
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    letters = String.fromCharCode(65 + rem) + letters;
-    n = Math.floor((n - 1) / 26);
-  }
-  return letters;
-}
 
 /** Live header row → column-name lookup, never hardcoded indices. */
 async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {

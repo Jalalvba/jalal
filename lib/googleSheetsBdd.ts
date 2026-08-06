@@ -8,6 +8,7 @@ import {
   withCache,
   invalidateCache,
   verifyRowIdentity,
+  columnIndexToLetter,
 } from "@/lib/googleSheetsClient";
 
 const ROWS_CACHE_KEY = "rows:BDD";
@@ -23,17 +24,6 @@ const editableFieldSet = new Set<string>(BDD_EDITABLE_FIELDS);
 // Wide enough that a realistic header row can never be truncated (verified up
 // to column BZ during discovery), without hardcoding the sheet's real width.
 const HEADER_SCAN_WIDTH = "CZ";
-
-function columnIndexToLetter(oneBasedIndex: number): string {
-  let n = oneBasedIndex;
-  let letters = "";
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    letters = String.fromCharCode(65 + rem) + letters;
-    n = Math.floor((n - 1) / 26);
-  }
-  return letters;
-}
 
 /** Fetches the real row-1 header list, cached 5min — headers essentially never change. */
 async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
