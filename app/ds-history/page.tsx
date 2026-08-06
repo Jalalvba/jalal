@@ -4,7 +4,9 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Pencil } from "lucide-react";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { logout } from "@/app/login/actions";
+import { clearPersistedAppState } from "@/lib/clearClientState";
 import { ThemeToggle } from "@/components/fleet/ThemeToggle";
 import { Combobox } from "@/components/ui/combobox";
 import type {
@@ -771,6 +773,17 @@ function DlIcon({ spinning }: { spinning?: boolean }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const queryClient = useQueryClient();
+
+  // Plain onClick instead of <form action={logout}> — see
+  // lib/clearClientState.ts's comment: the persisted BDD dataset in
+  // localStorage must be cleared client-side before the server action
+  // (which only destroys the session cookie) runs.
+  async function handleLogout() {
+    clearPersistedAppState(queryClient);
+    await logout();
+  }
+
   const [imm, setImm] = useState("48070-B-7");
 
   // Smart search suggestions
@@ -1040,14 +1053,12 @@ export default function Home() {
             <ThemeToggle className="border-border bg-muted text-foreground hover:bg-muted/70" />
 
             {/* Logout */}
-            <form action={logout}>
-              <button type="submit"
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground transition hover:bg-muted/70"
-                title="Se déconnecter">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                Déconnexion
-              </button>
-            </form>
+            <button type="button" onClick={handleLogout}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground transition hover:bg-muted/70"
+              title="Se déconnecter">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Déconnexion
+            </button>
 
             {/* PDF */}
             <button onClick={handlePdf} disabled={!data || exportingPdf}

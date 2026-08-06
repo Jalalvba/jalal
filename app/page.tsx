@@ -2,7 +2,9 @@
 "use client";
 
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { logout } from "@/app/login/actions";
+import { clearPersistedAppState } from "@/lib/clearClientState";
 import { ThemeToggle } from "@/components/fleet/ThemeToggle";
 import { ImportTrigger, LastImportCard } from "@/components/fleet/ImportTrigger";
 import { ZONE_COLORS } from "@/lib/constants/zones";
@@ -54,6 +56,17 @@ function NavCard({
 }
 
 export default function Home() {
+  const queryClient = useQueryClient();
+
+  // Plain onClick instead of <form action={logout}> — see
+  // lib/clearClientState.ts's comment: the persisted BDD dataset in
+  // localStorage must be cleared client-side before the server action
+  // (which only destroys the session cookie) runs.
+  async function handleLogout() {
+    clearPersistedAppState(queryClient);
+    await logout();
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
@@ -65,16 +78,15 @@ export default function Home() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ThemeToggle className="border-border bg-muted text-foreground hover:bg-muted/70" />
-            <form action={logout}>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground transition hover:bg-muted/70"
-                title="Se déconnecter"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                Déconnexion
-              </button>
-            </form>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-foreground transition hover:bg-muted/70"
+              title="Se déconnecter"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Déconnexion
+            </button>
           </div>
         </div>
 

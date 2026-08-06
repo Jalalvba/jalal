@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, RotateCw, Trash2, Power } from "lucide-react";
 import { logout } from "@/app/login/actions";
+import { clearPersistedAppState } from "@/lib/clearClientState";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/fleet/ThemeToggle";
 import {
@@ -46,6 +48,19 @@ export function ListPageHeader({
   clearAllDescription?: string;
   children?: React.ReactNode;
 }) {
+  const queryClient = useQueryClient();
+
+  // Plain onClick instead of <form action={logout}> — the full BDD dataset
+  // (plates, client names, technician assignments, free-text comments) is
+  // persisted to localStorage by hooks/queryClient.tsx, and logout() (a
+  // server action) has no way to reach into this browser's localStorage.
+  // Clearing it here, before the server action runs, is what actually
+  // removes it — logout() alone only destroys the session cookie.
+  async function handleLogout() {
+    clearPersistedAppState(queryClient);
+    await logout();
+  }
+
   return (
     <div className="sticky top-0 z-20 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
       <div className="mb-2 flex items-center justify-between">
@@ -80,11 +95,9 @@ export function ListPageHeader({
               </AlertDialogContent>
             </AlertDialog>
           )}
-          <form action={logout}>
-            <Button type="submit" variant="ghost" size="icon" title="Déconnexion">
-              <Power className="h-4 w-4" />
-            </Button>
-          </form>
+          <Button type="button" variant="ghost" size="icon" onClick={handleLogout} title="Déconnexion">
+            <Power className="h-4 w-4" />
+          </Button>
         </div>
       </div>
       {children}
