@@ -135,8 +135,13 @@ reality within days.
 - **No OAuth login flow test.** `e2e/helpers/auth.ts` mints a session
   cookie directly, bypassing Google's OAuth entirely — a broken
   `/api/auth/google/callback` wouldn't be caught here.
-- **No CI wiring.** These scripts run locally on demand; nothing runs them
-  automatically on push/PR yet (no GitHub Actions workflow was added).
+- **CI covers the Vitest suite only, not E2E.** `.github/workflows/ci.yml`
+  runs `tsc --noEmit`, `pnpm lint`, and `pnpm test` on every push to `main`
+  and every pull request. The Playwright suite is intentionally left out
+  of that path — it writes to real production Sheets/Mongo data (see
+  "Needs a real environment" above) and needs real secrets, so it's wired
+  as a separate `e2e` job gated behind `workflow_dispatch` (manual trigger
+  from the Actions tab) instead of running unattended on every PR.
 - **No visual regression or accessibility testing.**
 - **Stage 1 admin/config's option-set VALUES are covered; header/field
   structure is not** (matches Stage 1's own scope — see the

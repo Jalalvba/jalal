@@ -1,0 +1,104 @@
+name: CI
+
+# Unit/integration suite + type-check + lint run on every push to main and
+# every pull request. E2E (Playwright) is deliberately NOT wired into that
+# path — see the `e2e` job below for why — and only runs when someone
+# explicitly triggers it via workflow_dispatch.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Type-check, lint, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm exec tsc --noEmit
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit + integration tests (Vitest)
+        run: pnpm test
+
+  # Playwright E2E suite. Deliberately excluded from the push/pull_request
+  # triggers above, not just skipped silently:
+  #
+  #   - Per TESTING.md, these specs run against the app's real, live
+  #     Sheets/Mongo data — there is no seeded fixture dataset or test
+  #     database — and e2e/admin-config.spec.ts briefly WRITES to it
+  #     (add/verify/remove a config value). Running that on every PR
+  #     (including from forks) would mean untrusted branches mutating
+  #     production data on every push.
+  #   - It needs real secrets (Mongo URI, Google service-account key,
+  #     Sheets IDs, iron-session secret) that would otherwise sit in a
+  #     shared CI environment/logs. GitHub Actions already withholds
+  #     repository secrets from pull_request runs triggered by forks, but
+  #     the production-data-write risk above stands regardless of that.
+  #
+  # This job is opt-in only (Actions tab → CI → "Run workflow"), and only
+  # runs once the secrets listed below are added under
+  # Settings → Secrets and variables → Actions. Until then it will fail
+  # fast on missing env vars if manually triggered — that's expected.
+  e2e:
+    name: E2E tests (Playwright — manual trigger only)
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      MONGODB_DB: avis
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      IRON_SESSION_SECRET: ${{ secrets.IRON_SESSION_SECRET }}
+      GOOGLE_SERVICE_ACCOUNT_KEY_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_B64 }}
+      GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
+      GOOGLE_RDV_SHEETS_ID: ${{ secrets.GOOGLE_RDV_SHEETS_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      # No manual server start/wait/teardown here: playwright.config.ts's
+      # own `webServer` block already runs `pnpm dev`, polls
+      # http://localhost:3000/login until ready (60s timeout), and tears
+      # it down when the test run ends — duplicating that in the workflow
+      # would just be a second thing to keep in sync with local runs.
+      - name: Run E2E tests
+        run: pnpm test:e2e

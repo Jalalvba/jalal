@@ -1,5 +1,7 @@
 # jalal — AVIS Maroc fleet management
 
+[![CI](https://github.com/Jalalvba/jalal/actions/workflows/ci.yml/badge.svg)](https://github.com/Jalalvba/jalal/actions/workflows/ci.yml)
+
 A Next.js app for tracking fleet vehicles across parking, workshop, depot,
 and appointment logs, backed by Google Sheets and MongoDB.
 
