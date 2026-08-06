@@ -33,6 +33,12 @@ export default defineConfig({
       // AUTHORIZED_EMAIL), same reasoning as the dummies above.
       GOOGLE_OAUTH_CLIENT_ID: "test-dummy-oauth-client-id",
       GOOGLE_OAUTH_CLIENT_SECRET: "test-dummy-oauth-client-secret",
+      // iron-session (lib/session.ts) requires a real >=32-char secret at
+      // seal/unseal time — used by lib/__tests__/proxy.test.ts to mint a
+      // real sealed session cookie the same way e2e/helpers/auth.ts does
+      // for the Playwright suite, so proxy.ts's actual iron-session
+      // unsealing code runs for real in that test, not a mock.
+      IRON_SESSION_SECRET: "test-dummy-iron-session-secret-at-least-32-chars-long",
     },
   },
   resolve: {
