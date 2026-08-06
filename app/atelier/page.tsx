@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CATEGORIE_OPTIONS, type AtelierRow, type ParkingAddResultItem, type AtelierEditableField } from "@/lib/types";
+import { CATEGORIE_OPTIONS, TECHNICIEN_OPTIONS, type AtelierRow, type ParkingAddResultItem, type AtelierEditableField } from "@/lib/types";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { PlateSearchInput } from "@/components/fleet/PlateSearchInput";
@@ -23,27 +23,11 @@ import {
   useClearAtelierAll,
 } from "@/hooks/useAtelierRows";
 
-// ─── Option lists — CATEGORIE_OPTIONS is shared with app/suivi-rl/page.tsx
-// and app/ds-history/page.tsx via lib/types.ts (was an independently
-// hand-duplicated copy here until it silently drifted a typo out of sync
-// with lib/types.ts's — now a single source of truth). TECHNICIEN_OPTIONS
-// stays local — same values as app/suivi-rl/page.tsx's equivalent, not yet
-// deduplicated. ──
-
-const TECHNICIEN_OPTIONS = [
-  "ALI ELGHORABI",
-  "Said Errakkachi",
-  "AMDAOUI OTHMANE",
-  "Othmane Madih",
-  "MALEK HAMZA",
-  "BELOUARDIGHI AZIZ",
-  "RIDA BOULLAH",
-  "HAJJI BADRY",
-  "MINYAOUI SAID",
-  "ABDERRAHIM ELKONTAFI",
-  "RAMZI ADIL",
-  "HOUCINE CHARII",
-];
+// ─── CATEGORIE_OPTIONS and TECHNICIEN_OPTIONS are both shared with
+// app/suivi-rl/page.tsx and app/ds-history/page.tsx via lib/types.ts —
+// each used to be an independently hand-duplicated copy here (CATEGORIE_OPTIONS
+// had already drifted a stray typo out of sync with lib/types.ts's before
+// that was fixed) — now both import the single source of truth. ──
 
 const selectClass =
   "h-auto w-full rounded-lg border border-border bg-popover px-2 py-1.5 text-micro font-medium text-popover-foreground outline-none focus:border-amber-500";
