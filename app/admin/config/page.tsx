@@ -6,6 +6,8 @@ import {
   PALETTE_COLORS,
   DOT_COLOR_CLASSES,
   OPTION_LABELS,
+  OPTION_KEYS,
+  COLORED_OPTION_KEYS,
   type OptionKey,
   type ColoredOption,
   type PaletteColor,
@@ -24,8 +26,20 @@ import { cn } from "@/components/ui/utils";
 // convention BDD/Atelier/Parking already use throughout this app, applied
 // here to option *lists* instead of a single row's fields.
 
-const PLAIN_KEYS: OptionKey[] = ["EMPLACEMENT_OPTIONS", "ETAT_OPTIONS", "CATEGORIE_OPTIONS", "TECHNICIEN_OPTIONS", "RDV_CONVOYEURS"];
-const COLORED_KEYS: OptionKey[] = ["FLAG_OPTIONS", "PRESTATAIRE_OPTIONS"];
+// Derived from lib/types.ts's OPTION_KEYS/COLORED_OPTION_KEYS rather than
+// hand-copied — a hand-copied pair of arrays here compiled fine (both typed
+// as the non-exhaustive OptionKey[]) but silently dropped any key added to
+// OPTION_KEYS in the future from ever rendering on this page, with no error
+// anywhere (audit finding I4). Deriving means a new key is either editable
+// here automatically (if plain) or needs one line added to
+// COLORED_OPTION_KEYS in lib/types.ts to route it to the colored variant —
+// there's no third, silently-invisible path anymore.
+// Exported (not just module-local) so lib/__tests__/adminConfigKeys.test.ts
+// can assert every key in OPTION_KEYS is reachable through one of these two
+// lists — a compile-time-adjacent guard against this exact drift recurring,
+// per the audit's I4 finding.
+export const COLORED_KEYS: OptionKey[] = [...COLORED_OPTION_KEYS];
+export const PLAIN_KEYS: OptionKey[] = OPTION_KEYS.filter((k) => !(COLORED_OPTION_KEYS as readonly OptionKey[]).includes(k));
 
 function ChipButton({
   children,
