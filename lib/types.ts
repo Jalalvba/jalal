@@ -309,6 +309,18 @@ export type AllSheetFieldOptions = {
 // as given by the sheet owner. Fallback only — see note above.
 export const EMPLACEMENT_OPTIONS_FALLBACK = ["ATELIER", "PARKING", "INTROUVABLE", "DEPOT", "EXTERNE"];
 
+// Named handle for the one EMPLACEMENT_OPTIONS_FALLBACK value that
+// app/suivi-rl/page.tsx and app/ds-history/page.tsx treat specially (red
+// "⚠ Introuvable" alert styling on the whole card/row). Referencing this
+// constant instead of a raw "INTROUVABLE" literal at each comparison site
+// doesn't remove the underlying fragility — Emplacement is admin-editable
+// at /admin/config, and renaming or removing this exact value there still
+// silently disables the alert styling with no error anywhere (Stage 1 of
+// the config-driven proposal deliberately didn't wire behavior flags like
+// this into the Mongo-backed option documents) — but it does mean there's
+// exactly one place to look/update if that value's spelling ever changes.
+export const EMPLACEMENT_INTROUVABLE = "INTROUVABLE";
+
 // Fallback only — see note above. Merges the old FLAG_OPTIONS list and
 // FLAG_STYLE color map into one {value,color}[] (they were always a matched
 // pair — two separately-synced lists was the exact drift risk this
@@ -326,6 +338,43 @@ export const FLAG_OPTIONS_FALLBACK: ColoredOption[] = [
 // Fallback only — see note above. Dropdown option lists were exact, given
 // verbatim, not invented; unchanged here, just renamed.
 export const ETAT_OPTIONS_FALLBACK = ["INTERNE", "EXTERNE", "DISPONIBLE", "ANNULE", "ANNULEE"];
+
+// Named handles for the ETAT_OPTIONS_FALLBACK values app/suivi-rl/page.tsx
+// (the INTERNE/EXTERNE Flotte filter) and app/ds-history/page.tsx's
+// etatStyle() (per-value badge color) compare against directly. Same
+// caveat as EMPLACEMENT_INTROUVABLE above: ETAT is admin-editable at
+// /admin/config, and these are still plain string comparisons, not derived
+// from the live option list — renaming any of these five values there
+// silently breaks the corresponding filter/color, with no error. Centralizing
+// the literals here at least means a rename only needs updating in one place.
+export const ETAT_INTERNE = "INTERNE";
+export const ETAT_EXTERNE = "EXTERNE";
+export const ETAT_DISPONIBLE = "DISPONIBLE";
+export const ETAT_ANNULE = "ANNULE";
+export const ETAT_ANNULEE = "ANNULEE";
+
+/**
+ * ETAT's badge color mapping — a deliberate literal-color exception (see
+ * CLAUDE.md §3's "ÉTAT badges" entry, same convention FLAG_STYLE/ZoneBadges
+ * use), but previously duplicated and drifted independently in two places:
+ * app/ds-history/page.tsx's etatStyle() covered ANNULEE but not ANNULE
+ * (despite ETAT_OPTIONS_FALLBACK including both), and app/suivi-rl/page.tsx
+ * had its own, simpler two-branch (EXTERNE vs everything-else) ternary that
+ * didn't distinguish DISPONIBLE/ANNULE/ANNULEE at all. Centralized here so
+ * the same ETAT value renders identically on both pages, with both
+ * ANNULE and ANNULEE covered. The fallback/unknown-value and
+ * ANNULE/ANNULEE branches use the semantic muted/border tokens rather than
+ * a literal zinc shade — that literal (bg-zinc-700 text-zinc-200) was also
+ * a real light/dark bug, not just a token-naming nitpick: it rendered a
+ * dark surface unconditionally, regardless of the app's light/dark theme.
+ */
+export function etatBadgeClass(etat: string): string {
+  const key = etat?.toUpperCase();
+  if (key === ETAT_DISPONIBLE) return "bg-green-700 text-white border-green-700";
+  if (key === ETAT_INTERNE) return "bg-amber-400 text-amber-950 border-amber-500";
+  if (key === ETAT_EXTERNE) return "bg-red-600 text-white border-red-700";
+  return "bg-muted text-muted-foreground border-border";
+}
 
 export const CATEGORIE_OPTIONS_FALLBACK = [
   "Atelier chargé — en attente diagnostic",

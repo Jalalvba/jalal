@@ -24,6 +24,8 @@ import {
   getPrestataireDotClass,
   BDD_ZONE_DETECTION_HEADERS,
   BDD_EDITABLE_FIELDS,
+  EMPLACEMENT_INTROUVABLE,
+  etatBadgeClass,
 } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
@@ -507,15 +509,13 @@ function FieldSelector({
 
 // ─── Sheet Card (BDD + RL merged) ────────────────────────────────────────────
 
-// Module-scope so both SheetCard (RL rows, Import section) and
-// BddEditableRow (Réunion N-1, the one read-only field left on the BDD row)
-// can call it without needing to thread a prop through.
-const etatStyle = (etat: string) => ({
-  "DISPONIBLE": "bg-green-700 text-white border-green-700",
-  "INTERNE":    "bg-amber-400 text-amber-950 border-amber-500",
-  "EXTERNE":    "bg-red-600 text-white border-red-700",
-  "ANNULEE":    "bg-zinc-700 text-zinc-200 border-zinc-600",
-} as Record<string,string>)[etat?.toUpperCase()] ?? "bg-zinc-700 text-zinc-200 border-zinc-600";
+// etatBadgeClass (lib/types.ts) replaces this file's own local mapping —
+// that local one covered ANNULEE but not ANNULE, and drifted independently
+// from app/suivi-rl/page.tsx's own simpler ETAT styling. Shared now so
+// both pages render the same ETAT value identically. Kept as a thin local
+// alias (not inlining every call site) since etatStyle's name is already
+// used at both call sites below and in comments referencing it.
+const etatStyle = etatBadgeClass;
 
 function f(label: string, val?: string) {
   return val ? (
@@ -551,7 +551,11 @@ function BddEditableRow({ row }: { row: BddRow }) {
   }
 
   const dot = getPrestataireDotClass(row.prestataire, options.PRESTATAIRE_OPTIONS);
-  const isIntrouvable = row.Emplacement === "INTROUVABLE";
+  // WARNING: Emplacement is admin-editable at /admin/config — if
+  // EMPLACEMENT_INTROUVABLE's exact value is ever renamed or removed
+  // there, this comparison silently stops matching anything and the alert
+  // styling disappears with no error (see its comment in lib/types.ts).
+  const isIntrouvable = row.Emplacement === EMPLACEMENT_INTROUVABLE;
 
   return (
     <div

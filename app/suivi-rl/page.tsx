@@ -6,6 +6,10 @@ import {
   BDD_ZONE_DETECTION_HEADERS,
   getFlagStyle,
   getPrestataireDotClass,
+  EMPLACEMENT_INTROUVABLE,
+  ETAT_INTERNE,
+  ETAT_EXTERNE,
+  etatBadgeClass,
   type BddRow,
 } from "@/lib/types";
 import { ZONE_COLORS } from "@/lib/constants/zones";
@@ -150,10 +154,15 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
 
   const flagStyle = getFlagStyle(row.flag, options.FLAG_OPTIONS);
   const dot = getPrestataireDotClass(row.prestataire, options.PRESTATAIRE_OPTIONS);
-  // Emplacement is a human's manual assessment (see lib/types.ts) — INTROUVABLE
-  // means someone has flagged this vehicle as genuinely not located, a real
-  // alert worth the same red treatment ds-history's SheetCard gives RL rows.
-  const isIntrouvable = row.Emplacement === "INTROUVABLE";
+  // Emplacement is a human's manual assessment (see lib/types.ts) —
+  // EMPLACEMENT_INTROUVABLE means someone has flagged this vehicle as
+  // genuinely not located, a real alert worth the same red treatment
+  // ds-history's SheetCard gives RL rows. WARNING: Emplacement is
+  // admin-editable at /admin/config — if that exact value is ever renamed
+  // or removed there, this comparison silently stops matching anything and
+  // the alert styling disappears with no error (see EMPLACEMENT_INTROUVABLE's
+  // own comment in lib/types.ts).
+  const isIntrouvable = row.Emplacement === EMPLACEMENT_INTROUVABLE;
 
   return (
     <RecordCard
@@ -211,7 +220,11 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
               disabled={pending}
               className={cn(
                 "flex min-h-8 flex-shrink-0 items-center rounded-lg px-2 py-1 text-micro font-bold uppercase transition disabled:opacity-60",
-                value?.toUpperCase() === "EXTERNE" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400",
+                // etatBadgeClass (lib/types.ts) — shared with ds-history's
+                // ETAT badge, replaces this page's own two-branch
+                // (EXTERNE-vs-everything-else) ternary, which silently
+                // rendered DISPONIBLE/ANNULE/ANNULEE the same as INTERNE.
+                etatBadgeClass(value),
                 justSaved && "ring-2 ring-emerald-400"
               )}
             >
@@ -277,7 +290,12 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
 
 // ─── Main page ──────────────────────────────────────────────────────────────
 
-type Fleet = "TOUS" | "INTERNE" | "EXTERNE";
+// "TOUS" has no corresponding lib/types.ts constant — it's a filter-only
+// sentinel meaning "no ETAT filter applied", not a real ETAT value, so
+// there's nothing to rename-drift against. ETAT_INTERNE/ETAT_EXTERNE ARE
+// live ETAT values (admin-editable at /admin/config) — see their comment
+// in lib/types.ts for the rename-drift risk.
+type Fleet = "TOUS" | typeof ETAT_INTERNE | typeof ETAT_EXTERNE;
 
 const EMPTY_ROWS: BddRow[] = [];
 
@@ -289,7 +307,7 @@ export default function SuiviRlPage() {
   const rows = rowsQuery.data ?? EMPTY_ROWS;
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [activeFleet, setActiveFleet] = useState<Fleet>("INTERNE");
+  const [activeFleet, setActiveFleet] = useState<Fleet>(ETAT_INTERNE);
   const [activeEmplacement, setActiveEmplacement] = useState("TOUS");
   const [activePrestataire, setActivePrestataire] = useState("TOUS");
   const [activeFlag, setActiveFlag] = useState("TOUS");
@@ -307,7 +325,7 @@ export default function SuiviRlPage() {
 
   const fleetFiltered = useMemo(() => {
     if (activeFleet === "TOUS") {
-      return rows.filter((r) => r.ETAT?.toUpperCase() === "INTERNE" || r.ETAT?.toUpperCase() === "EXTERNE");
+      return rows.filter((r) => r.ETAT?.toUpperCase() === ETAT_INTERNE || r.ETAT?.toUpperCase() === ETAT_EXTERNE);
     }
     return rows.filter((r) => r.ETAT?.toUpperCase() === activeFleet);
   }, [rows, activeFleet]);
@@ -433,7 +451,7 @@ export default function SuiviRlPage() {
             value={activeFleet}
             onValueChange={(v) => v && selectFleet(v as Fleet)}
           >
-            {(["TOUS", "INTERNE", "EXTERNE"] as const).map((f) => (
+            {(["TOUS", ETAT_INTERNE, ETAT_EXTERNE] as const).map((f) => (
               <ToggleGroupItem key={f} value={f}>
                 {f}
               </ToggleGroupItem>
