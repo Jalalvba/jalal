@@ -105,6 +105,18 @@ export async function POST(req: Request) {
   try {
     let triggerRes: Response;
     try {
+      // Accepted tradeoff (M7 in the audit this responds to), not an
+      // oversight: the token travels as a query param, which lands in
+      // ~/import's own access logs. A header would avoid that, but ~/import's
+      // api/index.py reads the token via `query.get("token")` only — there is
+      // no header-auth path on the receiving side (confirmed by reading that
+      // project's source directly, not assumed). Fixing this properly means
+      // coordinated changes across two separate Vercel projects/deployments
+      // (this repo's caller AND ~/import's handler, redeployed together) —
+      // out of scope for a one-sided change here, and per this repo's own
+      // AGENTS.md, ~/import is a separate repo this session doesn't touch
+      // without being explicitly asked to. If ~/import ever gains header
+      // support, switch this to an Authorization header at the same time.
       triggerRes = await fetch(`${IMPORT_API_BASE}/api?token=${encodeURIComponent(token)}`, {
         cache: "no-store",
       });
