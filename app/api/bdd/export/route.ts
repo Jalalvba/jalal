@@ -139,6 +139,13 @@ async function buildPdf(
   const sanitize = (s: string): string =>
     String(s ?? "")
       .replace(/[\r\n\t\x00-\x1f\x7f]/g, " ")
+      // \x80-\x9f (the C1 control range) sits inside \x00-\xff but is NOT
+      // encodable by pdf-lib's WinAnsi StandardFonts — the final catch-all
+      // below used to let it through untouched (only \x00-\x1f/\x7f were
+      // treated as control characters), so a Commentaire/IMM/search term
+      // containing one of these (e.g. from a Windows-1252-mangled paste)
+      // crashed the whole export with an opaque "BDD export failed" 500.
+      .replace(/[\x80-\x9f]/g, " ")
       .replace(new RegExp("[\\u202f\\u00a0\\u2007\\u2009\\u200a\\u3000]", "g"), " ")
       .replace(new RegExp("[\\u2018\\u2019\\u02bc]", "g"), "'")
       .replace(new RegExp("[\\u201c\\u201d\\u00ab\\u00bb]", "g"), '"')

@@ -84,4 +84,34 @@ describe("POST /api/bdd/export — happy path", () => {
     );
     expect(res.status).toBe(200);
   });
+
+  // Regression guard for the C1-range crash found in the audit (I1): pdf-lib's
+  // WinAnsi StandardFonts can't encode U+0080-U+009F, and sanitize()'s
+  // previous control-char strip only covered \x00-\x1f/\x7f, missing this
+  // range entirely — a Windows-1252-mangled paste containing one of these
+  // characters crashed the whole export with an opaque 500. Covers all three
+  // text paths that call into pdf-lib's width/draw calls: wrapText
+  // (commentaire), and truncate (IMM, and the header line via searchTerm).
+  it("a C1 control character (U+0081) in commentaire no longer crashes the export", async () => {
+    const res = await POST(req({ rows: [{ ...validRow, commentaire: `avant${String.fromCharCode(0x81)}apres` }] }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/pdf");
+  });
+
+  it("a C1 control character (U+0090) in IMM no longer crashes the export", async () => {
+    const res = await POST(req({ rows: [{ ...validRow, IMM: `12345${String.fromCharCode(0x90)}B` }] }));
+    expect(res.status).toBe(200);
+  });
+
+  it("a C1 control character (U+008D) in searchTerm (rendered in the header line) no longer crashes the export", async () => {
+    const res = await POST(req({ rows: [validRow], searchTerm: `x${String.fromCharCode(0x8d)}y` }));
+    expect(res.status).toBe(200);
+  });
+
+  it("the full C1 range (U+0080-U+009F) is handled without crashing, one character at a time", async () => {
+    for (let code = 0x80; code <= 0x9f; code++) {
+      const res = await POST(req({ rows: [{ ...validRow, commentaire: `x${String.fromCharCode(code)}y` }] }));
+      expect(res.status, `code 0x${code.toString(16)} should not crash the export`).toBe(200);
+    }
+  });
 });
