@@ -83,6 +83,7 @@ export function Combobox({
                 key={option}
                 value={option}
                 onSelect={() => onSelect(option)}
+                onMouseDown={(e) => e.preventDefault()}
                 className="cursor-pointer border-b border-border px-4 py-2.5 font-mono text-sm font-semibold tracking-wide text-popover-foreground last:border-0 data-[selected=true]:bg-muted"
               >
                 {option}
