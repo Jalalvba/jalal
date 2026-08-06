@@ -24,6 +24,20 @@
  * already edited a value via /admin/config would overwrite their edit back
  * to the original hardcoded value — this is a one-time bootstrap, not a
  * sync job.
+ *
+ * CACHE STALENESS: this script writes directly to Mongo and does NOT call
+ * lib/googleSheetsClient.ts's invalidateCache() — confirmed by direct
+ * testing that it can't: invalidateCache() wraps Next's revalidateTag(),
+ * which throws ("Invariant: static generation store missing") the instant
+ * it's called outside a real Next.js request/build context, which a
+ * standalone `npx tsx` process never has. A running deployment's
+ * lib/sheetFieldOptions.ts getAllSheetFieldOptionsWithStatus() cache has a
+ * 5-minute TTL (CACHE_TTL_MS), so a value changed by re-running this script
+ * can take up to 5 minutes to actually show up in the live app — that's
+ * expected, not a bug, and there's no in-process way to force it sooner
+ * from outside the running Next server. If this ever needs to be
+ * synchronous, it would have to go through an authenticated app route
+ * (e.g. a one-off admin action) instead of a standalone script.
  */
 
 import { readFileSync, existsSync } from "node:fs";
