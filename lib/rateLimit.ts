@@ -42,17 +42,33 @@ export async function checkRateLimit(
   const windowEnd = (windowBucket + 1) * windowMs;
   const key = `${route}:${identifier}:${windowBucket}`;
 
-  const col = await getCollection<RateLimitDoc>("rate_limits");
-  const doc = await col.findOneAndUpdate(
-    { _id: key },
-    {
-      $inc: { count: 1 },
-      // TTL cushion past the window's own end so the document outlives the
-      // window it's counting for, without lingering indefinitely.
-      $setOnInsert: { expiresAt: new Date(windowEnd + windowMs) },
-    },
-    { upsert: true, returnDocument: "after" }
-  );
+  // Fails OPEN, not closed: a transient Mongo connectivity blip (confirmed
+  // live via Vercel's runtime error logs — MongoNetworkError/
+  // MongoNetworkTimeoutError/MongoServerSelectionError recur across nearly
+  // every route in this app, not just this one) used to propagate as an
+  // uncaught exception from here, through rateLimitOrNull's un-try/caught
+  // call site, into a raw unhandled-request 500 with no JSON body — turning
+  // a rate limiter (an abuse-prevention safety net, not a security control,
+  // for what's a single-authorized-user app) into a hard outage for every
+  // rate-limited route the moment Mongo hiccups. Letting the request through
+  // when the limiter itself can't be consulted is the correct tradeoff here.
+  let doc: (RateLimitDoc & { _id: string }) | null;
+  try {
+    const col = await getCollection<RateLimitDoc>("rate_limits");
+    doc = await col.findOneAndUpdate(
+      { _id: key },
+      {
+        $inc: { count: 1 },
+        // TTL cushion past the window's own end so the document outlives the
+        // window it's counting for, without lingering indefinitely.
+        $setOnInsert: { expiresAt: new Date(windowEnd + windowMs) },
+      },
+      { upsert: true, returnDocument: "after" }
+    );
+  } catch (e) {
+    console.error(`checkRateLimit: Mongo unreachable for ${key}, failing open`, e);
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
 
   const count = doc?.count ?? 1;
   const retryAfterSeconds = Math.max(0, Math.ceil((windowEnd - Date.now()) / 1000));
