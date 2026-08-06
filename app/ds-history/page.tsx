@@ -543,7 +543,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
 
   function commitField(field: FieldKey) {
     return async (value: string) => {
-      await updateMutation.mutateAsync({ row: row._row, updates: { [field]: value } });
+      await updateMutation.mutateAsync({ row: row._row, updates: { [field]: value }, imm: row.IMM });
       applyOptimisticUpdate(row._row, { [field]: value } as Partial<BddRow>);
     };
   }

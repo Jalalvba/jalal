@@ -147,10 +147,20 @@ async function fetchSheetRows(): Promise<BddRow[]> {
  * are ever accepted — anything else is rejected outright (the whole call
  * fails, nothing partial-writes), and the rejected field names are returned
  * so the caller gets an honest answer instead of a silent no-op.
+ *
+ * `expectedImm` is required and checked via verifyRowIdentity() before the
+ * write — same guard every other write path in this app already has
+ * (Parking/Atelier/Depot's update+delete, this file's own deleteBddRow).
+ * Without it, a client-held `row` that's gone stale (another delete
+ * renumbered the sheet since this browser tab last loaded, and TanStack
+ * Query's persisted cache + refetchOnWindowFocus:false means that can
+ * survive a tab switch or reload) would silently write into a different
+ * vehicle's row.
  */
 export async function updateSheetRow(
   row: number,
-  updates: Record<string, string>
+  updates: Record<string, string>,
+  expectedImm: string
 ): Promise<BddUpdateResult> {
   const requestedFields = Object.keys(updates);
 
@@ -181,6 +191,18 @@ export async function updateSheetRow(
       rejectedFields: missingFromSheet,
     };
   }
+
+  const immColIdx = headers.indexOf("IMM"); // 0-based
+  if (immColIdx === -1) {
+    throw new Error("Column 'IMM' not found in the live BDD sheet header row");
+  }
+
+  await verifyRowIdentity(
+    sheets,
+    spreadsheetId!,
+    `'${BDD_TAB_NAME}'!${columnIndexToLetter(immColIdx + 1)}${row}`,
+    expectedImm
+  );
 
   // One atomic batchUpdate covering every field, not N independent
   // values.update() calls — matches Parking/Atelier/Depot/RDV's pattern.

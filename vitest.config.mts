@@ -23,6 +23,11 @@ export default defineConfig({
       // getCollection(), never at module import time).
       MONGODB_URI: "mongodb://test-dummy-host/test",
       MONGODB_DB: "test-dummy-db",
+      // lib/googleSheetsBdd.ts (and the other lib/googleSheets*.ts modules)
+      // throw at module load if this is unset — same reasoning as the two
+      // dummies above, needed just to make the module importable when a
+      // test gives it a fully mocked `sheets` client.
+      GOOGLE_SHEETS_ID: "test-dummy-sheet-id",
     },
   },
   resolve: {

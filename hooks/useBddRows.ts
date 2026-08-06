@@ -41,11 +41,11 @@ export function useBddRows() {
 export function useUpdateBddRow() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ row, updates }: { row: number; updates: Record<string, string> }) =>
+    mutationFn: ({ row, updates, imm }: { row: number; updates: Record<string, string>; imm: string }) =>
       fetchJson<BddUpdateResult & { ok: true }>("/api/bdd/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ row, updates }),
+        body: JSON.stringify({ row, updates, imm }),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });

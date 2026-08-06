@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Invalid request body" }, { status: 400 });
   }
 
-  const { row, updates } = body as { row?: unknown; updates?: unknown };
+  const { row, updates, imm } = body as { row?: unknown; updates?: unknown; imm?: unknown };
 
   if (typeof row !== "number" || !Number.isInteger(row) || row < 2) {
     return NextResponse.json(
@@ -29,6 +29,10 @@ export async function POST(req: Request) {
 
   if (!updates || typeof updates !== "object" || Array.isArray(updates)) {
     return NextResponse.json({ ok: false, error: "Missing or invalid 'updates' (must be an object)" }, { status: 400 });
+  }
+
+  if (typeof imm !== "string" || !imm.trim()) {
+    return NextResponse.json({ ok: false, error: "Missing or invalid 'imm' (must be a non-empty string)" }, { status: 400 });
   }
 
   const updatesObj = updates as Record<string, unknown>;
@@ -44,7 +48,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await updateSheetRow(row, updatesObj as Record<string, string>);
+    const result = await updateSheetRow(row, updatesObj as Record<string, string>, imm);
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (e) {
     return toErrorResponse(e, "Failed to update BDD sheet");
