@@ -72,6 +72,35 @@ describe("updateSheetRow — row-identity safety", () => {
   });
 });
 
+describe("updateSheetRow — BDD_EDITABLE_FIELDS allowlist enforcement", () => {
+  // Called out by name (alongside deleteBddRow's verifyRowIdentity gap) in
+  // the audit's mutation-testing list — not one of the 4 explicitly
+  // required test-suite-gap items, but closing it for completeness since
+  // it's in the same paragraph.
+  it("rejects a field not in BDD_EDITABLE_FIELDS — does not reach verifyRowIdentity or batchUpdate at all", async () => {
+    const headers = ["IMM", "date", "commentaire", "ds"]; // "ds" is a read-only XLOOKUP column, never editable
+    const { sheets, batchUpdate } = fakeSheets(headers);
+    mockedGetSheetsClient.mockReturnValue(sheets as never);
+
+    const result = await updateSheetRow(42, { ds: "should not be writable" }, "12345-B-6");
+
+    expect(result.ok).toBe(false);
+    expect(mockedVerifyRowIdentity).not.toHaveBeenCalled();
+    expect(batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("accepts a real editable field (commentaire) unchanged", async () => {
+    const headers = ["IMM", "commentaire"];
+    const { sheets, batchUpdate } = fakeSheets(headers);
+    mockedGetSheetsClient.mockReturnValue(sheets as never);
+
+    const result = await updateSheetRow(42, { commentaire: "hello" }, "12345-B-6");
+
+    expect(result.ok).toBe(true);
+    expect(batchUpdate).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("deleteBddRow — row-identity safety (existing behavior, locked in)", () => {
   it("calls verifyRowIdentity before issuing the row deletion", async () => {
     const headers = ["IMM", "commentaire"];
