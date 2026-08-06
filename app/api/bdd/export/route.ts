@@ -34,7 +34,7 @@ type BddExportPayload = {
   searchTerm?: string;
 };
 
-function isValidRow(r: unknown): r is BddExportRow {
+export function isValidRow(r: unknown): r is BddExportRow {
   if (!r || typeof r !== "object") return false;
   const keys: (keyof BddExportRow)[] = ["IMM", "client", "modele", "commentaire"];
   return keys.every((k) => typeof (r as Record<string, unknown>)[k] === "string");

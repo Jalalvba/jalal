@@ -51,3 +51,8 @@ secret.json
 
 # generated full-source context dumps (for feeding to other tools/models)
 gemini_context.md
+
+# Playwright E2E run artifacts (traces, screenshots, HTML report)
+/test-results/
+/playwright-report/
+/blob-report/

@@ -109,7 +109,7 @@ function flattenLines(results: ImportPipelineResult[]): FlatLine[] {
   });
 }
 
-function buildSummary(results: ImportPipelineResult[], durationSec: number): { ok: boolean; text: string } {
+export function buildSummary(results: ImportPipelineResult[], durationSec: number): { ok: boolean; text: string } {
   const failed = results.filter((r) => r.status === "failed");
   const succeeded = results.filter((r) => r.status === "success");
   // Two distinct skip reasons (confirmed against ~/import/run.py's

@@ -31,6 +31,8 @@ pnpm dev      # start the dev server at http://localhost:3000
 pnpm build    # production build
 pnpm start    # run a production build
 pnpm lint     # eslint
+pnpm test     # vitest unit/integration suite (fast, no network)
+pnpm test:e2e # playwright E2E suite (needs real .env.local + a dev server) — see TESTING.md
 ```
 
 Copy `.env.example` to `.env.local` and fill in real values:
@@ -214,3 +216,4 @@ here. Additional conventions:
 - **[`PROJECT_HISTORY.md`](./PROJECT_HISTORY.md)** — full commit-by-commit feature timeline and reasoning.
 - **[`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md)** — full, file/line-cited security verification.
 - **[`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md)** — color/typography/radius/error-banner conventions.
+- **[`TESTING.md`](./TESTING.md)** — how to run the Vitest unit/integration suite and the Playwright E2E suite, what each test actually covers, and the gaps left deliberately uncovered.
