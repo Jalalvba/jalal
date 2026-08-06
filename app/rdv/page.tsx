@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Trash2, ImageDown, Search, Check } from "lucide-react";
 import type { RdvRow, RdvEditableField } from "@/lib/types";
-import { RDV_MATRICULE_REGEX } from "@/lib/types";
+import { RDV_MATRICULE_REGEX, RDV_HEADERS } from "@/lib/types";
 import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
@@ -82,7 +82,8 @@ const COLUMNS: { label: string; className?: string }[] = [
   { label: "", className: "w-11" },
 ];
 
-// Same columns as the live table, minus the actions column — this is a
+// Same columns as the live table, minus "Date" (shown once in the title
+// bar above, not repeated per-row) and the actions column — this is a
 // dedicated plain-markup render for image export, not the interactive
 // table (no InlineEdit widgets, no hover states, no delete button), and
 // it deliberately doesn't reuse the live table's overflow-x-auto wrapper:
@@ -90,7 +91,19 @@ const COLUMNS: { label: string; className?: string }[] = [
 // into the exported image if captured directly, cutting off columns on
 // narrow screens. This one is rendered off-screen at its natural width
 // instead — see ExportTable/handleExportImage below.
-const EXPORT_COLUMNS = ["Heure", "Clients", "Véhicule", "Matricule", "Intervention", "Contact", "Convoyeur"];
+//
+// Derived from lib/types.ts's RDV_HEADERS rather than hand-copied — the
+// hand-copied version had already drifted ("Convoyeur" vs the sheet's real
+// header text "CONVOYEUR") with no error anywhere. The <td>s below are
+// still positional/hand-written (row.heure, row.clients, ... in that
+// order) with no compile-time link to this list — if RDV_HEADERS' column
+// *order* ever changes, the headers and cells would silently misalign.
+// Full field-driven rendering (mapping each header to its RdvRow accessor)
+// is a bigger structural change than this pass — flagged here, not fixed.
+// Exported so lib/__tests__/rdvExportColumns.test.ts can lock in that this
+// stays derived (and stays byte-identical to the real sheet header text)
+// rather than drifting back into a hand-copied literal.
+export const EXPORT_COLUMNS = RDV_HEADERS.filter((h) => h !== "Date");
 
 function ExportTable({ dayRows, dateIso }: { dayRows: RdvRow[]; dateIso: string }) {
   return (
