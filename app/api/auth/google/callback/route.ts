@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { getIronSession } from "iron-session";
 import { sessionOptions, SessionData } from "@/lib/session";
 import { getOAuthClient, getRedirectUri, AUTHORIZED_EMAIL } from "@/lib/googleOAuth";
+import { rateLimitOrNull } from "@/lib/rateLimit";
 
 // Validates the CSRF state, exchanges the code, verifies the ID token
 // (cryptographically, via Google's own public keys — not just trusting an
@@ -10,7 +11,16 @@ import { getOAuthClient, getRedirectUri, AUTHORIZED_EMAIL } from "@/lib/googleOA
 // against the single hardcoded authorized account. No User model, no
 // session data beyond the existing { isLoggedIn: boolean } shape — this
 // only replaces how a session gets created, not what it contains.
+//
+// Rate-limited (M8 in the audit this responds to): unauthenticated, and
+// each hit triggers an outbound call to Google (getToken() + ID-token
+// verification) — worth capping independently of oauth-start's limit, since
+// a caller could in principle hit this route directly with old/garbage
+// code+state pairs without ever visiting /api/auth/google first.
 export async function GET(req: Request) {
+  const limited = await rateLimitOrNull(req, "oauth-callback", 30, 60_000);
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
