@@ -147,6 +147,11 @@ function AtelierCard({
 
 const EMPTY_ROWS: AtelierRow[] = [];
 
+// Sentinel for the Technicien filter chip row — distinct from "TOUS" (no
+// filter, shows everything including blank-Technicien rows) and from any
+// real technician name (which can never collide with this literal).
+const UNASSIGNED_TECHNICIEN = "__UNASSIGNED__";
+
 export default function AtelierPage() {
   const rowsQuery = useAtelierRows();
   const immListQuery = useParkingImmList(); // shared parc plate list, same underlying resource as Parking
@@ -173,10 +178,11 @@ export default function AtelierPage() {
     [rows]
   );
 
-  const technicienFiltered = useMemo(
-    () => (activeTechnicien === "TOUS" ? rows : rows.filter((r) => r.technicien === activeTechnicien)),
-    [rows, activeTechnicien]
-  );
+  const technicienFiltered = useMemo(() => {
+    if (activeTechnicien === "TOUS") return rows;
+    if (activeTechnicien === UNASSIGNED_TECHNICIEN) return rows.filter((r) => !r.technicien?.trim());
+    return rows.filter((r) => r.technicien === activeTechnicien);
+  }, [rows, activeTechnicien]);
 
   async function submitIMMs() {
     const val = rawInput.trim();
@@ -255,7 +261,7 @@ export default function AtelierPage() {
 
         <PlateFilterInput value={search} onChange={setSearch} />
 
-        {visibleTechniciens.length > 0 && (
+        {rows.length > 0 && (
           <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
             <span className="mr-1 flex-shrink-0 text-micro font-bold uppercase text-muted-foreground">Technicien</span>
             <ToggleGroup
@@ -264,6 +270,7 @@ export default function AtelierPage() {
               onValueChange={(v) => v && setActiveTechnicien(v)}
             >
               <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
+              <ToggleGroupItem value={UNASSIGNED_TECHNICIEN}>Non assigné</ToggleGroupItem>
               {visibleTechniciens.map((t) => (
                 <ToggleGroupItem key={t} value={t}>
                   {t}
