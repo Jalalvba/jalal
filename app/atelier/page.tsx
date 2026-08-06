@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { AtelierRow, ParkingAddResultItem, AtelierEditableField } from "@/lib/types";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
@@ -12,6 +12,7 @@ import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useEditableState } from "@/hooks/useEditableState";
 import { useParkingImmList } from "@/hooks/useParkingRows";
 import {
@@ -164,6 +165,8 @@ function AtelierCard({
 
 // ─── Main page ──────────────────────────────────────────────────────────────
 
+const EMPTY_ROWS: AtelierRow[] = [];
+
 export default function AtelierPage() {
   const rowsQuery = useAtelierRows();
   const immListQuery = useParkingImmList(); // shared parc plate list, same underlying resource as Parking
@@ -176,9 +179,24 @@ export default function AtelierPage() {
   const [rawInput, setRawInput] = useState("");
   const [error, setError] = useState("");
   const [addResults, setAddResults] = useState<ParkingAddResultItem[] | null>(null);
+  const [activeTechnicien, setActiveTechnicien] = useState("TOUS");
 
-  const rows = rowsQuery.data ?? [];
+  const rows = rowsQuery.data ?? EMPTY_ROWS;
   const immList = immListQuery.data ?? [];
+
+  // Distinct Technicien values actually present in the loaded rows, not the
+  // fixed TECHNICIEN_OPTIONS roster used by the per-card assignment dropdown
+  // above — a technician with no vehicles currently in Atelier shouldn't
+  // clutter the filter chip row.
+  const visibleTechniciens = useMemo(
+    () => [...new Set(rows.map((r) => r.technicien).filter(Boolean))].sort(),
+    [rows]
+  );
+
+  const technicienFiltered = useMemo(
+    () => (activeTechnicien === "TOUS" ? rows : rows.filter((r) => r.technicien === activeTechnicien)),
+    [rows, activeTechnicien]
+  );
 
   async function submitIMMs() {
     const val = rawInput.trim();
@@ -219,9 +237,13 @@ export default function AtelierPage() {
     }
   }
 
+  // Plate search bypasses the Technicien chip entirely, same convention as
+  // suivi-rl's Flotte/Emplacement/Prestataire/Flag chip cascade — chips are a
+  // browsing filter, search is for finding one specific plate regardless of
+  // which chip is currently active.
   const searched = (() => {
     const term = search.trim().toUpperCase();
-    if (!term) return rows;
+    if (!term) return technicienFiltered;
     return rows.filter((r) => r.imm.includes(term));
   })();
 
@@ -252,6 +274,24 @@ export default function AtelierPage() {
         {addResults && <AddResultsList results={addResults} />}
 
         <PlateFilterInput value={search} onChange={setSearch} />
+
+        {visibleTechniciens.length > 0 && (
+          <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
+            <span className="mr-1 flex-shrink-0 text-micro font-bold uppercase text-muted-foreground">Technicien</span>
+            <ToggleGroup
+              type="single"
+              value={activeTechnicien}
+              onValueChange={(v) => v && setActiveTechnicien(v)}
+            >
+              <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
+              {visibleTechniciens.map((t) => (
+                <ToggleGroupItem key={t} value={t}>
+                  {t}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+        )}
       </ListPageHeader>
 
       <div className="px-3 py-3">
