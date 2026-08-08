@@ -1,4 +1,17 @@
 /**
+ * DEPRECATED — retired, not maintained. Do not run this against production
+ * anymore: its field-name literals predate the ds/bc/cp/parc dirty->clean
+ * Mongo key migration (2026-08) and are now stale (e.g. "IMM"/"Immatriculation"/
+ * "CMD Num" instead of imm/immatriculation/cmd_num). Index ownership has
+ * moved to the ~/import project's ensure_indexes() (lib/mongo.py) — each
+ * collection's own INDEX_SPECS constant (ds.py, bc.py, cp.py, parc.py) is
+ * the real source of truth for what indexes ds/bc/cp/parc should have, and
+ * ensure_indexes() applies it on every pipeline run. A one-off script here
+ * duplicating and inevitably drifting from those lists isn't worth keeping
+ * current. Kept only for historical reference (the
+ * before/after timing methodology below may still be a useful pattern to
+ * copy elsewhere), not as something to fix and re-run.
+ *
  * One-time index creation for the collections queried by this app's API
  * routes — see AUDIT_REPORT.md §8.1 for the analysis behind these choices.
  *
