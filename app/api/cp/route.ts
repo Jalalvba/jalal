@@ -20,8 +20,8 @@ export async function GET(req: Request) {
     const col = await getCollection("cp");
 
     const orClauses: Record<string, unknown>[] = [];
-    if (imm) orClauses.push({ IMM: imm });
-    if (ww)  orClauses.push({ WW: ww });
+    if (imm) orClauses.push({ imm: imm });
+    if (ww)  orClauses.push({ ww: ww });
     const match = orClauses.length === 1 ? orClauses[0] : { $or: orClauses };
 
     const items = await col.aggregate([
@@ -29,19 +29,19 @@ export async function GET(req: Request) {
       {
         $project: {
           _id:                0,
-          gestionnaire:       "$Gestionnaire",
-          ww:                 "$WW",
-          imm:                "$IMM",
-          vin:                "$NUM chassis",
-          marque:             "$Marque",
-          model:              "$Modèle",
-          version:            "$Libellé version long",
-          type_location:      "$Type location",
-          mce_date:           "$Date MCE",
-          date_debut_contrat: "$Date début contrat",
-          date_fin_contrat:   "$Date fin contrat",
-          type:               "$Type",
-          jockey:             "$Jockey",
+          gestionnaire:       "$gestionnaire",
+          ww:                 "$ww",
+          imm:                "$imm",
+          vin:                "$num_chassis",
+          marque:             "$marque",
+          model:              "$modele",
+          version:            "$libelle_version_long",
+          type_location:      "$type_location",
+          mce_date:           "$date_mce",
+          date_debut_contrat: "$date_debut_contrat",
+          date_fin_contrat:   "$date_fin_contrat",
+          type:               "$type_vh_relais",
+          jockey:             "$jockey",
         },
       },
       { $limit: 50 },
