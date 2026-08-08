@@ -38,6 +38,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Verify Mongo field-name references against field_registry.json
+        run: pnpm verify-field-names
+
       - name: Unit + integration tests (Vitest)
         run: pnpm test
 

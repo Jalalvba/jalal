@@ -79,7 +79,16 @@ export async function GET(req: Request) {
           $push: {
             cmd_num:          "$cmd_num",
             code_art:         "$code_art",
-            designation_consommation: "$designation_consommation",
+            // TEMPORARY dual-read: field_mapping.py's rename of
+            // "Désignation Consomation" -> designation_consommation had a
+            // trailing-space typo that made it never actually apply, so
+            // ~252k/258k live `ds` docs still carry the old dirty key.
+            // Remove this $ifNull fallback (and the dirty key) once the
+            // Part 5 backfill has renamed the field on every existing doc.
+            // verify-field-names:allow designation_consommation -- clean key not yet backfilled onto existing docs, see above
+            designation_consommation: {
+              $ifNull: ["$designation_consommation", "$Désignation Consomation"],
+            },
             qte:              "$qte",
 
           },
