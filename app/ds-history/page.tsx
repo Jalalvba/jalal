@@ -103,28 +103,28 @@ const PARC_MANDATORY: (keyof ParcItem)[] = ["imm","ww","vin","brand","model","ve
 const PARC_EXTRA:     (keyof ParcItem)[] = ["client","location_type","tenant"];
 
 const CARD_FIELDS: CardField[] = [
-  { key: "N°DS",         label: "N°DS",         group: "Identification" },
-  { key: "Date DS",      label: "Date DS",       group: "Identification" },
-  { key: "ENTITE",       label: "Entité",        group: "Localisation" },
-  { key: "Description",  label: "Description",   group: "DS Info" },
-  { key: "KM",           label: "KM",            group: "DS Info" },
-  { key: "Techniciens",  label: "Techniciens",   group: "Intervenants" },
-  { key: "Fournisseur",  label: "Fournisseur",   group: "Intervenants" },
+  { key: "n_ds",         label: "N°DS",         group: "Identification" },
+  { key: "date_ds",      label: "Date DS",       group: "Identification" },
+  { key: "entite_nom",   label: "Entité",        group: "Localisation" },
+  { key: "description",  label: "Description",   group: "DS Info" },
+  { key: "km",           label: "KM",            group: "DS Info" },
+  { key: "techniciens",  label: "Techniciens",   group: "Intervenants" },
+  { key: "fournisseur",  label: "Fournisseur",   group: "Intervenants" },
 ];
 
 const LINE_FIELDS: LineField[] = [
-  { key: "cmd_num",           label: "CMD Num" },
-  { key: "code_art",          label: "Code art" },
-  { key: "designation_conso", label: "Désig. conso." },
-  { key: "qte",               label: "Qté" },
+  { key: "cmd_num",                  label: "CMD Num" },
+  { key: "code_art",                 label: "Code art" },
+  { key: "designation_consommation", label: "Désig. conso." },
+  { key: "qte",                      label: "Qté" },
 ];
 
 const DEFAULT_CARD_VISIBLE = new Set<keyof DsHistoryItem>([
-  "N°DS","Date DS","ENTITE","KM","Description","Techniciens","Fournisseur",
+  "n_ds","date_ds","entite_nom","km","description","techniciens","fournisseur",
 ]);
-const DEFAULT_LINE_VISIBLE = new Set<keyof Line>(["cmd_num","designation_conso","qte"]);
+const DEFAULT_LINE_VISIBLE = new Set<keyof Line>(["cmd_num","designation_consommation","qte"]);
 const CARD_GROUPS = ["Identification","Localisation","DS Info","Intervenants"];
-const TOP_BAR_KEYS = new Set(["Date DS","KM"]);
+const TOP_BAR_KEYS = new Set(["date_ds","km"]);
 const NUM_LINE_KEYS = new Set(["qte"]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -132,10 +132,10 @@ const NUM_LINE_KEYS = new Set(["qte"]);
 function displayValue(item: DsHistoryItem, key: keyof DsHistoryItem): string {
   const v = item[key];
   if (v == null) return "—";
-  if (key === "Techniciens") return (v as string[]).join(", ") || "—";
-  if (key === "KM") return fmtNum(v as number) + " km";
+  if (key === "techniciens") return (v as string[]).join(", ") || "—";
+  if (key === "km") return fmtNum(v as number) + " km";
 
-  if (key === "Date DS") return fmtDate(v as string);
+  if (key === "date_ds") return fmtDate(v as string);
   return String(v).trim() || "—";
 }
 
@@ -467,13 +467,13 @@ function FieldSelector({
                   <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{group}</span>
                   <div className="flex gap-2">
                     <button onClick={() => { const n = new Set(visibleCardFields); fields.forEach(f => n.add(f.key)); saveCard(n); }} className="text-xs text-blue-500 hover:underline">Tout</button>
-                    <button onClick={() => { const n = new Set(visibleCardFields); fields.forEach(f => { if (f.key !== "N°DS") n.delete(f.key); }); saveCard(n); }} className="text-xs text-muted-foreground hover:underline">Aucun</button>
+                    <button onClick={() => { const n = new Set(visibleCardFields); fields.forEach(f => { if (f.key !== "n_ds") n.delete(f.key); }); saveCard(n); }} className="text-xs text-muted-foreground hover:underline">Aucun</button>
                   </div>
                 </div>
                 <div className="space-y-1">
                   {fields.map(f => (
                     <label key={f.key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted">
-                      <input type="checkbox" checked={visibleCardFields.has(f.key)} onChange={() => toggleCard(f.key)} disabled={f.key==="N°DS"} className="h-3.5 w-3.5 accent-foreground" />
+                      <input type="checkbox" checked={visibleCardFields.has(f.key)} onChange={() => toggleCard(f.key)} disabled={f.key==="n_ds"} className="h-3.5 w-3.5 accent-foreground" />
                       <span className="text-sm text-card-foreground">{f.label}</span>
                     </label>
                   ))}
@@ -995,7 +995,7 @@ export default function Home() {
   useEffect(() => { fetchAll("48070-B-7"); }, []); // eslint-disable-line
 
   const orderedCardFields = CARD_FIELDS.filter(
-    f => visibleCardFields.has(f.key) && f.key !== "N°DS" && !TOP_BAR_KEYS.has(f.key as string)
+    f => visibleCardFields.has(f.key) && f.key !== "n_ds" && !TOP_BAR_KEYS.has(f.key as string)
   );
   const orderedLineFields = LINE_FIELDS.filter(f => visibleLineFields.has(f.key));
 
@@ -1143,7 +1143,7 @@ export default function Home() {
           )}
 
           {data && !loading && data.items.map(it => {
-            const nds = it["N°DS"];
+            const nds = it["n_ds"];
 
             // All card fields always visible (no collapse for DS cards)
             const allCardFields = orderedCardFields;
@@ -1155,12 +1155,12 @@ export default function Home() {
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3 dark:border-border">
                 {/* LEFT: date · KM */}
                 <div className="flex flex-wrap items-center gap-2">
-                  {visibleCardFields.has("Date DS") && (
-                    <span className="text-sm font-bold tabular-nums text-card-foreground">{fmtDate(it["Date DS"])}</span>
+                  {visibleCardFields.has("date_ds") && (
+                    <span className="text-sm font-bold tabular-nums text-card-foreground">{fmtDate(it["date_ds"])}</span>
                   )}
-                  {visibleCardFields.has("KM") && it.KM != null && (
+                  {visibleCardFields.has("km") && it.km != null && (
                     <><span className="text-muted-foreground">•</span>
-                    <span className="text-sm font-bold tabular-nums text-card-foreground">{fmtNum(it.KM)} km</span></>
+                    <span className="text-sm font-bold tabular-nums text-card-foreground">{fmtNum(it.km)} km</span></>
                   )}
                 </div>
                 {/* RIGHT: MAD · Site · N°DS · Type DS · Affectation */}
@@ -1176,9 +1176,9 @@ export default function Home() {
                     const val = displayValue(it, f.key);
                     if (val === "—") return null;
                     return (
-                      <div key={f.key} className={f.key === "Description" ? "sm:col-span-3" : ""}>
+                      <div key={f.key} className={f.key === "description" ? "sm:col-span-3" : ""}>
                         <div className="text-xs text-muted-foreground">{f.label}</div>
-                        <div className={`text-sm font-medium text-card-foreground ${f.key === "Description" ? "whitespace-pre-wrap" : "truncate"}`}>
+                        <div className={`text-sm font-medium text-card-foreground ${f.key === "description" ? "whitespace-pre-wrap" : "truncate"}`}>
                           {val}
                         </div>
                       </div>

@@ -25,15 +25,15 @@ export async function GET(req: Request) {
     const regex = { $regex: "^" + escapeRegex(q.toUpperCase()) };
 
     const docs = await col
-      .find({ $or: [{ Immatriculation: regex }, { "Numéro WW": regex }] })
-      .project({ Immatriculation: 1, "Numéro WW": 1, Marque: 1, Modèle: 1, _id: 0 })
+      .find({ $or: [{ immatriculation: regex }, { numero_ww: regex }] })
+      .project({ immatriculation: 1, numero_ww: 1, marque: 1, modele: 1, _id: 0 })
       .limit(10)
       .toArray();
 
     const results = docs.map(d => ({
-      imm:   d["Immatriculation"] ?? "",
-      ww:    d["Numéro WW"]       ?? "",
-      label: [d["Marque"], d["Modèle"]].filter(Boolean).join(" — "),
+      imm:   d["immatriculation"] ?? "",
+      ww:    d["numero_ww"]       ?? "",
+      label: [d["marque"], d["modele"]].filter(Boolean).join(" — "),
     }));
 
     return NextResponse.json({ ok: true, results });

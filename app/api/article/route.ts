@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 
     const words = article.split(/\s+/).filter(Boolean);
     const wordFilters = words.map((w) => ({
-      "Description article": { $regex: escapeRegex(w), $options: "i" },
+      description_article: { $regex: escapeRegex(w), $options: "i" },
     }));
 
     const pipeline: Document[] = [
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
         $match: {
           $and: [
             ...wordFilters,
-            { "Code article": { $not: /^PIM/i } },
+            { code_article: { $not: /^PIM/i } },
           ],
         },
       },
@@ -67,7 +67,7 @@ export async function GET(request: Request) {
                 $replaceAll: {
                   input: {
                     $replaceAll: {
-                      input: { $toString: "$PU" },
+                      input: { $toString: "$pu" },
                       find: ",",
                       replacement: "",
                     },
@@ -83,8 +83,8 @@ export async function GET(request: Request) {
           },
           Année: {
             $cond: {
-              if:   { $ifNull: ["$Date BC", false] },
-              then: { $year: "$Date BC" },
+              if:   { $ifNull: ["$date_bc", false] },
+              then: { $year: "$date_bc" },
               else: null,
             },
           },
@@ -108,7 +108,7 @@ export async function GET(request: Request) {
       {
         $lookup: {
           from: "parc",
-          let:  { imm: "$Immatriculation" },
+          let:  { imm: "$immatriculation" },
           pipeline: [
             {
               $match: {
@@ -116,7 +116,7 @@ export async function GET(request: Request) {
                   $and: [
                     { $ne: ["$$imm", null] },
                     { $ne: ["$$imm", ""]   },
-                    { $eq: ["$Immatriculation", "$$imm"] },
+                    { $eq: ["$immatriculation", "$$imm"] },
                   ],
                 },
               },
@@ -124,9 +124,9 @@ export async function GET(request: Request) {
             {
               $project: {
                 _id:     0,
-                Marque:  "$Marque",
-                Modele:  "$Modèle",
-                DateMCE: "$Date MCE",
+                Marque:  "$marque",
+                Modele:  "$modele",
+                DateMCE: "$date_mce",
               },
             },
             { $limit: 1 },
@@ -147,7 +147,7 @@ export async function GET(request: Request) {
       {
         $lookup: {
           from: "cp",
-          let:  { imm: "$Immatriculation" },
+          let:  { imm: "$immatriculation" },
           pipeline: [
             {
               $match: {
@@ -155,7 +155,7 @@ export async function GET(request: Request) {
                   $and: [
                     { $ne: ["$$imm", null] },
                     { $ne: ["$$imm", ""]   },
-                    { $eq: ["$IMM", "$$imm"] },
+                    { $eq: ["$imm", "$$imm"] },
                   ],
                 },
               },
@@ -163,8 +163,8 @@ export async function GET(request: Request) {
             {
               $project: {
                 _id:     0,
-                Version: "$Libellé version long",
-                MCE:     "$Date MCE",
+                Version: "$libelle_version_long",
+                MCE:     "$date_mce",
               },
             },
             { $limit: 1 },
@@ -201,18 +201,18 @@ export async function GET(request: Request) {
     pipeline.push({
       $project: {
         _id:                   0,
-        "CMD Num":             1,
-        "Date BC":             1,
-        Fournisseurs:          1,
-        "Code article":        1,
-        "Description article": 1,
-        PU:                    1,
-        "Qté":                 1,
-        "N° DS":               1,
-        "Cree par":            1,
+        "CMD Num":             "$cmd_num",
+        "Date BC":             "$date_bc",
+        Fournisseurs:          "$fournisseurs",
+        "Code article":        "$code_article",
+        "Description article": "$description_article",
+        PU:                    "$pu",
+        "Qté":                 "$qte",
+        "N° DS":               "$n_ds",
+        "Cree par":            "$cree_par",
         Année:                 1,
         Prix:                  { $round: ["$pu_numeric", 2] },
-        Immatriculation:       1,
+        Immatriculation:       "$immatriculation",
         Marque:                1,
         Modele:                1,
         Version:               1,

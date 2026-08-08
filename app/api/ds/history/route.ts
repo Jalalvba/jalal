@@ -34,8 +34,8 @@ export async function GET(req: Request) {
   const limit = clampInt(searchParams.get("limit"), 200, 1, 2000);
   const { start, end } = parseYear(searchParams.get("year"));
 
-  const match: Record<string, unknown> = { Immatriculation: imm };
-  if (start && end) match["Date DS"] = { $gte: start, $lt: end };
+  const match: Record<string, unknown> = { immatriculation: imm };
+  if (start && end) match["date_ds"] = { $gte: start, $lt: end };
 
   const pipeline: Document[] = [
     { $match: match },
@@ -46,7 +46,7 @@ export async function GET(req: Request) {
           $convert: {
             input: {
               $replaceAll: {
-                input: { $replaceAll: { input: { $toString: "$KM" }, find: ",", replacement: "" } },
+                input: { $replaceAll: { input: { $toString: "$km" }, find: ",", replacement: "" } },
                 find: " ",
                 replacement: "",
               },
@@ -58,29 +58,29 @@ export async function GET(req: Request) {
       },
     },
 
-    { $sort: { "Date DS": -1 } },
+    { $sort: { date_ds: -1 } },
 
     {
       $group: {
-        _id: "$N°DS",
+        _id: "$n_ds",
 
-        nds:          { $first: "$N°DS" },
-        date_ds:      { $first: "$Date DS" },
-        imm:          { $first: "$Immatriculation" },
-        entite:       { $first: "$ENTITE" },
-        description:  { $first: "$Description" },
-        fournisseur:  { $first: "$Founisseur" },
+        nds:          { $first: "$n_ds" },
+        date_ds:      { $first: "$date_ds" },
+        imm:          { $first: "$immatriculation" },
+        entite:       { $first: "$entite_nom" },
+        description:  { $first: "$description" },
+        fournisseur:  { $first: "$fournisseur" },
         km_max:       { $max: "$km_num" },
 
 
-        techniciens_raw: { $push: "$Technicein" },
+        techniciens_raw: { $push: "$technicien" },
 
         lines: {
           $push: {
-            cmd_num:          "$CMD Num",
-            code_art:         "$Code art",
-            designation_conso: "$Désignation Consomation",
-            qte:              "$Qté",
+            cmd_num:          "$cmd_num",
+            code_art:         "$code_art",
+            designation_consommation: "$designation_consommation",
+            qte:              "$qte",
 
           },
         },
@@ -113,20 +113,20 @@ export async function GET(req: Request) {
     {
       $project: {
         _id: 0,
-        "N°DS":        "$nds",
-        "Date DS":     "$date_ds",
-        Immatriculation: "$imm",
-        ENTITE:        "$entite",
-        Description:   "$description",
-        Fournisseur:   "$fournisseur",
-        Techniciens:   "$techniciens",
-        KM:            "$km_max",
+        n_ds:            "$nds",
+        date_ds:         "$date_ds",
+        immatriculation: "$imm",
+        entite_nom:      "$entite",
+        description:     "$description",
+        fournisseur:     "$fournisseur",
+        techniciens:     "$techniciens",
+        km:              "$km_max",
 
         lines: 1,
       },
     },
 
-    { $sort: { "Date DS": -1 } },
+    { $sort: { date_ds: -1 } },
     { $limit: limit },
   ];
 

@@ -42,9 +42,9 @@ type ExportPayload = {
 function getCardValue(item: DsItem, key: string): string {
   const v = (item as Record<string, unknown>)[key];
   if (v == null) return "—";
-  if (key === "Techniciens") return (v as string[]).join(", ") || "—";
-  if (key === "KM") return fmtNum(v as number) + " km";
-  if (key === "Date DS") return fmtDate(v as string);
+  if (key === "techniciens") return (v as string[]).join(", ") || "—";
+  if (key === "km") return fmtNum(v as number) + " km";
+  if (key === "date_ds") return fmtDate(v as string);
   return String(v).trim() || "—";
 }
 
@@ -129,8 +129,8 @@ async function generateExport(req: Request): Promise<NextResponse> {
 
     const numKeys    = new Set(["qte"]);
     const topSet     = new Set(topBarKeys);
-    const MAND_DS    = new Set(["Description","Techniciens","ENTITE"]);
-    const infoSet    = new Set(visibleCardFields.filter(k => k !== "N°DS" && !topSet.has(k)));
+    const MAND_DS    = new Set(["description","techniciens","entite_nom"]);
+    const infoSet    = new Set(visibleCardFields.filter(k => k !== "n_ds" && !topSet.has(k)));
     MAND_DS.forEach(k => infoSet.add(k));
     const infoFields = [...infoSet];
     const immat      = (vehicle?.imm ?? imm ?? "—").toString();
@@ -299,10 +299,10 @@ async function generateExport(req: Request): Promise<NextResponse> {
       // header
       fillRect(ML, cy, PW, 16, NAVY);
       const lStr = [
-        visibleCardFields.includes("Date DS") && it["Date DS"] ? fmtDate(it["Date DS"]) : "",
-        visibleCardFields.includes("KM") && it.KM != null      ? fmtNum(it.KM) + " km"  : "",
+        visibleCardFields.includes("date_ds") && it["date_ds"] ? fmtDate(it["date_ds"]) : "",
+        visibleCardFields.includes("km") && it.km != null      ? fmtNum(it.km) + " km"  : "",
       ].filter(Boolean).join("  ·  ");
-      const rStr = it["N°DS"];
+      const rStr = it["n_ds"];
       drawText(lStr, ML + 5,    cy + 4, PW/2 - 10, fontB, 8,   WHITE, "left");
       drawText(rStr, ML + PW/2, cy + 4, PW/2 - 5,  fontR, 7.5, WHITE, "right");
       cy += 18;
@@ -536,13 +536,13 @@ async function generateExport(req: Request): Promise<NextResponse> {
   } = payload;
 
   const firstDs = items?.[0];
-  const immat = (vehicle?.imm ?? firstDs?.Immatriculation ?? imm ?? "—").toString();
+  const immat = (vehicle?.imm ?? firstDs?.immatriculation ?? imm ?? "—").toString();
   const now = new Date().toLocaleDateString("fr-FR");
   const topSet = new Set(topBarKeys);
 
   // Mirror the UI: mandatory DS fields always included in body (same as MANDATORY_CARD_KEYS in frontend)
-  const MANDATORY_DS = new Set(["Description", "Techniciens", "ENTITE"]);
-  const infoFieldsSet = new Set(visibleCardFields.filter(k => k !== "N°DS" && !topSet.has(k)));
+  const MANDATORY_DS = new Set(["description", "techniciens", "entite_nom"]);
+  const infoFieldsSet = new Set(visibleCardFields.filter(k => k !== "n_ds" && !topSet.has(k)));
   // Add mandatory fields if they were hidden by user (so export always matches minimum visible)
   MANDATORY_DS.forEach(k => infoFieldsSet.add(k));
   const infoFields = [...infoFieldsSet];
@@ -641,17 +641,17 @@ async function generateExport(req: Request): Promise<NextResponse> {
   items.forEach((it, idx) => {
     // Top summary line (mirrors the UI top bar)
     const topParts: string[] = [];
-    if (visibleCardFields.includes("Date DS") && it["Date DS"])
-      topParts.push(fmtDate(it["Date DS"]));
-    if (visibleCardFields.includes("KM") && it.KM != null)
-      topParts.push(fmtNum(it.KM) + " km");
+    if (visibleCardFields.includes("date_ds") && it["date_ds"])
+      topParts.push(fmtDate(it["date_ds"]));
+    if (visibleCardFields.includes("km") && it.km != null)
+      topParts.push(fmtNum(it.km) + " km");
 
     children.push(
       new Paragraph({
         heading: HeadingLevel.HEADING_2,
         spacing: { before: idx === 0 ? 0 : 220, after: 60 },
         children: [
-          new TextRun({ text: it["N°DS"], bold: true, size: 26, color: COLORS.headerBg, font: "Arial" }),
+          new TextRun({ text: it["n_ds"], bold: true, size: 26, color: COLORS.headerBg, font: "Arial" }),
           ...(topParts.length
             ? [
                 new TextRun({ text: "    ", size: 22, font: "Arial" }),

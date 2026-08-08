@@ -9,19 +9,19 @@
 export type Line = {
   cmd_num?: string;
   code_art?: string;
-  designation_conso?: string;
+  designation_consommation?: string;
   qte?: number;
 };
 
 export type DsHistoryItem = {
-  "N°DS": string;
-  "Date DS"?: string;
-  Immatriculation?: string;
-  ENTITE?: string;
-  Description?: string;
-  Fournisseur?: string;
-  Techniciens?: string[];
-  KM?: number;
+  n_ds: string;
+  date_ds?: string;
+  immatriculation?: string;
+  entite_nom?: string;
+  description?: string;
+  fournisseur?: string;
+  techniciens?: string[];
+  km?: number;
   lines?: Line[];
 };
 
@@ -58,10 +58,10 @@ export type ParcApiResponse = {
 // Raw `parc` collection shape, projected down to the 4 fields the
 // query/query-search suggest endpoints actually read.
 export type ParcDoc = {
-  Immatriculation?: string;
-  "Numéro WW"?: string;
-  Marque?: string;
-  "Modèle"?: string;
+  immatriculation?: string;
+  numero_ww?: string;
+  marque?: string;
+  modele?: string;
 };
 
 export type CpItem = {

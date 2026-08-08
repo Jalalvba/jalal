@@ -30,10 +30,10 @@ export async function GET(req: Request) {
 
     const docs = await col
       .find({ $or: [
-        { Immatriculation: regex },
-        { "Numéro WW": regex },
+        { immatriculation: regex },
+        { numero_ww: regex },
       ]})
-      .project({ Immatriculation: 1, "Numéro WW": 1, Marque: 1, "Modèle": 1, _id: 0 })
+      .project({ immatriculation: 1, numero_ww: 1, marque: 1, modele: 1, _id: 0 })
       .limit(10)
       .toArray();
 
@@ -43,10 +43,10 @@ export async function GET(req: Request) {
         ok: true,
         mode: "suggest",
         suggestions: docs.map(d => {
-          const imm   = String(d["Immatriculation"] ?? "");
-          const ww    = String(d["Numéro WW"]       ?? "");
-          const marque = String(d["Marque"]  ?? "");
-          const model  = String(d["Modèle"]  ?? "");
+          const imm   = String(d["immatriculation"] ?? "");
+          const ww    = String(d["numero_ww"]       ?? "");
+          const marque = String(d["marque"]  ?? "");
+          const model  = String(d["modele"]  ?? "");
           // Show whichever field matched the query
           const matchedByWW  = ww.toLowerCase().includes(ql);
           const matchedByIMM = imm.toLowerCase().includes(ql);
@@ -66,8 +66,8 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok:   true,
       mode: "data",
-      imm:  docs[0]?.["Immatriculation"] ? String(docs[0]["Immatriculation"]) : q,
-      ww:   docs[0]?.["Numéro WW"]       ? String(docs[0]["Numéro WW"])       : q,
+      imm:  docs[0]?.["immatriculation"] ? String(docs[0]["immatriculation"]) : q,
+      ww:   docs[0]?.["numero_ww"]       ? String(docs[0]["numero_ww"])       : q,
     });
   } catch (e) {
     return toErrorResponse(e, "Query failed");
