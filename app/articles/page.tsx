@@ -179,7 +179,7 @@ export default function ArticlePage() {
                         {fmtNum(r.PU, 2)} MAD
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
-                        {r["Qté"] || "—"}
+                        {r["Qté"] != null ? r["Qté"] : "—"}
                       </td>
                       <td className="px-4 py-2 text-muted-foreground">
                         {r.Marque || "—"}
