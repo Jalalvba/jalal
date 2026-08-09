@@ -173,9 +173,20 @@ async function fetchParkingRows(): Promise<ParkingRow[]> {
  * "parc" migrated to MongoDB (the same collection /api/parc and DS History's
  * autocomplete already query), so this reads that directly instead of
  * maintaining a redundant Sheets mirror this app has no other use for.
+ *
+ * TTL is a full week (2026-08-09): confirmed with the person that parc only
+ * actually changes on a roughly weekly cadence in practice — cross-checked
+ * against `pipeline_runs`, whose parc entries show real "success" runs
+ * ~5 days apart (2026-08-03, 2026-08-08) with everything between them
+ * "skipped" (unchanged). A week-long default would otherwise risk serving
+ * stale plates for up to 7 days after a genuine change, so
+ * app/api/trigger-import/route.ts calls invalidateIMMListCache() the moment
+ * it sees the parc pipeline report "success" (not "skipped_unchanged" /
+ * "skipped_absent" / "failed"), so a real update is reflected immediately
+ * instead of waiting out the TTL.
  */
 export async function getIMMList(): Promise<string[]> {
-  return withCache(IMM_LIST_CACHE_KEY, 12 * 60_000, async () => {
+  return withCache(IMM_LIST_CACHE_KEY, 7 * 24 * 60 * 60_000, async () => {
     const col = await getCollection("parc");
     // Real field is lowercase "immatriculation" (field_registry.json) — a
     // prior "Immatriculation" typo here always matched zero documents, so
@@ -191,6 +202,11 @@ export async function getIMMList(): Promise<string[]> {
     }
     return [...set];
   });
+}
+
+/** Called by app/api/trigger-import/route.ts right after a successful parc pipeline run. */
+export function invalidateIMMListCache(): void {
+  invalidateCache(IMM_LIST_CACHE_KEY);
 }
 
 /**

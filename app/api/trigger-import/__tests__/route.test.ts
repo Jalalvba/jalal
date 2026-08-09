@@ -4,10 +4,16 @@ vi.mock("@/lib/rateLimit", () => ({
   rateLimitOrNull: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock("@/lib/googleSheetsParking", () => ({
+  invalidateIMMListCache: vi.fn(),
+}));
+
 import { rateLimitOrNull } from "@/lib/rateLimit";
+import { invalidateIMMListCache } from "@/lib/googleSheetsParking";
 import { POST } from "@/app/api/trigger-import/route";
 
 const mockedRateLimit = vi.mocked(rateLimitOrNull);
+const mockedInvalidateIMMListCache = vi.mocked(invalidateIMMListCache);
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -146,4 +152,47 @@ describe("POST /api/trigger-import", () => {
     expect(run.stepDetailWarning).toBeTruthy();
     expect(run.steps).toEqual([{ step: "parse", status: "failed", detail: "", timestamp: null }]);
   });
+
+  it("invalidates the IMM-list cache when parc reports success", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/api?token=")) {
+        return jsonResponse({
+          success: true,
+          results: [{ label: "PARC", filename: "parc.xlsx", status: "success", run_id: "run-parc", steps: ["load:success"] }],
+        });
+      }
+      if (url.includes("run_id=run-parc")) {
+        return jsonResponse({ pipeline: "parc", status: "success", steps: [] });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await POST(req());
+
+    expect(mockedInvalidateIMMListCache).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["skipped_unchanged", "skipped_absent", "failed"] as const)(
+    "does NOT invalidate the IMM-list cache when parc reports %s",
+    async (status) => {
+      const fetchMock = vi.fn(async (url: string) => {
+        if (url.includes("/api?token=")) {
+          return jsonResponse({
+            success: status !== "failed",
+            results: [{ label: "PARC", filename: "parc.xlsx", status, run_id: "run-parc", steps: [] }],
+          });
+        }
+        if (url.includes("run_id=run-parc")) {
+          return jsonResponse({ pipeline: "parc", status, steps: [] });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await POST(req());
+
+      expect(mockedInvalidateIMMListCache).not.toHaveBeenCalled();
+    }
+  );
 });

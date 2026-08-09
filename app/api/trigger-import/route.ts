@@ -5,6 +5,7 @@ export const maxDuration = 180;
 import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/rateLimit";
 import { toErrorResponse } from "@/lib/apiError";
+import { invalidateIMMListCache } from "@/lib/googleSheetsParking";
 import type {
   ImportPipelineResult,
   ImportPipelineStep,
@@ -202,6 +203,15 @@ export async function POST(req: Request) {
         }
       })
     );
+
+    // getIMMList()'s cache (lib/googleSheetsParking.ts) is a week-long TTL —
+    // refresh it immediately on a real parc change instead of waiting that
+    // out. Only "success" counts: "skipped_unchanged"/"skipped_absent" mean
+    // parc's data didn't actually change, and "failed" means it may not be
+    // trustworthy yet either.
+    if (results.some((r) => r.pipeline === "parc" && r.status === "success")) {
+      invalidateIMMListCache();
+    }
 
     return NextResponse.json<TriggerImportResponse>({
       ok: true,
