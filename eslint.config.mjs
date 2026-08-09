@@ -25,6 +25,16 @@ const eslintConfig = defineConfig([
       "react-hooks/rules-of-hooks": "off",
     },
   },
+  {
+    // .cjs files are CommonJS by definition (that's what the extension
+    // means) — require() is the correct, intended way to import in them,
+    // not a violation of the ESM-oriented no-require-imports rule that
+    // eslint-config-next's typescript config turns on project-wide.
+    files: ["**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;
