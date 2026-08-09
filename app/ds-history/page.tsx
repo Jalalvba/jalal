@@ -37,6 +37,7 @@ import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate } from "@/hooks/useBddRows";
 import { useVehicleZone } from "@/hooks/useVehicleZone";
 import { ZoneBadges } from "@/components/fleet/ZoneBadges";
+import { ZONE_COLORS } from "@/lib/constants/zones";
 import { buildPlateVariants } from "@/lib/plateVariants";
 import type { RlRow, RlReunionRow } from "@/lib/googleSheetsRl";
 import type { ImportRow } from "@/lib/googleSheetsImport";
@@ -272,8 +273,11 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
   const isRemplacement = contracts.some(c => c.type?.trim().toLowerCase() === "remplacement");
   const isRed = hasRl || isRemplacement;
   const zone = useVehicleZone(parc.imm ?? "");
-  const zoneLabels = [zone.inParking && "Parking", zone.inAtelier && "Atelier", zone.inRdv && "RDV", zone.inDepot && "Dépôt"]
-    .filter((v): v is string => !!v);
+  // Atelier > Depot > Parking > RDV: a vehicle in the workshop is the most
+  // actionable state to flag at a glance, RDV (just an appointment) the
+  // least — matches priority as anywhere else in this app that must pick
+  // one zone out of several simultaneously-true ones.
+  const primaryZone = zone.inAtelier ? "atelier" : zone.inDepot ? "depot" : zone.inParking ? "parking" : zone.inRdv ? "rdv" : null;
 
   const f = (label: string, val?: string | null) => (
     <div>
@@ -284,8 +288,14 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
     </div>
   );
 
+  const cardTint = isRed
+    ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20"
+    : primaryZone
+      ? ZONE_COLORS[primaryZone].card
+      : "border-border bg-card dark:border-border dark:bg-card";
+
   return (
-    <div className={`rounded-2xl border shadow-sm ${isRed ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20" : "border-border bg-card dark:border-border dark:bg-card"}`}>
+    <div className={`rounded-2xl border shadow-sm ${cardTint}`}>
       {/* Header */}
       <div className={`flex items-center gap-2 border-b px-5 py-3 ${isRed ? "border-red-200 dark:border-red-800/50" : "border-border"}`}>
         <svg className={`h-4 w-4 ${isRed ? "text-red-500" : "text-muted-foreground"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -296,6 +306,9 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
         <span className={`text-xs font-semibold uppercase tracking-widest ${isRed ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
           {isRed && "⚠ "}Véhicule
         </span>
+        <div className="flex flex-wrap gap-1">
+          <ZoneBadges inParking={zone.inParking} inAtelier={zone.inAtelier} inRdv={zone.inRdv} inDepot={zone.inDepot} />
+        </div>
         <span className="ml-auto text-xs italic text-muted-foreground">parc + cp</span>
       </div>
 
@@ -307,16 +320,6 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
         {f("Etat véhicule", parc.vehicle_state)}
         {f("Date MCE",      fmtDate(parc.mce_date ?? cp?.mce_date))}
         {f("Fin contrat",   fmtDate(cp?.date_fin_contrat))}
-        {zoneLabels.length > 0 && (
-          <div>
-            <div className="text-xs text-muted-foreground">Zone</div>
-            <div className="mt-0.5 flex flex-wrap gap-1">
-              {zoneLabels.map((label) => (
-                <Badge key={label} variant="success">{label}</Badge>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Version full width ── */}
