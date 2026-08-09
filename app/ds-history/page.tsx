@@ -272,9 +272,8 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
   const isRemplacement = contracts.some(c => c.type?.trim().toLowerCase() === "remplacement");
   const isRed = hasRl || isRemplacement;
   const zone = useVehicleZone(parc.imm ?? "");
-  const zoneLabel = [zone.inParking && "Parking", zone.inAtelier && "Atelier", zone.inRdv && "RDV", zone.inDepot && "Dépôt"]
-    .filter(Boolean)
-    .join(" + ") || null;
+  const zoneLabels = [zone.inParking && "Parking", zone.inAtelier && "Atelier", zone.inRdv && "RDV", zone.inDepot && "Dépôt"]
+    .filter((v): v is string => !!v);
 
   const f = (label: string, val?: string | null) => (
     <div>
@@ -308,7 +307,16 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
         {f("Etat véhicule", parc.vehicle_state)}
         {f("Date MCE",      fmtDate(parc.mce_date ?? cp?.mce_date))}
         {f("Fin contrat",   fmtDate(cp?.date_fin_contrat))}
-        {zoneLabel && f("Zone", zoneLabel)}
+        {zoneLabels.length > 0 && (
+          <div>
+            <div className="text-xs text-muted-foreground">Zone</div>
+            <div className="mt-0.5 flex flex-wrap gap-1">
+              {zoneLabels.map((label) => (
+                <Badge key={label} variant="success">{label}</Badge>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Version full width ── */}
