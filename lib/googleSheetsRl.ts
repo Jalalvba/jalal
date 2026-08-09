@@ -1,5 +1,5 @@
 import { buildPlateVariants } from "@/lib/plateVariants";
-import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash } from "@/lib/googleSheetsClient";
+import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, withCache } from "@/lib/googleSheetsClient";
 
 // Reads the "RL" tab (véhicule de remplacement / replacement-vehicle data)
 // via the authenticated service-account Sheets API — replacing the
@@ -91,4 +91,62 @@ export async function getRlRows(immFilter?: string): Promise<RlRow[]> {
       variants.has(r["Immatriculation_a_remplacer"]?.trim().toUpperCase() ?? "") ||
       variants.has(r["Immatriculation_remplacement"]?.trim().toUpperCase() ?? "")
   );
+}
+
+// Reads the "RL_reunion" tab — a 2-column lookup (Immatriculation, suivi)
+// used elsewhere in the app only as an XLOOKUP formula target
+// (googleSheetsAtelier/Depot/Parking.ts). Header row confirmed live via
+// spreadsheets.values.get('RL_reunion'!A1:Z1) — only columns A and B are
+// populated (C:Z empty).
+const RL_REUNION_TAB_NAME = "RL_reunion";
+
+export type RlReunionRow = { Immatriculation: string; suivi: string };
+
+const RL_REUNION_ROWS_CACHE_KEY = "rows:RL_REUNION";
+
+// Unlike getRlRows() above (deliberately uncached — see its own history),
+// this is cached: it's now fetched on every ds-history search alongside RL,
+// so an uncached read here would double the RL-adjacent Sheets API traffic
+// per search. 15s TTL matches the ROWS_CACHE_KEY pattern used by
+// googleSheetsBdd.ts / googleSheetsAtelier.ts for their row reads.
+async function fetchRlReunionRows(): Promise<RlReunionRow[]> {
+  const sheets = getSheetsClient();
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId!,
+    range: `'${RL_REUNION_TAB_NAME}'!A:Z`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+
+  const values = res.data.values ?? [];
+  if (values.length === 0) return [];
+
+  const headers = values[0].map((h) => String(h ?? "").trim());
+  const immIdx = headers.indexOf("Immatriculation");
+  const suiviIdx = headers.indexOf("suivi");
+
+  const rows: RlReunionRow[] = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const isBlank = row.every((c) => c == null || String(c).trim() === "");
+    if (isBlank) continue;
+
+    const Immatriculation = immIdx >= 0 ? String(row[immIdx] ?? "").trim() : "";
+    if (!Immatriculation) continue;
+
+    rows.push({
+      Immatriculation,
+      suivi: suiviIdx >= 0 ? String(row[suiviIdx] ?? "").trim() : "",
+    });
+  }
+  return rows;
+}
+
+export async function getRlReunionRows(immFilter?: string): Promise<RlReunionRow[]> {
+  const rows = await withCache(RL_REUNION_ROWS_CACHE_KEY, 15_000, fetchRlReunionRows);
+
+  if (!immFilter) return rows;
+
+  const variants = new Set(buildPlateVariants(immFilter));
+  return rows.filter((r) => variants.has(r.Immatriculation.trim().toUpperCase()));
 }

@@ -1,7 +1,7 @@
 // app/api/sheet/route.ts
 import { NextResponse } from "next/server";
 import { getSheetRows as getBddRows } from "@/lib/googleSheetsBdd";
-import { getRlRows } from "@/lib/googleSheetsRl";
+import { getRlRows, getRlReunionRows } from "@/lib/googleSheetsRl";
 import { getImportRows } from "@/lib/googleSheetsImport";
 import { toErrorResponse } from "@/lib/apiError";
 
@@ -23,6 +23,11 @@ export async function GET(req: Request) {
 
     if (sheet === "rl") {
       const rows = await getRlRows(imm);
+      return NextResponse.json({ ok: true, count: rows.length, items: rows });
+    }
+
+    if (sheet === "rl_reunion") {
+      const rows = await getRlReunionRows(imm);
       return NextResponse.json({ ok: true, count: rows.length, items: rows });
     }
 

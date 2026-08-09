@@ -38,7 +38,7 @@ import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate } from "@/hooks/use
 import { useVehicleZone } from "@/hooks/useVehicleZone";
 import { ZoneBadges } from "@/components/fleet/ZoneBadges";
 import { buildPlateVariants } from "@/lib/plateVariants";
-import type { RlRow } from "@/lib/googleSheetsRl";
+import type { RlRow, RlReunionRow } from "@/lib/googleSheetsRl";
 import type { ImportRow } from "@/lib/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/format";
 import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
@@ -659,7 +659,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
   );
 }
 
-function SheetCard({ bddRows, rlRows, importRows }: { bddRows: BddRow[]; rlRows: RlRow[]; importRows: ImportRow[] }) {
+function SheetCard({ bddRows, rlRows, rlReunionRows, importRows }: { bddRows: BddRow[]; rlRows: RlRow[]; rlReunionRows: RlReunionRow[]; importRows: ImportRow[] }) {
   if (!bddRows.length && !rlRows.length && !importRows.length) return null;
 
   const hasRl = rlRows.length > 0;
@@ -684,22 +684,30 @@ function SheetCard({ bddRows, rlRows, importRows }: { bddRows: BddRow[]; rlRows:
         ))}
 
         {/* RL rows */}
-        {rlRows.map((row, i) => (
-          <div key={`rl-${i}`} className="px-5 py-4">
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wide">Véhicule de remplacement</span>
-              <span className="text-xs font-mono text-muted-foreground">{row.Reference}</span>
-              {row.Date && <span className="text-xs text-muted-foreground">{row.Date}</span>}
+        {rlRows.map((row, i) => {
+          const rlReunionVariants = new Set(buildPlateVariants(row.Immatriculation_a_remplacer));
+          const suivi = rlReunionRows.find((rr) =>
+            buildPlateVariants(rr.Immatriculation).some((v) => rlReunionVariants.has(v))
+          )?.suivi;
+
+          return (
+            <div key={`rl-${i}`} className="px-5 py-4">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wide">Véhicule de remplacement</span>
+                <span className="text-xs font-mono text-muted-foreground">{row.Reference}</span>
+                {row.Date && <span className="text-xs text-muted-foreground">{row.Date}</span>}
+              </div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+                {f("Téléphone",        row["Téléphone"])}
+                {f("IMM remplacement", row.Immatriculation_remplacement)}
+                {f("Modèle rempl.",    row["Modèle_remplacement"])}
+                {f("Début RL",         row["Date début"])}
+                {f("Motif",            row.Motif)}
+                {f("Suivi réunion",    suivi)}
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
-              {f("Téléphone",        row["Téléphone"])}
-              {f("IMM remplacement", row.Immatriculation_remplacement)}
-              {f("Modèle rempl.",    row["Modèle_remplacement"])}
-              {f("Début RL",         row["Date début"])}
-              {f("Motif",            row.Motif)}
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {/* Import rows */}
         {importRows.length > 0 && (() => {
           const parseDate = (s: string): string => {
@@ -868,6 +876,7 @@ export default function Home() {
   }, [bddRowsQuery.data, bddMatchVariants]);
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [rlRows, setRlRows] = useState<RlRow[]>([]);
+  const [rlReunionRows, setRlReunionRows] = useState<RlReunionRow[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -908,7 +917,7 @@ export default function Home() {
         if (resolveJson.ok && resolveJson.mode === "suggest") {
           setSuggestions(resolveJson.suggestions ?? []);
           setShowSuggestions(true);
-          setData(null); setVehicle(null); setContracts([]); setBddMatchVariants(null); setImportRows([]); setRlRows([]);
+          setData(null); setVehicle(null); setContracts([]); setBddMatchVariants(null); setImportRows([]); setRlRows([]); setRlReunionRows([]);
           return;
         }
         if (resolveJson.ok && resolveJson.mode === "data") {
@@ -926,7 +935,7 @@ export default function Home() {
       const sheetImmQs    = new URLSearchParams({ imm: immVal });
       const sheetWwQs     = rawVal !== immVal ? new URLSearchParams({ imm: rawVal }) : null;
 
-      const [dsRes, parcRes, cpRes, importRes, importWwRes, rlRes, rlWwRes] = await Promise.all([
+      const [dsRes, parcRes, cpRes, importRes, importWwRes, rlRes, rlWwRes, rlReunionRes, rlReunionWwRes] = await Promise.all([
         fetch(`/api/ds/history?${dsQs}`),
         fetch(`/api/parc?${parcQs}`),
         fetch(`/api/cp?${cpQs}`),
@@ -934,6 +943,8 @@ export default function Home() {
         sheetWwQs ? fetch(`/api/sheet?sheet=import&${sheetWwQs}`) : Promise.resolve(null),
         fetch(`/api/sheet?sheet=rl&${sheetImmQs}`),
         sheetWwQs ? fetch(`/api/sheet?sheet=rl&${sheetWwQs}`) : Promise.resolve(null),
+        fetch(`/api/sheet?sheet=rl_reunion&${sheetImmQs}`),
+        sheetWwQs ? fetch(`/api/sheet?sheet=rl_reunion&${sheetWwQs}`) : Promise.resolve(null),
       ]);
 
       const dsJson     = await dsRes.json()     as DsApiResponse;
@@ -943,6 +954,8 @@ export default function Home() {
       const importWwJson = importWwRes ? await importWwRes.json() : { ok: false, items: [] };
       const rlJson       = await rlRes.json();
       const rlWwJson     = rlWwRes     ? await rlWwRes.json()     : { ok: false, items: [] };
+      const rlReunionJson   = await rlReunionRes.json();
+      const rlReunionWwJson = rlReunionWwRes ? await rlReunionWwRes.json() : { ok: false, items: [] };
 
       if (!isCurrent()) return;
 
@@ -983,9 +996,15 @@ export default function Home() {
       ) === i);
       setRlRows(mergeRl);
 
+      const mergeRlReunion = [
+        ...(rlReunionJson.ok ? rlReunionJson.items : []),
+        ...(rlReunionWwJson.ok ? rlReunionWwJson.items : []),
+      ].filter((r, i, arr) => arr.findIndex(x => x.Immatriculation === r.Immatriculation) === i);
+      setRlReunionRows(mergeRlReunion);
+
     } catch (e) {
       if (!isCurrent()) return;
-      setData(null); setVehicle(null); setContracts([]); setBddMatchVariants(null); setImportRows([]); setRlRows([]);
+      setData(null); setVehicle(null); setContracts([]); setBddMatchVariants(null); setImportRows([]); setRlRows([]); setRlReunionRows([]);
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       if (isCurrent()) setLoading(false);
@@ -1123,7 +1142,7 @@ export default function Home() {
 
         {/* Vehicle metadata (from parc) */}
         {vehicle && !loading && <div className="mt-4"><VehicleCard parc={vehicle} contracts={contracts} hasRl={rlRows.length > 0} /></div>}
-        {(bddRows.length > 0 || rlRows.length > 0 || importRows.length > 0) && !loading && <div className="mt-3"><SheetCard bddRows={bddRows} rlRows={rlRows} importRows={importRows} /></div>}
+        {(bddRows.length > 0 || rlRows.length > 0 || importRows.length > 0) && !loading && <div className="mt-3"><SheetCard bddRows={bddRows} rlRows={rlRows} rlReunionRows={rlReunionRows} importRows={importRows} /></div>}
 
         {/* Results */}
         <div className="mt-4 space-y-3">
