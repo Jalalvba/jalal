@@ -1,5 +1,9 @@
 "use client";
 
+// DELIBERATE (2026-08-09): despite the "Suivi RL" name, this page reads/writes the
+// BDD sheet tab (lib/googleSheetsBdd.ts), not a separate "RL" tab — none exists.
+// "RL" is a business/UI label for a view over BDD's RL-related columns.
+
 import { useMemo, useState } from "react";
 import {
   BDD_HEADERS,

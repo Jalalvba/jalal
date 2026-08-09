@@ -18,6 +18,10 @@ const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 
 // Confirmed by a live spreadsheets.get() call against gid=868042157 — not a guess.
+// DELIBERATE (2026-08-09): the "Suivi RL" page (app/suivi-rl/page.tsx) reads/writes
+// this BDD tab, not a separate "RL" tab — no such tab exists. "RL" is a business/UI
+// name for a filtered view over BDD's RL-related columns, not a distinct data source.
+// Reconsider only if the sheet owner ever splits RL data into its own tab.
 const BDD_TAB_NAME = "BDD";
 const editableFieldSet = new Set<string>(BDD_EDITABLE_FIELDS);
 
