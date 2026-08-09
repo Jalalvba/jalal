@@ -15,14 +15,21 @@
  * error. This script exists to make that class of bug fail loudly in CI
  * instead of shipping silently.
  *
- * Scope (documented limitation, not exhaustive): scans app/api/** for
+ * Scope (documented limitation, not exhaustive): scans app/api/** AND
+ * lib/**, since Mongo-facing helper code (e.g. lib/googleSheetsParking.ts)
+ * lives outside app/api/** too -- widened 2026-08-09 after getIMMList()'s
+ * "Immatriculation" vs. real "immatriculation" typo (always silently
+ * returned []) shipped undetected because lib/** wasn't scanned. Scans for
  * quoted dollar-prefixed field references -- "$fieldname" -- the pattern
  * used throughout this codebase's aggregation pipelines ($project,
- * $group, $ifNull, etc). It does not attempt to parse bare object-key
- * field references (e.g. `{ immatriculation: imm }` in a $match) via a
- * full TS/AST walk, since those are indistinguishable from arbitrary JS
- * object keys without real type information. Extend this if a future
- * bug slips through that pattern.
+ * $group, $ifNull, etc) -- plus quoted string-literal bracket-index field
+ * access, e.g. `doc["fieldName"]` (added in the same 2026-08-09 fix, since
+ * that's exactly the shape the getIMMList() bug took). It does not attempt
+ * to parse bare object-key field references (e.g. `{ immatriculation: imm }`
+ * in a $match, or a projection's `{ fieldName: 1 }`) via a full TS/AST
+ * walk, since those are indistinguishable from arbitrary JS object keys
+ * without real type information. Extend this if a future bug slips
+ * through that pattern.
  *
  * Collection scoping is per-file: every collection name passed to
  * getCollection(...) OR to a $lookup's `from:` anywhere in a file is
@@ -57,7 +64,7 @@ const path = require("node:path");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const REGISTRY_PATH = path.join(REPO_ROOT, "field_registry.json");
-const SCAN_ROOT = path.join(REPO_ROOT, "app", "api");
+const SCAN_ROOTS = [path.join(REPO_ROOT, "app", "api"), path.join(REPO_ROOT, "lib")];
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir)) {
@@ -74,13 +81,22 @@ function walk(dir, out = []) {
 
 function main() {
   const registry = JSON.parse(fs.readFileSync(REGISTRY_PATH, "utf8"));
-  const files = walk(SCAN_ROOT);
+  const files = SCAN_ROOTS.flatMap((root) => walk(root));
 
   const GETCOLLECTION_RE = /getCollection\(\s*["'`](\w+)["'`]\s*\)/g;
   const LOOKUP_FROM_RE = /from:\s*["'`](\w+)["'`]/g;
   // Captures the name after a single leading "$", rejecting "$$..." (let
   // vars like $$ROOT/$$imm) via the negative lookahead.
   const FIELD_REF_RE = /["'`]\$(?!\$)([A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_ ]*)["'`]/g;
+  // Quoted string-literal bracket-index field access, e.g. doc["fieldName"]
+  // or doc['fieldName'] -- unlike a bare object key, this is unambiguously
+  // a property read by name, not a locally-defined key, so it's safe to
+  // check against the registry. Excludes `colMap[...]` by name: that's this
+  // codebase's repo-wide idiom (91 uses across 4 googleSheets*.ts files) for
+  // a Sheets header-name -> column-index lookup, never a Mongo document, so
+  // checking it against field_registry.json would be a guaranteed false
+  // positive rather than a real risk.
+  const BRACKET_FIELD_RE = /(\w+)\[\s*["'`]([A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_ ]*)["'`]\s*\]/g;
   // Pipeline-local field definitions: `name: { $op: ... }` (always a
   // synthesized value -- $first/$push/$convert/etc) or `name: "$other"`
   // where `name !== other` (a rename/alias). Deliberately NOT matching
@@ -130,6 +146,18 @@ function main() {
       const line = src.slice(0, m.index).split("\n").length;
       errors.push(
         `${rel}:${line}  "$${field}" — not in field_registry.json for {${[...collectionsInFile].join(", ")}}`
+      );
+    }
+
+    for (const m of src.matchAll(BRACKET_FIELD_RE)) {
+      const objName = m[1];
+      const field = m[2];
+      if (objName === "colMap") continue;
+      if (allowed.has(field) || fileAllowMarkers.has(field)) continue;
+
+      const line = src.slice(0, m.index).split("\n").length;
+      errors.push(
+        `${rel}:${line}  ${objName}["${field}"] — not in field_registry.json for {${[...collectionsInFile].join(", ")}}`
       );
     }
   }

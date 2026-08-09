@@ -15,6 +15,7 @@ import {
 
 const ROWS_CACHE_KEY = "rows:PARKING";
 const HEADERS_CACHE_KEY = "headers:PARKING";
+const IMM_LIST_CACHE_KEY = "imm-list:parc";
 
 // Ported from the AVIS Maroc GAS "Parking" system (code.gs + Parking.gs).
 // Tab name, column layout and XLOOKUP formulas confirmed by a live read of
@@ -174,19 +175,22 @@ async function fetchParkingRows(): Promise<ParkingRow[]> {
  * maintaining a redundant Sheets mirror this app has no other use for.
  */
 export async function getIMMList(): Promise<string[]> {
-  const col = await getCollection("parc");
-  const docs = await col
-    .find({}, { projection: { Immatriculation: 1, _id: 0 } })
-    .toArray();
+  return withCache(IMM_LIST_CACHE_KEY, 12 * 60_000, async () => {
+    const col = await getCollection("parc");
+    // Real field is lowercase "immatriculation" (field_registry.json) — a
+    // prior "Immatriculation" typo here always matched zero documents, so
+    // this list silently returned [] since the day it was written. Index-
+    // backed distinct() also skips the ~7.8k-doc full projection scan the
+    // old find({}).toArray() did every cache miss.
+    const values = await col.distinct("immatriculation");
 
-  const set = new Set<string>();
-  for (const d of docs) {
-    const v = String((d as Record<string, unknown>)["Immatriculation"] ?? "")
-      .trim()
-      .toUpperCase();
-    if (v) set.add(v);
-  }
-  return [...set];
+    const set = new Set<string>();
+    for (const v of values) {
+      const s = String(v ?? "").trim().toUpperCase();
+      if (s) set.add(s);
+    }
+    return [...set];
+  });
 }
 
 /**
