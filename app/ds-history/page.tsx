@@ -807,7 +807,7 @@ export default function Home() {
     await logout();
   }
 
-  const [imm, setImm] = useState("48070-B-7");
+  const [imm, setImm] = useState("");
 
   // Smart search suggestions
   const [suggestions, setSuggestions]         = useState<SearchResult[]>([]);
@@ -1021,8 +1021,6 @@ export default function Home() {
       if (isCurrent()) setLoading(false);
     }
   }
-
-  useEffect(() => { fetchAll("48070-B-7"); }, []); // eslint-disable-line
 
   const orderedCardFields = CARD_FIELDS.filter(
     f => visibleCardFields.has(f.key) && f.key !== "n_ds" && !TOP_BAR_KEYS.has(f.key as string)
