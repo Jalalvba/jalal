@@ -240,6 +240,11 @@ export async function getVehicleSuggestionList(): Promise<VehicleSuggestion[]> {
         modele: String(d.modele ?? "").trim(),
       });
     }
+    // Sorted to match col.distinct("immatriculation")'s (getIMMList()) sort
+    // order — otherwise the two lists' first-15 truncation in useImmSuggestions
+    // vs usePlateAutocomplete diverges for any prefix matching >15 plates,
+    // even though both are correct, complete matches underneath.
+    list.sort((a, b) => (a.imm < b.imm ? -1 : a.imm > b.imm ? 1 : 0));
     return list;
   });
 }
