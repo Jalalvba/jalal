@@ -10,9 +10,18 @@ import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persi
 // the last-known cache before the background refresh landed. Plain
 // TanStack Query's cache is in-memory only and wouldn't survive a hard
 // reload the same way, so this persists the query cache to localStorage —
-// scoped to only the "bdd" query key via shouldDehydrateQuery, so Parking/
-// Atelier/other pages (which never had this behavior) aren't affected.
+// scoped via shouldDehydrateQuery to only the query keys below.
 const BDD_QUERY_KEY = "bdd";
+
+// Parking/Atelier/Depot's shared plate list (["parking","imm-list"]) and DS
+// History's widened plate-suggestion list (["parking","vehicle-suggestions"])
+// both back a server-side week-long Mongo cache (see getIMMList()/
+// getVehicleSuggestionList() in lib/googleSheetsParking.ts) — persisting them
+// client-side too means a repeat page load paints suggestions instantly with
+// zero network round trip, only revalidating in the background once stale.
+function isPersistedPlateListKey(key: readonly unknown[]): boolean {
+  return key[0] === "parking" && (key[1] === "imm-list" || key[1] === "vehicle-suggestions");
+}
 
 export function AppQueryProvider({ children }: { children: React.ReactNode }) {
   const [client] = useState(() => new QueryClient({
@@ -37,7 +46,8 @@ export function AppQueryProvider({ children }: { children: React.ReactNode }) {
       persistOptions={{
         persister,
         dehydrateOptions: {
-          shouldDehydrateQuery: (query) => query.queryKey[0] === BDD_QUERY_KEY,
+          shouldDehydrateQuery: (query) =>
+            query.queryKey[0] === BDD_QUERY_KEY || isPersistedPlateListKey(query.queryKey),
         },
       }}
     >

@@ -43,6 +43,7 @@ import type { RlRow, RlReunionRow } from "@/lib/googleSheetsRl";
 import type { ImportRow } from "@/lib/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/format";
 import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
+import { useImmSuggestions } from "@/hooks/useImmSuggestions";
 
 type FieldKey = (typeof BDD_EDITABLE_FIELDS)[number];
 
@@ -138,18 +139,6 @@ function displayValue(item: DsHistoryItem, key: keyof DsHistoryItem): string {
 
   if (key === "date_ds") return fmtDate(v as string);
   return String(v).trim() || "—";
-}
-
-// Search suggestions now match IMM/WW only (VIN search cut) — plate/WW
-// standardization across the app. Formats one suggestion into the single
-// display line the shared Combobox renders per row.
-type SearchResult = { imm: string; ww: string; label: string; primary?: string; secondary?: string };
-
-function formatSuggestion(s: SearchResult): string {
-  const parts = [s.primary ?? s.imm];
-  if (s.secondary) parts.push(`(${s.secondary})`);
-  if (s.label) parts.push(`— ${s.label}`);
-  return parts.join(" ");
 }
 
 function displayLineValue(line: Line, key: keyof Line): string {
@@ -809,12 +798,12 @@ export default function Home() {
 
   const [imm, setImm] = useState("");
 
-  // Smart search suggestions
-  const [suggestions, setSuggestions]         = useState<SearchResult[]>([]);
+  // Smart search suggestions — plate-only display, backed by the cached +
+  // browser-persisted widened vehicle list (see useImmSuggestions()), no
+  // per-keystroke Mongo round trip.
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [searchLoading, setSearchLoading]     = useState(false);
-  const searchRef  = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const { suggestions, loading: searchLoading } = useImmSuggestions(imm);
 
   // Close suggestions on outside click
   useEffect(() => {
@@ -828,40 +817,19 @@ export default function Home() {
 
   function handleImmChange(val: string) {
     setImm(val);
-    setShowSuggestions(false);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (val.trim().length < 2) { setSuggestions([]); return; }
-    debounceRef.current = setTimeout(async () => {
-      setSearchLoading(true);
-      try {
-        const res = await fetch(`/api/query/search?q=${encodeURIComponent(val.trim())}`);
-        const json = await res.json();
-        setSuggestions(json.results ?? []);
-        setShowSuggestions((json.results ?? []).length > 0);
-      } catch { setSuggestions([]); }
-      finally { setSearchLoading(false); }
-    }, 300);
+    setShowSuggestions(val.trim().length >= 2);
   }
 
-  function selectSuggestion(s: SearchResult) {
-    setImm(s.imm);
-    setSuggestions([]);
+  function selectSuggestion(plate: string) {
+    setImm(plate);
     setShowSuggestions(false);
-    fetchAll(s.imm);
+    fetchAll(plate);
   }
 
-  // Formatted display label per suggestion (what the shared Combobox
-  // renders), mapped back to the underlying SearchResult for onSelect.
-  const { suggestionOptions, suggestionByLabel } = useMemo(() => {
-    const options: string[] = [];
-    const byLabel = new Map<string, SearchResult>();
-    for (const s of suggestions) {
-      const label = formatSuggestion(s);
-      options.push(label);
-      byLabel.set(label, s);
-    }
-    return { suggestionOptions: options, suggestionByLabel: byLabel };
-  }, [suggestions]);
+  // Plate-only suggestion list (matches Parking/Atelier/Depot's style) —
+  // the widened {imm, ww, marque, modele} data stays available via
+  // suggestions itself for anything that needs it after selection.
+  const suggestionOptions = useMemo(() => suggestions.map((s) => s.imm), [suggestions]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string>("");
@@ -915,7 +883,6 @@ export default function Home() {
 
     setLoading(true);
     setError("");
-    setSuggestions([]);
     setShowSuggestions(false);
 
     try {
@@ -926,7 +893,8 @@ export default function Home() {
         const resolveJson = await resolveRes.json();
         if (!isCurrent()) return;
         if (resolveJson.ok && resolveJson.mode === "suggest") {
-          setSuggestions(resolveJson.suggestions ?? []);
+          // suggestions itself already reacts to `imm` via useImmSuggestions()
+          // above — no separate state to populate here, just reveal the list.
           setShowSuggestions(true);
           setData(null); setVehicle(null); setContracts([]); setBddMatchVariants(null); setImportRows([]); setRlRows([]); setRlReunionRows([]);
           return;
@@ -1120,10 +1088,7 @@ export default function Home() {
                 open={showSuggestions}
                 onOpenChange={setShowSuggestions}
                 options={suggestionOptions}
-                onSelect={(label) => {
-                  const s = suggestionByLabel.get(label);
-                  if (s) selectSuggestion(s);
-                }}
+                onSelect={selectSuggestion}
                 loading={searchLoading}
                 placeholder="ex: 48070 / 832223WW"
                 inputMode="numeric"
