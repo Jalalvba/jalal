@@ -3,11 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AtelierRow, AtelierEditableField, ParkingAddResponse } from "@/lib/types";
 
-// Same pattern/refetch-behavior mapping as hooks/useParkingRows.ts. Atelier
-// has no imm-list endpoint of its own — app/atelier/page.tsx already reused
-// /api/parking/imm-list directly ("Shares the same parc plate list as
-// Parking — same underlying resource"), so this reuses useParkingImmList
-// rather than duplicating a second identical hook.
+// Same pattern/refetch-behavior mapping as hooks/useParkingRows.ts. The
+// plate-suggestion list itself is shared app-wide — see
+// hooks/useVehicleSuggestionList.ts, one fetch across all four plate-input
+// pages — so it isn't duplicated here.
 
 const ROWS_KEY = ["atelier", "rows"] as const;
 

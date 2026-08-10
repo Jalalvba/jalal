@@ -3,10 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DepotRow, ParkingAddResponse } from "@/lib/types";
 
-// Same pattern/shape as hooks/useParkingRows.ts. No dedicated imm-list hook
-// here — app/depot/page.tsx reuses useParkingImmList() directly, same as
-// Atelier already does ("shares the same parc plate list as Parking — same
-// underlying resource").
+// Same pattern/shape as hooks/useParkingRows.ts. The plate-suggestion list
+// itself is shared app-wide — see hooks/useVehicleSuggestionList.ts, one
+// fetch across all four plate-input pages — so it isn't duplicated here.
 
 const ROWS_KEY = ["depot", "rows"] as const;
 

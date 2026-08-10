@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/rateLimit";
 import { toErrorResponse } from "@/lib/apiError";
 import { invalidateIMMListCache } from "@/lib/googleSheetsParking";
+import { invalidateVehicleSuggestionListCache } from "@/lib/vehicleSuggestions";
 import type {
   ImportPipelineResult,
   ImportPipelineStep,
@@ -211,6 +212,12 @@ export async function POST(req: Request) {
     // trustworthy yet either.
     if (results.some((r) => r.pipeline === "parc" && r.status === "success")) {
       invalidateIMMListCache();
+    }
+
+    // The combined parc+cp suggestion list (lib/vehicleSuggestions.ts) draws
+    // from both collections, so either one changing real data invalidates it.
+    if (results.some((r) => (r.pipeline === "parc" || r.pipeline === "cp") && r.status === "success")) {
+      invalidateVehicleSuggestionListCache();
     }
 
     return NextResponse.json<TriggerImportResponse>({

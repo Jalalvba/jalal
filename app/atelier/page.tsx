@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useEditableState } from "@/hooks/useEditableState";
-import { useParkingImmList } from "@/hooks/useParkingRows";
+import { useVehicleSuggestionList } from "@/hooks/useVehicleSuggestionList";
 import {
   useAtelierRows,
   useAddAtelierPlates,
@@ -154,7 +154,7 @@ const UNASSIGNED_TECHNICIEN = "__UNASSIGNED__";
 
 export default function AtelierPage() {
   const rowsQuery = useAtelierRows();
-  const immListQuery = useParkingImmList(); // shared parc plate list, same underlying resource as Parking
+  const vehicleSuggestionsQuery = useVehicleSuggestionList(); // shared parc+cp plate universe, one fetch across all four plate-input pages
   const addMutation = useAddAtelierPlates();
   const fieldMutation = useUpdateAtelierField();
   const deleteMutation = useDeleteAtelierRow();
@@ -167,7 +167,7 @@ export default function AtelierPage() {
   const [activeTechnicien, setActiveTechnicien] = useState("TOUS");
 
   const rows = rowsQuery.data ?? EMPTY_ROWS;
-  const immList = immListQuery.data ?? [];
+  const immList = useMemo(() => (vehicleSuggestionsQuery.data ?? []).map((v) => v.imm), [vehicleSuggestionsQuery.data]);
 
   // Distinct Technicien values actually present in the loaded rows, not the
   // fixed TECHNICIEN_OPTIONS roster used by the per-card assignment dropdown

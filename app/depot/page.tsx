@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { DepotRow, ParkingAddResultItem } from "@/lib/types";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
@@ -13,7 +13,7 @@ import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { useEditableState } from "@/hooks/useEditableState";
-import { useParkingImmList } from "@/hooks/useParkingRows";
+import { useVehicleSuggestionList } from "@/hooks/useVehicleSuggestionList";
 import {
   useDepotRows,
   useAddDepotPlates,
@@ -79,7 +79,7 @@ function DepotCard({
 
 export default function DepotPage() {
   const rowsQuery = useDepotRows();
-  const immListQuery = useParkingImmList(); // shared parc plate list, same underlying resource as Parking/Atelier
+  const vehicleSuggestionsQuery = useVehicleSuggestionList(); // shared parc+cp plate universe, one fetch across all four plate-input pages
   const addMutation = useAddDepotPlates();
   const actionMutation = useUpdateDepotAction();
   const deleteMutation = useDeleteDepotRow();
@@ -91,7 +91,7 @@ export default function DepotPage() {
   const [addResults, setAddResults] = useState<ParkingAddResultItem[] | null>(null);
 
   const rows = rowsQuery.data ?? [];
-  const immList = immListQuery.data ?? [];
+  const immList = useMemo(() => (vehicleSuggestionsQuery.data ?? []).map((v) => v.imm), [vehicleSuggestionsQuery.data]);
 
   async function submitIMMs() {
     const val = rawInput.trim();

@@ -13,14 +13,14 @@ import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persi
 // scoped via shouldDehydrateQuery to only the query keys below.
 const BDD_QUERY_KEY = "bdd";
 
-// Parking/Atelier/Depot's shared plate list (["parking","imm-list"]) and DS
-// History's widened plate-suggestion list (["parking","vehicle-suggestions"])
-// both back a server-side week-long Mongo cache (see getIMMList()/
-// getVehicleSuggestionList() in lib/googleSheetsParking.ts) — persisting them
-// client-side too means a repeat page load paints suggestions instantly with
-// zero network round trip, only revalidating in the background once stale.
+// The single shared full-plate-universe query (["vehicle-suggestions"], see
+// hooks/useVehicleSuggestionList.ts) backs Parking/Atelier/Depot/DS
+// History's plate inputs — persisting it client-side means only the very
+// first page visited in a browser session ever fetches it; every other
+// page/navigation reads localStorage with zero network round trip, only
+// revalidating in the background once past its staleTime.
 function isPersistedPlateListKey(key: readonly unknown[]): boolean {
-  return key[0] === "parking" && (key[1] === "imm-list" || key[1] === "vehicle-suggestions");
+  return key[0] === "vehicle-suggestions";
 }
 
 export function AppQueryProvider({ children }: { children: React.ReactNode }) {

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { getVehicleSuggestionList } from "@/lib/googleSheetsParking";
+import { getCombinedVehicleSuggestionList } from "@/lib/vehicleSuggestions";
 
 export async function GET() {
   try {
-    const vehicles = await getVehicleSuggestionList();
+    const vehicles = await getCombinedVehicleSuggestionList();
     return NextResponse.json({ ok: true, vehicles });
   } catch (e) {
     console.error("[vehicle-suggestions] Mongo lookup failed:", e);

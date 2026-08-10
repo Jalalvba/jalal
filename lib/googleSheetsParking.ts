@@ -16,7 +16,6 @@ import {
 const ROWS_CACHE_KEY = "rows:PARKING";
 const HEADERS_CACHE_KEY = "headers:PARKING";
 const IMM_LIST_CACHE_KEY = "imm-list:parc";
-const VEHICLE_SUGGEST_CACHE_KEY = "vehicle-suggest-list:parc";
 
 // Ported from the AVIS Maroc GAS "Parking" system (code.gs + Parking.gs).
 // Tab name, column layout and XLOOKUP formulas confirmed by a live read of
@@ -208,45 +207,6 @@ export async function getIMMList(): Promise<string[]> {
 /** Called by app/api/trigger-import/route.ts right after a successful parc pipeline run. */
 export function invalidateIMMListCache(): void {
   invalidateCache(IMM_LIST_CACHE_KEY);
-  invalidateCache(VEHICLE_SUGGEST_CACHE_KEY);
-}
-
-export type VehicleSuggestion = { imm: string; ww: string; marque: string; modele: string };
-
-/**
- * Widened sibling of getIMMList(): same "parc" collection, same weekly TTL
- * and invalidation trigger (invalidateIMMListCache() above clears both keys
- * together), but returns {imm, ww, marque, modele} instead of a bare plate
- * string — used by useImmSuggestions() to populate DS History's suggestion
- * list without a per-keystroke Mongo round trip.
- */
-export async function getVehicleSuggestionList(): Promise<VehicleSuggestion[]> {
-  return withCache(VEHICLE_SUGGEST_CACHE_KEY, 7 * 24 * 60 * 60_000, async () => {
-    const col = await getCollection("parc");
-    const docs = await col
-      .find({}, { projection: { immatriculation: 1, numero_ww: 1, marque: 1, modele: 1 } })
-      .toArray();
-
-    const seen = new Set<string>();
-    const list: VehicleSuggestion[] = [];
-    for (const d of docs) {
-      const imm = String(d.immatriculation ?? "").trim().toUpperCase();
-      if (!imm || seen.has(imm)) continue;
-      seen.add(imm);
-      list.push({
-        imm,
-        ww: String(d.numero_ww ?? "").trim(),
-        marque: String(d.marque ?? "").trim(),
-        modele: String(d.modele ?? "").trim(),
-      });
-    }
-    // Sorted to match col.distinct("immatriculation")'s (getIMMList()) sort
-    // order — otherwise the two lists' first-15 truncation in useImmSuggestions
-    // vs usePlateAutocomplete diverges for any prefix matching >15 plates,
-    // even though both are correct, complete matches underneath.
-    list.sort((a, b) => (a.imm < b.imm ? -1 : a.imm > b.imm ? 1 : 0));
-    return list;
-  });
 }
 
 /**

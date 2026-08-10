@@ -2,7 +2,6 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ParkingRow, ParkingAddResponse } from "@/lib/types";
-import type { VehicleSuggestion } from "@/lib/googleSheetsParking";
 
 // Route logic is untouched — these are thin client-side wrappers around the
 // exact same /api/parking* endpoints app/parking/page.tsx already called by
@@ -12,8 +11,6 @@ import type { VehicleSuggestion } from "@/lib/googleSheetsParking";
 // `finally` regardless of outcome.
 
 const ROWS_KEY = ["parking", "rows"] as const;
-const IMM_LIST_KEY = ["parking", "imm-list"] as const;
-const VEHICLE_SUGGESTIONS_KEY = ["parking", "vehicle-suggestions"] as const;
 
 async function fetchJson<T extends { ok: boolean; error?: string }>(
   url: string,
@@ -30,25 +27,6 @@ export function useParkingRows() {
     queryKey: ROWS_KEY,
     queryFn: () => fetchJson<{ ok: true; rows: ParkingRow[] }>("/api/parking"),
     select: (data) => data.rows,
-  });
-}
-
-export function useParkingImmList() {
-  return useQuery({
-    queryKey: IMM_LIST_KEY,
-    queryFn: () => fetchJson<{ ok: true; imms: string[] }>("/api/parking/imm-list"),
-    select: (data) => data.imms,
-    staleTime: 5 * 60_000,
-  });
-}
-
-/** Widened sibling of useParkingImmList(): {imm, ww, marque, modele}[], same server-side weekly cache. */
-export function useVehicleSuggestionList() {
-  return useQuery({
-    queryKey: VEHICLE_SUGGESTIONS_KEY,
-    queryFn: () => fetchJson<{ ok: true; vehicles: VehicleSuggestion[] }>("/api/parking/vehicle-suggestions"),
-    select: (data) => data.vehicles,
-    staleTime: 5 * 60_000,
   });
 }
 

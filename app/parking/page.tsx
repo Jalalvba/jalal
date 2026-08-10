@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ParkingRow, ParkingAddResultItem } from "@/lib/types";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
@@ -15,12 +15,12 @@ import { Alert } from "@/components/ui/alert";
 import { useEditableState } from "@/hooks/useEditableState";
 import {
   useParkingRows,
-  useParkingImmList,
   useAddParkingPlates,
   useUpdateParkingAction,
   useDeleteParkingRow,
   useClearParkingAll,
 } from "@/hooks/useParkingRows";
+import { useVehicleSuggestionList } from "@/hooks/useVehicleSuggestionList";
 
 // ─── Read-only reference fields — the 9 sheet-side XLOOKUP columns, exact
 // header spelling (TECHNICEIN/FOUNISSEUR are sic, matching the real sheet) ──
@@ -78,7 +78,7 @@ function ParkingCard({
 
 export default function ParkingPage() {
   const rowsQuery = useParkingRows();
-  const immListQuery = useParkingImmList();
+  const vehicleSuggestionsQuery = useVehicleSuggestionList();
   const addMutation = useAddParkingPlates();
   const actionMutation = useUpdateParkingAction();
   const deleteMutation = useDeleteParkingRow();
@@ -90,7 +90,10 @@ export default function ParkingPage() {
   const [addResults, setAddResults] = useState<ParkingAddResultItem[] | null>(null);
 
   const rows = rowsQuery.data ?? [];
-  const immList = immListQuery.data ?? [];
+  // usePlateAutocomplete (inside PlateSearchInput) only needs bare plate
+  // strings — derived client-side from the one shared full parc+cp fetch,
+  // no separate network call.
+  const immList = useMemo(() => (vehicleSuggestionsQuery.data ?? []).map((v) => v.imm), [vehicleSuggestionsQuery.data]);
 
   async function submitIMMs() {
     const val = rawInput.trim();
