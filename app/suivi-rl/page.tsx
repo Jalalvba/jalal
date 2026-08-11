@@ -31,6 +31,7 @@ import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
 import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
 import { cn } from "@/components/ui/utils";
 import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate, useDeleteBddRow } from "@/hooks/useBddRows";
+import { AddBddPlateDialog } from "@/components/fleet/AddBddPlateDialog";
 import { useVehicleZone } from "@/hooks/useVehicleZone";
 import { ZoneBadges } from "@/components/fleet/ZoneBadges";
 import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
@@ -447,6 +448,10 @@ export default function SuiviRlPage() {
           placeholder="Rechercher par immatriculation…"
           inputMode="numeric"
         />
+
+        <div className="mt-2">
+          <AddBddPlateDialog />
+        </div>
 
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto">
           <span className="mr-1 flex-shrink-0 text-micro font-bold uppercase text-muted-foreground">Flotte</span>

@@ -1,6 +1,12 @@
 import { type sheets_v4 } from "googleapis";
-import { BDD_EDITABLE_FIELDS, type BddRow, type BddUpdateResult } from "@/lib/types";
+import {
+  BDD_EDITABLE_FIELDS,
+  type BddRow,
+  type BddUpdateResult,
+  type ParkingAddResponse,
+} from "@/lib/types";
 import { buildPlateVariants } from "@/lib/plateVariants";
+import { getIMMListSafe, resolveIMM } from "@/lib/googleSheetsParking";
 import {
   getSheetsClient,
   serialToUTCDate,
@@ -41,8 +47,13 @@ async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
   });
 }
 
-/** Same pattern as googleSheetsParking.ts's getParkingSheetProps() — the numeric sheetId a deleteDimension request needs (distinct from the spreadsheet-wide spreadsheetId). */
-async function getBddSheetProps(sheets: sheets_v4.Sheets): Promise<{ sheetId: number }> {
+/**
+ * Same pattern as googleSheetsParking.ts's getParkingSheetProps() — the
+ * numeric sheetId a deleteDimension request needs (distinct from the
+ * spreadsheet-wide spreadsheetId), plus rowCount (needed by addBddRow() to
+ * know whether the grid needs growing before appending a new row).
+ */
+async function getBddSheetProps(sheets: sheets_v4.Sheets): Promise<{ sheetId: number; rowCount: number }> {
   const res = await sheets.spreadsheets.get({
     spreadsheetId: spreadsheetId!,
     fields: "sheets.properties",
@@ -51,7 +62,15 @@ async function getBddSheetProps(sheets: sheets_v4.Sheets): Promise<{ sheetId: nu
   if (!props || props.sheetId == null) {
     throw new Error(`Sheet tab '${BDD_TAB_NAME}' not found`);
   }
-  return { sheetId: props.sheetId };
+  return { sheetId: props.sheetId, rowCount: props.gridProperties?.rowCount ?? 0 };
+}
+
+function buildColMap(headers: string[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  headers.forEach((h, i) => {
+    if (h) map[h] = i + 1; // 1-based
+  });
+  return map;
 }
 
 /**
@@ -134,6 +153,137 @@ async function fetchSheetRows(): Promise<BddRow[]> {
   }
 
   return rows;
+}
+
+// ─── addBddRow ──────────────────────────────────────────────────────────────
+
+// XLOOKUP/DATEDIF formulas, verbatim from a live spreadsheets.values.get()
+// read of the BDD tab (valueRenderOption: FORMULA) — every column other than
+// IMM and BDD_EDITABLE_FIELDS is a per-row formula referencing that row's own
+// A{ROW} cell, not a whole-column ARRAYFORMULA. A newly appended row must get
+// these written in explicitly (same reason Parking/Atelier/Depot's own
+// FORMULAS maps exist) or these columns stay permanently blank -- Sheets
+// doesn't auto-fill a formula into a row the API appends.
+//
+// "mois_restant"'s template hardcodes "N{ROW}" (not looked up via colMap)
+// because that's what the live formula itself hardcodes -- N is
+// date_fin_contrat's column letter in the sheet's current layout. This stays
+// correct as long as the column order isn't restructured; if it ever is,
+// every existing row's formula breaks too, not just newly-added ones.
+const BDD_FORMULAS: Record<string, string> = {
+  date: '=XLOOKUP(A{ROW};RL!D:D;RL!B:B;46422;0;1)',
+  client: '=XLOOKUP(A{ROW};RL!D:D;RL!C:C;"INCONNU";0;1)',
+  modele: '=XLOOKUP(A{ROW};parc!F:F;parc!E:E;"INCONNU";0;1)',
+  "Reunion N-1": '=XLOOKUP(A{ROW};RL_reunion!A:A;RL_reunion!B:B;"";0;1)',
+  mois_restant: '=IFERROR(DATEDIF(TODAY();N{ROW};"m");0)',
+  date_fin_contrat: '=XLOOKUP(A{ROW};CP!G:G;CP!Q:Q;"";0;1)',
+  lieu_Reparation: '=XLOOKUP(A{ROW};RL!D:D;RL!U:U;"";0;1)',
+  Motif: '=XLOOKUP(A{ROW};RL!D:D;RL!S:S;"";0;1)',
+  station_départ: '=XLOOKUP(A{ROW};RL!D:D;RL!N:N;"";0;1)',
+  ds: '=XLOOKUP(A{ROW};ds!D:D;ds!C:C;"";0;-1)',
+  date_ds: '=XLOOKUP(A{ROW};ds!D:D;ds!A:A;"";0;-1)',
+  Parts: '=XLOOKUP(A{ROW};ds!D:D;ds!G:G;"";0;-1)',
+  Technicein_ds: '=XLOOKUP(A{ROW};ds!D:D;ds!E:E;"";0;-1)',
+  Founisseur: '=XLOOKUP(A{ROW};ds!D:D;ds!F:F;"";0;-1)',
+  RDV: '=XLOOKUP(A{ROW};RDV!E:E;RDV!A:A;"";0;1)',
+  CONVOYEUR: '=XLOOKUP(A{ROW};RDV!E:E;RDV!H:H;"";0;1)',
+  Intervention: '=XLOOKUP(A{ROW};RDV!E:E;RDV!F:F;"";0;1)',
+  ATELIER: '=XLOOKUP(A{ROW};ATELIER!A:A;ATELIER!A:A;"";0;1)',
+  DEPOT: '=XLOOKUP(A{ROW};DEPOT!A:A;DEPOT!A:A;"";0;1)',
+  PARKING: '=XLOOKUP(A{ROW};PARKING!A:A;PARKING!A:A;"";0;1)',
+};
+
+/**
+ * Adds one genuinely new plate to BDD -- IMM + ETAT (both required; ETAT is
+ * required because app/suivi-rl/page.tsx's default Flotte filter only shows
+ * rows where ETAT is INTERNE or EXTERNE, so a blank-ETAT row would be
+ * invisible even under "TOUS"), everything else left blank for later via the
+ * existing inline-edit UI. All 20 XLOOKUP/DATEDIF formula columns are seeded
+ * so they self-populate once matching DS/RL/RDV/CP/parc/etc. data exists,
+ * same as Parking/Atelier/Depot's addPlates()/addAtelierPlates()/addDepotPlates().
+ *
+ * Unlike those three tabs, a plate already present in BDD is rejected
+ * outright rather than "updated" (bumping some timestamp) -- BDD has no
+ * TIMESTAMP-like column whose bump would mean anything, and silently
+ * no-op'ing into an existing row would risk masking that the user meant to
+ * add a genuinely different plate but mistyped.
+ */
+export async function addBddRow(imm: string, etat: string): Promise<ParkingAddResponse> {
+  const token = (imm ?? "").trim();
+  if (!token) {
+    return { ok: false, error: "Aucune immatriculation saisie." };
+  }
+  const etatTrim = (etat ?? "").trim();
+  if (!etatTrim) {
+    return { ok: false, error: "ETAT est obligatoire." };
+  }
+
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const immCol = colMap["IMM"];
+  const etatCol = colMap["ETAT"];
+  if (!immCol) throw new Error(`Column 'IMM' not found in the live '${BDD_TAB_NAME}' header row`);
+  if (!etatCol) throw new Error(`Column 'ETAT' not found in the live '${BDD_TAB_NAME}' header row`);
+
+  const dataRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId!,
+    range: `'${BDD_TAB_NAME}'!A2:${HEADER_SCAN_WIDTH}`,
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+  const dataRows = dataRes.data.values ?? [];
+
+  const existingSet = new Set<string>();
+  dataRows.forEach((row) => {
+    const raw = row[immCol - 1];
+    const val = raw != null ? String(raw).trim().toUpperCase() : "";
+    if (val) existingSet.add(val);
+  });
+
+  // Resolved before any grid mutation below: if Mongo is unavailable,
+  // getIMMListSafe() degrades to [] instead of throwing mid-mutation and
+  // leaving the sheet grown with no data written into the new row.
+  const immList = await getIMMListSafe();
+  const resolved = resolveIMM(token, immList) || token.trim().toUpperCase();
+  const inParc = immList.includes(resolved);
+
+  if (existingSet.has(resolved)) {
+    return { ok: false, error: `${resolved} existe déjà dans BDD.` };
+  }
+
+  const targetRow = dataRows.length + 2; // row 1 is the header row, data starts at row 2
+  const props = await getBddSheetProps(sheets);
+  const gridShortfall = targetRow - props.rowCount;
+  if (gridShortfall > 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: spreadsheetId!,
+      requestBody: {
+        requests: [{ appendDimension: { sheetId: props.sheetId, dimension: "ROWS", length: gridShortfall } }],
+      },
+    });
+  }
+
+  const writes: { range: string; values: (string | number)[][] }[] = [
+    { range: `'${BDD_TAB_NAME}'!${columnIndexToLetter(immCol)}${targetRow}`, values: [[resolved]] },
+    { range: `'${BDD_TAB_NAME}'!${columnIndexToLetter(etatCol)}${targetRow}`, values: [[etatTrim]] },
+  ];
+
+  for (const [field, template] of Object.entries(BDD_FORMULAS)) {
+    const col = colMap[field];
+    if (!col) continue;
+    writes.push({
+      range: `'${BDD_TAB_NAME}'!${columnIndexToLetter(col)}${targetRow}`,
+      values: [[template.replace(/\{ROW\}/g, String(targetRow))]],
+    });
+  }
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: spreadsheetId!,
+    requestBody: { valueInputOption: "USER_ENTERED", data: writes },
+  });
+  invalidateCache(ROWS_CACHE_KEY);
+
+  return { ok: true, results: [{ imm: resolved, status: "added", inParc }] };
 }
 
 /**

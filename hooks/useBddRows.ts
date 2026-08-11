@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { BddRow, BddUpdateResult } from "@/lib/types";
+import type { BddRow, BddUpdateResult, ParkingAddResponse } from "@/lib/types";
 
 // Same pattern as hooks/useParkingRows.ts / useAtelierRows.ts, against the
 // existing /api/bdd and /api/bdd/update endpoints (unchanged).
@@ -35,6 +35,19 @@ export function useBddRows() {
     // refetchOnMount already paint instantly from the last-known cache and
     // refetch in the background, without forcing an unconditional refetch
     // on every mount the way staleTime: 0 used to.
+  });
+}
+
+export function useAddBddRow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ imm, etat }: { imm: string; etat: string }) =>
+      fetchJson<ParkingAddResponse & { ok: true }>("/api/bdd/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imm, etat }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
 
