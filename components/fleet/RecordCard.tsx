@@ -85,6 +85,7 @@ export function RecordCard({
                   size="icon"
                   className="hover:bg-red-500/10 hover:text-red-400"
                   title="Supprimer"
+                  aria-label="Supprimer"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>

@@ -47,6 +47,7 @@ export function useAddBddRow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imm, etat }),
       }),
+    meta: { successMessage: "Véhicule ajouté à la BDD" },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -60,6 +61,7 @@ export function useUpdateBddRow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ row, updates, imm }),
       }),
+    meta: { successMessage: "Champ mis à jour" },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -73,6 +75,7 @@ export function useDeleteBddRow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ row, imm }),
       }),
+    meta: { successMessage: "Véhicule supprimé de la BDD" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }

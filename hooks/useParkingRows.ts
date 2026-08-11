@@ -39,6 +39,7 @@ export function useAddParkingPlates() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ raw }),
       }),
+    meta: { successMessage: "Véhicule(s) ajouté(s) au parking" },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -52,6 +53,7 @@ export function useUpdateParkingAction() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rowIndex, action, imm }),
       }),
+    meta: { successMessage: "Action mise à jour" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -65,6 +67,7 @@ export function useDeleteParkingRow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rowIndex, imm }),
       }),
+    meta: { successMessage: "Véhicule retiré du parking" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -73,6 +76,7 @@ export function useClearParkingAll() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => fetchJson<{ ok: true }>("/api/parking/clear", { method: "POST" }),
+    meta: { successMessage: "Parking vidé" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }

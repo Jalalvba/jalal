@@ -65,7 +65,7 @@ export function ListPageHeader({
     <div className="sticky top-0 z-20 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Link href="/" className="text-muted-foreground transition hover:text-foreground" title="Accueil">
+          <Link href="/" className="text-muted-foreground transition hover:text-foreground" title="Accueil" aria-label="Accueil">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className={`font-sans text-sm font-semibold ${accentClassName}`}>
@@ -75,13 +75,13 @@ export function ListPageHeader({
         <div className="flex items-center gap-1.5">
           <span className={`rounded-full border px-2 py-0.5 font-mono text-micro ${countClassName}`}>{count}</span>
           <ThemeToggle variant="icon" />
-          <Button type="button" variant="ghost" size="icon" onClick={onRefresh} title="Actualiser">
+          <Button type="button" variant="ghost" size="icon" onClick={onRefresh} title="Actualiser" aria-label="Actualiser">
             <RotateCw className="h-4 w-4" />
           </Button>
           {onClearAll && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button type="button" variant="ghost" size="icon" className="hover:bg-red-500/10 hover:text-red-400" title="Vider">
+                <Button type="button" variant="ghost" size="icon" className="hover:bg-red-500/10 hover:text-red-400" title="Vider" aria-label="Vider">
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </AlertDialogTrigger>
@@ -95,7 +95,7 @@ export function ListPageHeader({
               </AlertDialogContent>
             </AlertDialog>
           )}
-          <Button type="button" variant="ghost" size="icon" onClick={handleLogout} title="Déconnexion">
+          <Button type="button" variant="ghost" size="icon" onClick={handleLogout} title="Déconnexion" aria-label="Déconnexion">
             <Power className="h-4 w-4" />
           </Button>
         </div>

@@ -37,6 +37,7 @@ export function useAddAtelierPlates() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ raw }),
       }),
+    meta: { successMessage: "Véhicule(s) ajouté(s) à l'atelier" },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -60,6 +61,7 @@ export function useUpdateAtelierField() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rowIndex, field, value, imm }),
       }),
+    meta: { successMessage: "Champ mis à jour" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -73,6 +75,7 @@ export function useDeleteAtelierRow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rowIndex, imm }),
       }),
+    meta: { successMessage: "Véhicule retiré de l'atelier" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -81,6 +84,7 @@ export function useClearAtelierAll() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => fetchJson<{ ok: true }>("/api/atelier/clear", { method: "POST" }),
+    meta: { successMessage: "Atelier vidé" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }

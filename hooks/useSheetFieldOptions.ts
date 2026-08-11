@@ -116,6 +116,7 @@ export function useUpdateSheetFieldOptions() {
       const json = (await res.json()) as { ok: boolean; error?: string };
       if (!json.ok) throw new Error(json.error ?? "Erreur inconnue");
     },
+    meta: { successMessage: "Options mises à jour" },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 }

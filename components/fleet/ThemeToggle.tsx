@@ -71,6 +71,7 @@ export function ThemeToggle({
         onClick={toggle}
         disabled={!mounted}
         title={dark ? "Passer en mode clair" : "Passer en mode sombre"}
+        aria-label={dark ? "Passer en mode clair" : "Passer en mode sombre"}
         className={className}
       >
         {dark ? sunIcon : moonIcon}
@@ -84,6 +85,7 @@ export function ThemeToggle({
       onClick={toggle}
       disabled={!mounted}
       title={dark ? "Passer en mode clair" : "Passer en mode sombre"}
+      aria-label={dark ? "Passer en mode clair" : "Passer en mode sombre"}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-foreground transition hover:bg-muted disabled:opacity-60",
         className

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { ThemeProvider } from "next-themes";
+import { Toaster } from "@/components/ui/toaster";
 import { AppQueryProvider } from "@/hooks/queryClient";
 import { LIGHT_START_HOUR, LIGHT_END_HOUR } from "@/lib/themeDefault";
 import "./globals.css";
@@ -86,6 +87,7 @@ export default async function RootLayout({
           nonce={nonce}
         >
           <AppQueryProvider>{children}</AppQueryProvider>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

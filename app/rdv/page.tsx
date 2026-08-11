@@ -150,6 +150,7 @@ function SelectToggle({ selected, onToggle }: { selected: boolean; onToggle: () 
       onClick={onToggle}
       aria-pressed={selected}
       title={selected ? "Désélectionner" : "Sélectionner"}
+      aria-label={selected ? "Désélectionner" : "Sélectionner"}
       className={cn(
         "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition",
         selected

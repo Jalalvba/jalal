@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -298,12 +299,18 @@ export function ImportTrigger() {
         throw new Error(body?.error || `Import request failed (HTTP ${res.status})${timeoutHint}`);
       }
 
-      setElapsedSec(Math.round((Date.now() - (startedAtRef.current ?? Date.now())) / 1000));
+      const elapsed = Math.round((Date.now() - (startedAtRef.current ?? Date.now())) / 1000);
+      setElapsedSec(elapsed);
       setResults(body.results);
       setPhase("replaying");
+      const { ok, text } = buildSummary(body.results, elapsed);
+      if (ok) toast.success(text);
+      else toast.error(text);
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "Erreur inconnue");
+      const message = e instanceof Error ? e.message : "Erreur inconnue";
+      setErrorMsg(message);
       setPhase("error");
+      toast.error(`Import échoué : ${message}`);
     }
   }
 

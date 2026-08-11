@@ -36,6 +36,7 @@ export function useAddRdvRow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       }),
+    meta: { successMessage: "Rendez-vous ajouté" },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -64,6 +65,7 @@ export function useUpdateRdvField() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identity, field, value }),
       }),
+    meta: { successMessage: "Champ mis à jour" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -78,6 +80,7 @@ export function useClearRdvRow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(identity),
       }),
+    meta: { successMessage: "Rendez-vous effacé" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }

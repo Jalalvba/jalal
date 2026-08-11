@@ -36,6 +36,7 @@ export function useAddDepotPlates() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ raw }),
       }),
+    meta: { successMessage: "Véhicule(s) ajouté(s) au dépôt" },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -49,6 +50,7 @@ export function useUpdateDepotAction() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rowIndex, action, imm }),
       }),
+    meta: { successMessage: "Action mise à jour" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -62,6 +64,7 @@ export function useDeleteDepotRow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rowIndex, imm }),
       }),
+    meta: { successMessage: "Véhicule retiré du dépôt" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
@@ -70,6 +73,7 @@ export function useClearDepotAll() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => fetchJson<{ ok: true }>("/api/depot/clear", { method: "POST" }),
+    meta: { successMessage: "Dépôt vidé" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }

@@ -1,9 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
+import { toast } from "sonner";
+
+// Every write action in the app goes through a useMutation call (see
+// hooks/use*Rows.ts) — hooking success/error here once, via MutationCache,
+// gives every one of them a toast without touching each call site. A
+// mutation opts into a specific success message with
+// `meta: { successMessage: "..." }`; without it, a generic fallback fires.
+// Errors always surface the thrown Error's message (already the real
+// server-side error text — see fetchJson() in each hooks/use*Rows.ts file).
+const mutationCache = new MutationCache({
+  onSuccess: (_data, _variables, _context, mutation) => {
+    const message =
+      typeof mutation.meta?.successMessage === "string" ? mutation.meta.successMessage : "Enregistré";
+    toast.success(message);
+  },
+  onError: (error) => {
+    toast.error(error instanceof Error ? error.message : "Une erreur est survenue");
+  },
+});
 
 // app/suivi-rl/page.tsx originally persisted its rows to localStorage itself
 // (loadCachedRows/saveCachedRows) so a repeat visit painted instantly from
@@ -25,6 +44,7 @@ function isPersistedPlateListKey(key: readonly unknown[]): boolean {
 
 export function AppQueryProvider({ children }: { children: React.ReactNode }) {
   const [client] = useState(() => new QueryClient({
+    mutationCache,
     defaultOptions: {
       queries: {
         staleTime: 30_000,
