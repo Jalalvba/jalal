@@ -292,7 +292,7 @@ export default function AdminConfigPage() {
         accentClassName="text-slate-400"
         countClassName="border-slate-500/20 bg-slate-500/10 text-slate-400"
         count={totalCount}
-        onRefresh={() => {}}
+        onRefresh={() => Promise.resolve()}
       />
 
       <div className="mx-auto flex max-w-2xl flex-col gap-3 px-3 py-4">

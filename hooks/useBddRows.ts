@@ -38,6 +38,24 @@ export function useBddRows() {
   });
 }
 
+/**
+ * Genuine hard refresh for Suivi RL's ListPageHeader "Actualiser" button —
+ * see useRefreshParkingRows() in hooks/useParkingRows.ts for the full
+ * reasoning. app/api/bdd/refresh also busts RL_reunion's cache, since DS
+ * History's search reads both — this hook only needs to refetch BDD's own
+ * query key, DS History manages its own refetch (see app/ds-history/page.tsx).
+ */
+export function useRefreshBddRows() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await fetchJson<{ ok: true }>("/api/bdd/refresh", { method: "POST" });
+      await queryClient.refetchQueries({ queryKey: ROWS_KEY });
+    },
+    meta: { successMessage: "Données actualisées" },
+  });
+}
+
 export function useAddBddRow() {
   const queryClient = useQueryClient();
   return useMutation({

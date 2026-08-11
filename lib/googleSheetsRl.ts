@@ -1,5 +1,5 @@
 import { buildPlateVariants } from "@/lib/plateVariants";
-import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, withCache } from "@/lib/googleSheetsClient";
+import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, withCache, invalidateCache } from "@/lib/googleSheetsClient";
 
 // Reads the "RL" tab (véhicule de remplacement / replacement-vehicle data)
 // via the authenticated service-account Sheets API — replacing the
@@ -149,4 +149,9 @@ export async function getRlReunionRows(immFilter?: string): Promise<RlReunionRow
 
   const variants = new Set(buildPlateVariants(immFilter));
   return rows.filter((r) => variants.has(r.Immatriculation.trim().toUpperCase()));
+}
+
+/** Called by app/api/bdd/refresh/route.ts — DS History's search reads RL_reunion alongside BDD, so its hard refresh needs to bust this cache too. getRlRows() itself is deliberately never cached (see its own history), nothing to bust there. */
+export function invalidateRlReunionRowsCache(): void {
+  invalidateCache(RL_REUNION_ROWS_CACHE_KEY);
 }

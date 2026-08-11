@@ -23,6 +23,7 @@ import {
   useUpdateAtelierField,
   useDeleteAtelierRow,
   useClearAtelierAll,
+  useRefreshAtelierRows,
 } from "@/hooks/useAtelierRows";
 
 // ─── CATEGORIE_OPTIONS and TECHNICIEN_OPTIONS are Mongo-backed now
@@ -160,6 +161,7 @@ export default function AtelierPage() {
   const fieldMutation = useUpdateAtelierField();
   const deleteMutation = useDeleteAtelierRow();
   const clearAllMutation = useClearAtelierAll();
+  const refreshMutation = useRefreshAtelierRows();
 
   const [search, setSearch] = useState("");
   const [rawInput, setRawInput] = useState("");
@@ -244,7 +246,7 @@ export default function AtelierPage() {
         accentClassName={ZONE_COLORS.atelier.accentText}
         countClassName={ZONE_COLORS.atelier.count}
         count={searched.length}
-        onRefresh={() => rowsQuery.refetch()}
+        onRefresh={() => refreshMutation.mutateAsync()}
         onClearAll={handleClearAll}
         clearAllTitle="Vider l'atelier ?"
       >

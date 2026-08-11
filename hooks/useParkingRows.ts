@@ -80,3 +80,20 @@ export function useClearParkingAll() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
+
+/**
+ * Genuine hard refresh for ListPageHeader's "Actualiser" button — busts the
+ * server-side 15s rows cache first, then refetches, so the result is
+ * guaranteed live instead of possibly still serving a stale cached read
+ * (which a plain queryClient.invalidateQueries() alone would risk).
+ */
+export function useRefreshParkingRows() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await fetchJson<{ ok: true }>("/api/parking/refresh", { method: "POST" });
+      await queryClient.refetchQueries({ queryKey: ROWS_KEY });
+    },
+    meta: { successMessage: "Données actualisées" },
+  });
+}

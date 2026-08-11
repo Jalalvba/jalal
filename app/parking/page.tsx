@@ -20,6 +20,7 @@ import {
   useUpdateParkingAction,
   useDeleteParkingRow,
   useClearParkingAll,
+  useRefreshParkingRows,
 } from "@/hooks/useParkingRows";
 import { useVehicleSuggestionList } from "@/hooks/useVehicleSuggestionList";
 
@@ -84,6 +85,7 @@ export default function ParkingPage() {
   const actionMutation = useUpdateParkingAction();
   const deleteMutation = useDeleteParkingRow();
   const clearAllMutation = useClearParkingAll();
+  const refreshMutation = useRefreshParkingRows();
 
   const [search, setSearch] = useState("");
   const [rawInput, setRawInput] = useState("");
@@ -151,7 +153,7 @@ export default function ParkingPage() {
         accentClassName={ZONE_COLORS.parking.accentText}
         countClassName={ZONE_COLORS.parking.count}
         count={searched.length}
-        onRefresh={() => rowsQuery.refetch()}
+        onRefresh={() => refreshMutation.mutateAsync()}
         onClearAll={handleClearAll}
         clearAllTitle="Vider tout le Parking ?"
       >

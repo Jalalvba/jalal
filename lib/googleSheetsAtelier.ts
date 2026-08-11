@@ -89,6 +89,11 @@ export async function getAtelierRows(): Promise<AtelierRow[]> {
   return withCache(ROWS_CACHE_KEY, 15_000, () => fetchAtelierRows());
 }
 
+/** Called by app/api/atelier/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+export function invalidateAtelierRowsCache(): void {
+  invalidateCache(ROWS_CACHE_KEY);
+}
+
 async function fetchAtelierRows(): Promise<AtelierRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({

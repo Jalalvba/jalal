@@ -27,6 +27,18 @@ export function useRdvRows() {
   });
 }
 
+/** Genuine hard refresh for ListPageHeader's "Actualiser" button — see useRefreshParkingRows() in hooks/useParkingRows.ts for the full reasoning. */
+export function useRefreshRdvRows() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await fetchJson<{ ok: true }>("/api/rdv/refresh", { method: "POST" });
+      await queryClient.refetchQueries({ queryKey: ROWS_KEY });
+    },
+    meta: { successMessage: "Données actualisées" },
+  });
+}
+
 export function useAddRdvRow() {
   const queryClient = useQueryClient();
   return useMutation({

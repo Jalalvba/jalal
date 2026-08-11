@@ -80,6 +80,11 @@ export async function getParkingRows(): Promise<ParkingRow[]> {
   return withCache(ROWS_CACHE_KEY, 15_000, () => fetchParkingRows());
 }
 
+/** Called by app/api/parking/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+export function invalidateParkingRowsCache(): void {
+  invalidateCache(ROWS_CACHE_KEY);
+}
+
 async function fetchParkingRows(): Promise<ParkingRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({

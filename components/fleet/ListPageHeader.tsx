@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, RotateCw, Trash2, Power } from "lucide-react";
+import { cn } from "@/components/ui/utils";
 import { logout } from "@/app/login/actions";
 import { clearPersistedAppState } from "@/lib/clearClientState";
 import { Button } from "@/components/ui/button";
@@ -41,7 +43,13 @@ export function ListPageHeader({
   accentClassName: string;
   countClassName: string;
   count: number;
-  onRefresh: () => void;
+  /**
+   * A genuine hard refresh (busts the server-side cache, not just a
+   * client-side refetch) — return the promise so the button can disable
+   * itself and spin until data has actually landed, instead of a plain
+   * fire-and-forget click.
+   */
+  onRefresh: () => Promise<unknown>;
   /** Omit entirely to hide the "Vider" button — Suivi RL has no clear-all concept. */
   onClearAll?: () => void;
   clearAllTitle?: string;
@@ -49,6 +57,17 @@ export function ListPageHeader({
   children?: React.ReactNode;
 }) {
   const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    if (refreshing) return; // already in flight — ignore a double-click instead of firing a second refresh
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   // Plain onClick instead of <form action={logout}> — the full BDD dataset
   // (plates, client names, technician assignments, free-text comments) is
@@ -75,8 +94,16 @@ export function ListPageHeader({
         <div className="flex items-center gap-1.5">
           <span className={`rounded-full border px-2 py-0.5 font-mono text-micro ${countClassName}`}>{count}</span>
           <ThemeToggle variant="icon" />
-          <Button type="button" variant="ghost" size="icon" onClick={onRefresh} title="Actualiser" aria-label="Actualiser">
-            <RotateCw className="h-4 w-4" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="Actualiser"
+            aria-label="Actualiser"
+          >
+            <RotateCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
           </Button>
           {onClearAll && (
             <AlertDialog>

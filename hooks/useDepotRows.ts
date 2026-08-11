@@ -77,3 +77,15 @@ export function useClearDepotAll() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
+
+/** Genuine hard refresh for ListPageHeader's "Actualiser" button — see useRefreshParkingRows() in hooks/useParkingRows.ts for the full reasoning. */
+export function useRefreshDepotRows() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await fetchJson<{ ok: true }>("/api/depot/refresh", { method: "POST" });
+      await queryClient.refetchQueries({ queryKey: ROWS_KEY });
+    },
+    meta: { successMessage: "Données actualisées" },
+  });
+}

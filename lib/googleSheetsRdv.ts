@@ -86,6 +86,11 @@ export async function getRdvRows(): Promise<RdvRow[]> {
   return withCache(ROWS_CACHE_KEY, 15_000, () => fetchRdvRows());
 }
 
+/** Called by app/api/rdv/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+export function invalidateRdvRowsCache(): void {
+  invalidateCache(ROWS_CACHE_KEY);
+}
+
 async function fetchRdvRows(): Promise<RdvRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({

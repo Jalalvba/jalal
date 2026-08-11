@@ -21,6 +21,7 @@ import {
   useUpdateDepotAction,
   useDeleteDepotRow,
   useClearDepotAll,
+  useRefreshDepotRows,
 } from "@/hooks/useDepotRows";
 
 // ─── Read-only reference fields — the 9 sheet-side XLOOKUP columns, exact
@@ -85,6 +86,7 @@ export default function DepotPage() {
   const actionMutation = useUpdateDepotAction();
   const deleteMutation = useDeleteDepotRow();
   const clearAllMutation = useClearDepotAll();
+  const refreshMutation = useRefreshDepotRows();
 
   const [search, setSearch] = useState("");
   const [rawInput, setRawInput] = useState("");
@@ -149,7 +151,7 @@ export default function DepotPage() {
         accentClassName={ZONE_COLORS.depot.accentText}
         countClassName={ZONE_COLORS.depot.count}
         count={searched.length}
-        onRefresh={() => rowsQuery.refetch()}
+        onRefresh={() => refreshMutation.mutateAsync()}
         onClearAll={handleClearAll}
         clearAllTitle="Vider tout le Dépôt ?"
       >

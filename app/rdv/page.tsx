@@ -25,7 +25,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { useRdvRows, useUpdateRdvField, useClearRdvRow, rdvRowToIdentity } from "@/hooks/useRdvRows";
+import { useRdvRows, useUpdateRdvField, useClearRdvRow, useRefreshRdvRows, rdvRowToIdentity } from "@/hooks/useRdvRows";
 
 // Read-only Date column intentionally not offered here — see
 // lib/googleSheetsRdvMonthly.ts's updateAppointmentInMonthlyTab(): editing
@@ -271,6 +271,7 @@ export default function RdvPage() {
   const rowsQuery = useRdvRows();
   const updateMutation = useUpdateRdvField();
   const clearMutation = useClearRdvRow();
+  const refreshMutation = useRefreshRdvRows();
   const { options } = useSheetFieldOptions();
 
   const [selectedDate, setSelectedDate] = useState(todayIso());
@@ -420,7 +421,7 @@ export default function RdvPage() {
         accentClassName={ZONE_COLORS.rdv.accentText}
         countClassName={ZONE_COLORS.rdv.count}
         count={dayRows.length}
-        onRefresh={() => rowsQuery.refetch()}
+        onRefresh={() => refreshMutation.mutateAsync()}
       >
         <div className="flex flex-wrap items-center gap-2">
           <AddRdvDialog />

@@ -88,3 +88,15 @@ export function useClearAtelierAll() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }
+
+/** Genuine hard refresh for ListPageHeader's "Actualiser" button — see useRefreshParkingRows() in hooks/useParkingRows.ts for the full reasoning. */
+export function useRefreshAtelierRows() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await fetchJson<{ ok: true }>("/api/atelier/refresh", { method: "POST" });
+      await queryClient.refetchQueries({ queryKey: ROWS_KEY });
+    },
+    meta: { successMessage: "Données actualisées" },
+  });
+}

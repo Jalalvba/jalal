@@ -116,6 +116,11 @@ export async function getSheetRows(immFilter?: string): Promise<BddRow[]> {
   return rows.filter((r) => variants.has(String(r.IMM ?? "").trim().toUpperCase()));
 }
 
+/** Called by app/api/bdd/refresh/route.ts — Suivi RL's and DS History's user-triggered "Actualiser"/re-search hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+export function invalidateBddRowsCache(): void {
+  invalidateCache(ROWS_CACHE_KEY);
+}
+
 async function fetchSheetRows(): Promise<BddRow[]> {
   const sheets = getSheetsClient();
 

@@ -891,6 +891,17 @@ export default function Home() {
     setShowSuggestions(false);
 
     try {
+      // Bust the server-side BDD/RL_reunion caches (15s TTL) before reading,
+      // same "genuine hard refresh" treatment as the other list pages'
+      // "Actualiser" button — every search here is a deliberate lookup, so it
+      // should never risk showing a stale value for the rest of that window.
+      // Best-effort: a failed bust just means the read might be up to 15s
+      // old, not worth failing the whole search over.
+      await fetch("/api/bdd/refresh", { method: "POST" }).catch(() => {});
+      if (!isCurrent()) return;
+      await queryClient.refetchQueries({ queryKey: ["bdd", "rows"] });
+      if (!isCurrent()) return;
+
       // If partial input, resolve to exact IMM first
       let immVal = rawVal;
       if (rawVal.length < 10) {

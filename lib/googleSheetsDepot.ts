@@ -82,6 +82,11 @@ export async function getDepotRows(): Promise<DepotRow[]> {
   return withCache(ROWS_CACHE_KEY, 15_000, () => fetchDepotRows());
 }
 
+/** Called by app/api/depot/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+export function invalidateDepotRowsCache(): void {
+  invalidateCache(ROWS_CACHE_KEY);
+}
+
 async function fetchDepotRows(): Promise<DepotRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({

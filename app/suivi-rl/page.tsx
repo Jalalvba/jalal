@@ -31,7 +31,7 @@ import { InlineEditText } from "@/components/fleet/InlineEditText";
 import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
 import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
 import { cn } from "@/components/ui/utils";
-import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate, useDeleteBddRow } from "@/hooks/useBddRows";
+import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate, useDeleteBddRow, useRefreshBddRows } from "@/hooks/useBddRows";
 import { AddBddPlateDialog } from "@/components/fleet/AddBddPlateDialog";
 import { useVehicleZone } from "@/hooks/useVehicleZone";
 import { ZoneBadges } from "@/components/fleet/ZoneBadges";
@@ -308,6 +308,7 @@ const EMPTY_ROWS: BddRow[] = [];
 export default function SuiviRlPage() {
   const rowsQuery = useBddRows();
   const deleteMutation = useDeleteBddRow();
+  const refreshMutation = useRefreshBddRows();
   const { options } = useSheetFieldOptions();
 
   const rows = rowsQuery.data ?? EMPTY_ROWS;
@@ -437,7 +438,7 @@ export default function SuiviRlPage() {
         accentClassName={ZONE_COLORS.bdd.accentText}
         countClassName={ZONE_COLORS.bdd.count}
         count={searched.length}
-        onRefresh={() => rowsQuery.refetch()}
+        onRefresh={() => refreshMutation.mutateAsync()}
       >
         <Combobox
           value={search}
