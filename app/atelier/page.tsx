@@ -25,6 +25,7 @@ import {
   useClearAtelierAll,
   useRefreshAtelierRows,
 } from "@/hooks/useAtelierRows";
+import { useStableRowOrder } from "@/hooks/useStableRowOrder";
 
 // ─── CATEGORIE_OPTIONS and TECHNICIEN_OPTIONS are Mongo-backed now
 // (lib/sheetFieldOptions.ts, admin-editable at /admin/config), loaded via
@@ -168,8 +169,13 @@ export default function AtelierPage() {
   const [error, setError] = useState("");
   const [addResults, setAddResults] = useState<ParkingAddResultItem[] | null>(null);
   const [activeTechnicien, setActiveTechnicien] = useState("TOUS");
+  // Bumped only by the hard-refresh button below — re-adopts the server's
+  // canonical (TIMESTAMP-sorted) order at that point; a plain field-edit
+  // refetch leaves this unchanged, see useStableRowOrder()'s own comment.
+  const [orderResetToken, setOrderResetToken] = useState(0);
 
-  const rows = rowsQuery.data ?? EMPTY_ROWS;
+  const rawRows = rowsQuery.data ?? EMPTY_ROWS;
+  const rows = useStableRowOrder(rawRows, (r) => r.imm, orderResetToken);
   const immList = useMemo(() => (vehicleSuggestionsQuery.data ?? []).map((v) => v.imm), [vehicleSuggestionsQuery.data]);
 
   // Distinct Technicien values actually present in the loaded rows, not the
@@ -246,7 +252,10 @@ export default function AtelierPage() {
         accentClassName={ZONE_COLORS.atelier.accentText}
         countClassName={ZONE_COLORS.atelier.count}
         count={searched.length}
-        onRefresh={() => refreshMutation.mutateAsync()}
+        onRefresh={async () => {
+          await refreshMutation.mutateAsync();
+          setOrderResetToken((t) => t + 1);
+        }}
         onClearAll={handleClearAll}
         clearAllTitle="Vider l'atelier ?"
       >

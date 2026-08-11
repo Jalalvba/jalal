@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { useEditableState } from "@/hooks/useEditableState";
 import { useVehicleSuggestionList } from "@/hooks/useVehicleSuggestionList";
+import { useStableRowOrder } from "@/hooks/useStableRowOrder";
 import {
   useDepotRows,
   useAddDepotPlates,
@@ -92,8 +93,13 @@ export default function DepotPage() {
   const [rawInput, setRawInput] = useState("");
   const [error, setError] = useState("");
   const [addResults, setAddResults] = useState<ParkingAddResultItem[] | null>(null);
+  // Bumped only by the hard-refresh button below — re-adopts the server's
+  // canonical (TIMESTAMP-sorted) order at that point; a plain field-edit
+  // refetch leaves this unchanged, see useStableRowOrder()'s own comment.
+  const [orderResetToken, setOrderResetToken] = useState(0);
 
-  const rows = rowsQuery.data ?? [];
+  const rawRows = rowsQuery.data ?? [];
+  const rows = useStableRowOrder(rawRows, (r) => r.imm, orderResetToken);
   const immList = useMemo(() => (vehicleSuggestionsQuery.data ?? []).map((v) => v.imm), [vehicleSuggestionsQuery.data]);
 
   async function submitIMMs() {
@@ -151,7 +157,10 @@ export default function DepotPage() {
         accentClassName={ZONE_COLORS.depot.accentText}
         countClassName={ZONE_COLORS.depot.count}
         count={searched.length}
-        onRefresh={() => refreshMutation.mutateAsync()}
+        onRefresh={async () => {
+          await refreshMutation.mutateAsync();
+          setOrderResetToken((t) => t + 1);
+        }}
         onClearAll={handleClearAll}
         clearAllTitle="Vider tout le Dépôt ?"
       >

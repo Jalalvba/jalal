@@ -23,6 +23,7 @@ import {
   useRefreshParkingRows,
 } from "@/hooks/useParkingRows";
 import { useVehicleSuggestionList } from "@/hooks/useVehicleSuggestionList";
+import { useStableRowOrder } from "@/hooks/useStableRowOrder";
 
 // ─── Read-only reference fields — the 9 sheet-side XLOOKUP columns, exact
 // header spelling (TECHNICEIN/FOUNISSEUR are sic, matching the real sheet) ──
@@ -91,8 +92,13 @@ export default function ParkingPage() {
   const [rawInput, setRawInput] = useState("");
   const [error, setError] = useState("");
   const [addResults, setAddResults] = useState<ParkingAddResultItem[] | null>(null);
+  // Bumped only by the hard-refresh button below — re-adopts the server's
+  // canonical (TIMESTAMP-sorted) order at that point; a plain field-edit
+  // refetch leaves this unchanged, see useStableRowOrder()'s own comment.
+  const [orderResetToken, setOrderResetToken] = useState(0);
 
-  const rows = rowsQuery.data ?? [];
+  const rawRows = rowsQuery.data ?? [];
+  const rows = useStableRowOrder(rawRows, (r) => r.imm, orderResetToken);
   // usePlateAutocomplete (inside PlateSearchInput) only needs bare plate
   // strings — derived client-side from the one shared full parc+cp fetch,
   // no separate network call.
@@ -153,7 +159,10 @@ export default function ParkingPage() {
         accentClassName={ZONE_COLORS.parking.accentText}
         countClassName={ZONE_COLORS.parking.count}
         count={searched.length}
-        onRefresh={() => refreshMutation.mutateAsync()}
+        onRefresh={async () => {
+          await refreshMutation.mutateAsync();
+          setOrderResetToken((t) => t + 1);
+        }}
         onClearAll={handleClearAll}
         clearAllTitle="Vider tout le Parking ?"
       >
