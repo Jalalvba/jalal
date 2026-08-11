@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { logout } from "@/app/login/actions";
 import { clearPersistedAppState } from "@/lib/clearClientState";
 import { ThemeToggle } from "@/components/fleet/ThemeToggle";
+import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";
 import { Combobox } from "@/components/ui/combobox";
 import type {
   Line,
@@ -1130,14 +1131,7 @@ export default function Home() {
             </div>
           )}
 
-          {loading && (
-            <div className="rounded-2xl border border-border bg-card p-6 dark:border-border dark:bg-card">
-              <div className="h-5 w-48 animate-pulse rounded-lg bg-muted" />
-              <div className="mt-4 space-y-3">
-                {[0,1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />)}
-              </div>
-            </div>
-          )}
+          {loading && <LoadingSkeleton />}
 
           {data && !loading && data.items.map(it => {
             const nds = it["n_ds"];

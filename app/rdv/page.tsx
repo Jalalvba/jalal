@@ -7,6 +7,7 @@ import { RDV_MATRICULE_REGEX, RDV_HEADERS } from "@/lib/types";
 import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
+import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";
 import { AddRdvDialog } from "@/components/fleet/AddRdvDialog";
 import { InlineEditText } from "@/components/fleet/InlineEditText";
 import { InlineEditSelect, type InlineEditTriggerState } from "@/components/fleet/InlineEditSelect";
@@ -528,7 +529,7 @@ export default function RdvPage() {
           </div>
         )}
 
-        {rowsQuery.isPending && <div className="py-16 text-center text-sm text-muted-foreground">Chargement…</div>}
+        {rowsQuery.isPending && <LoadingSkeleton />}
 
         {!rowsQuery.isPending && dayRows.length === 0 && !displayError && (
           <div className="py-16 text-center text-sm text-muted-foreground">Aucun rendez-vous pour cette date</div>

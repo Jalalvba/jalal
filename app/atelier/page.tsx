@@ -5,6 +5,7 @@ import type { AtelierRow, ParkingAddResultItem, AtelierEditableField } from "@/l
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
+import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";
 import { PlateSearchInput } from "@/components/fleet/PlateSearchInput";
 import { PlateFilterInput } from "@/components/fleet/PlateFilterInput";
 import { AddResultsList } from "@/components/fleet/AddResultsList";
@@ -286,9 +287,7 @@ export default function AtelierPage() {
           <Alert className="mb-3">{displayError}</Alert>
         )}
 
-        {rowsQuery.isPending && (
-          <div className="py-16 text-center text-sm text-muted-foreground">Chargement…</div>
-        )}
+        {rowsQuery.isPending && <LoadingSkeleton />}
 
         {!rowsQuery.isPending && searched.length === 0 && !displayError && (
           <div className="py-16 text-center text-sm text-muted-foreground">Aucun véhicule en atelier</div>
