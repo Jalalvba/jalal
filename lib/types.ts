@@ -742,3 +742,13 @@ export type TriggerImportResponse =
 export type ImportStatusResponse =
   | { ok: true; run: ImportPipelineResult }
   | { ok: false; error: string };
+
+export type GenerateEmailRequest = {
+  prompt: string;
+  tone?: string;
+  model?: string;
+};
+
+export type GenerateEmailResponse =
+  | { ok: true; email: string }
+  | { ok: false; error: string };
