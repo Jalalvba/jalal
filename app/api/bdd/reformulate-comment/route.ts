@@ -18,7 +18,42 @@ const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_OUTPUT_TOKENS = 150;
 const TEMPERATURE = 0.3;
 const SYSTEM_INSTRUCTION =
-  "Reformulate this French vehicle-fleet comment to be clear, professional, and grammatically correct. Keep it concise. Do not add information not present in the original. Return only the reformulated text, nothing else.";
+  "You are reformulating a short internal fleet-maintenance comment (Commentaire) written by a technician, in French. You are given the following context about the vehicle/case:\n" +
+  "- Modèle (vehicle model)\n" +
+  "- ETAT (current status/state)\n" +
+  "- Prestataire (service provider)\n" +
+  "- Flag (issue category flag)\n" +
+  "- Catégorie (category)\n" +
+  "- Technicien (technician name)\n\n" +
+  "Use this context ONLY to understand what the comment likely refers to and to reformulate it more clearly and professionally — do NOT restate the context fields in the output, do NOT invent details not present in the original comment, do NOT change the comment's actual meaning. Fix grammar, tighten wording, keep it concise and professional French. If a context field is blank, ignore it. Return only the reformulated Commentaire text, nothing else — no labels, no quotes, no explanation.";
+
+// Builds the user-turn text, omitting any blank/undefined context field
+// entirely rather than sending a literal "Modèle=undefined" — the whole
+// "Contexte:" line is dropped too if every field is blank. Context values
+// come from client-supplied JSON, not a type-checked internal call — a
+// BddRow field like modele can be a raw number straight from the Sheet
+// (see app/suivi-rl/page.tsx's downloadBddPdf comment on the same
+// footgun), so this coerces via String() rather than trusting the
+// declared `string | undefined` type and calling .trim() directly.
+function buildUserTurn(comment: string, context: ReformulateCommentRequest["context"]): string {
+  const pairs: [string, unknown][] = [
+    ["Modèle", context?.modele],
+    ["ETAT", context?.etat],
+    ["Prestataire", context?.prestataire],
+    ["Flag", context?.flag],
+    ["Catégorie", context?.categorie],
+    ["Technicien", context?.technicien],
+  ];
+  const contextLine = pairs
+    .map(([k, v]) => [k, String(v ?? "").trim()] as const)
+    .filter(([, v]) => v.length > 0)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(", ");
+
+  return contextLine
+    ? `Contexte: ${contextLine}\nCommentaire original: ${comment}`
+    : `Commentaire original: ${comment}`;
+}
 
 export async function POST(request: Request) {
   const limited = await rateLimitOrNull(request, "bdd-reformulate", RATE_LIMIT, RATE_WINDOW_MS);
@@ -51,6 +86,8 @@ export async function POST(request: Request) {
     );
   }
 
+  const userTurn = buildUserTurn(comment, body.context);
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -64,7 +101,7 @@ export async function POST(request: Request) {
           "x-goog-api-key": apiKey,
         },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: comment }] }],
+          contents: [{ parts: [{ text: userTurn }] }],
           systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
           generationConfig: {
             maxOutputTokens: MAX_OUTPUT_TOKENS,

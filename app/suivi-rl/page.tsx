@@ -15,6 +15,7 @@ import {
   ETAT_EXTERNE,
   etatBadgeClass,
   type BddRow,
+  type ReformulateCommentContext,
 } from "@/lib/types";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
@@ -372,7 +373,21 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
             placeholder="Commentaire…"
             className="flex-1"
           />
-          <ReformulateCommentButton comment={row.commentaire} onAccept={commitField("commentaire")} />
+          <ReformulateCommentButton
+            comment={row.commentaire}
+            context={{
+              // BDD field values can be raw non-string Sheet cells (e.g.
+              // modele as a bare number) — coerced the same way
+              // downloadBddPdf does above.
+              modele: String(row.modele ?? ""),
+              etat: String(row.ETAT ?? ""),
+              prestataire: String(row.prestataire ?? ""),
+              flag: String(row.flag ?? ""),
+              categorie: String(row["Catégorie"] ?? ""),
+              technicien: String(row.Technicien ?? ""),
+            }}
+            onAccept={commitField("commentaire")}
+          />
         </div>
       </div>
 
@@ -392,9 +407,11 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
 // as a manual edit) — Cancel just closes the dialog, no mutation call.
 function ReformulateCommentButton({
   comment,
+  context,
   onAccept,
 }: {
   comment: string;
+  context: ReformulateCommentContext;
   onAccept: (value: string) => Promise<void>;
 }) {
   const reformulateMutation = useReformulateComment();
@@ -414,7 +431,7 @@ function ReformulateCommentButton({
     setSuggestion("");
     setOpen(true);
     try {
-      const res = await reformulateMutation.mutateAsync(comment);
+      const res = await reformulateMutation.mutateAsync({ comment, context });
       setSuggestion(res.reformulated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Échec de la reformulation");

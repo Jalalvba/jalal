@@ -1,7 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { BddRow, BddUpdateResult, ParkingAddResponse, ReformulateCommentResponse } from "@/lib/types";
+import type {
+  BddRow,
+  BddUpdateResult,
+  ParkingAddResponse,
+  ReformulateCommentContext,
+  ReformulateCommentResponse,
+} from "@/lib/types";
 
 // Same pattern as hooks/useParkingRows.ts / useAtelierRows.ts, against the
 // existing /api/bdd and /api/bdd/update endpoints (unchanged).
@@ -91,11 +97,11 @@ export function useUpdateBddRow() {
  */
 export function useReformulateComment() {
   return useMutation({
-    mutationFn: (comment: string) =>
+    mutationFn: ({ comment, context }: { comment: string; context?: ReformulateCommentContext }) =>
       fetchJson<ReformulateCommentResponse & { ok: true }>("/api/bdd/reformulate-comment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment }),
+        body: JSON.stringify({ comment, context }),
       }),
   });
 }

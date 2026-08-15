@@ -753,8 +753,18 @@ export type GenerateEmailResponse =
   | { ok: true; email: string }
   | { ok: false; error: string };
 
+export type ReformulateCommentContext = {
+  modele?: string;
+  etat?: string;
+  prestataire?: string;
+  flag?: string;
+  categorie?: string;
+  technicien?: string;
+};
+
 export type ReformulateCommentRequest = {
   comment: string;
+  context?: ReformulateCommentContext;
 };
 
 export type ReformulateCommentResponse =
