@@ -45,6 +45,27 @@ function formatAge(dataUpdatedAt: number): string {
   return `il y a ${Math.floor(minutes / 60)}h`;
 }
 
+// "TOUS" ("clear this axis") lives outside each multi-select ToggleGroup,
+// since Radix's type="multiple" ToggleGroup value is the set of pressed
+// *individual* items — folding a "clear all" pseudo-value into that same
+// array would fight the group's own on/off semantics per real item. Same
+// visual language as ToggleGroupItem's own on/off classes
+// (components/ui/toggle-group.tsx) so it reads as part of the same chip row.
+function AllChip({ active, onClick }: { active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex-shrink-0 whitespace-nowrap rounded-full border border-border bg-card px-2.5 py-1.5 text-micro font-medium text-muted-foreground transition",
+        active && "border-amber-500 bg-amber-500/10 text-amber-400"
+      )}
+    >
+      TOUS
+    </button>
+  );
+}
+
 function DlIcon({ spinning }: { spinning?: boolean }) {
   return spinning
     ? <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" className="animate-spin"><circle cx="8" cy="8" r="6" strokeDasharray="28" strokeDashoffset="10"/></svg>
@@ -110,6 +131,58 @@ async function downloadBddPdf(
     URL.revokeObjectURL(url);
   } catch (e) {
     alert(`Erreur export PDF: ${e instanceof Error ? e.message : e}`);
+  } finally {
+    setExporting(false);
+  }
+}
+
+// Mirrors downloadBddPdf above, against /api/bdd/export-excel instead —
+// same filtered-rows-only behavior, same activeFilters/searchTerm header
+// info, but includes Emplacement as a real column (see that route's
+// BddExcelExportRow comment for why the PDF export deliberately omits it
+// and this one doesn't).
+async function downloadBddExcel(
+  rows: BddRow[],
+  activeFilters: { label: string; value: string }[],
+  searchTerm: string,
+  setExporting: (v: boolean) => void
+) {
+  setExporting(true);
+  try {
+    const res = await fetch("/api/bdd/export-excel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: rows.map((r) => ({
+          IMM: String(r.IMM ?? ""),
+          client: String(r.client ?? ""),
+          modele: String(r.modele ?? ""),
+          Emplacement: String(r.Emplacement ?? ""),
+          commentaire: String(r.commentaire ?? ""),
+        })),
+        activeFilters,
+        searchTerm: searchTerm || undefined,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error ?? `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const dateSlug = new Date().toISOString().slice(0, 10);
+    const filterSlug = [...activeFilters.map((f) => f.value), searchTerm]
+      .filter(Boolean)
+      .map(slugify)
+      .filter(Boolean)
+      .join("-");
+    a.download = `bdd-export-${dateSlug}${filterSlug ? `-${filterSlug}` : ""}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert(`Erreur export Excel: ${e instanceof Error ? e.message : e}`);
   } finally {
     setExporting(false);
   }
@@ -298,10 +371,14 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
 
 // "TOUS" has no corresponding lib/types.ts constant — it's a filter-only
 // sentinel meaning "no ETAT filter applied", not a real ETAT value, so
-// there's nothing to rename-drift against. ETAT_INTERNE/ETAT_EXTERNE ARE
-// live ETAT values (admin-editable at /admin/config) — see their comment
-// in lib/types.ts for the rename-drift risk.
-type Fleet = "TOUS" | typeof ETAT_INTERNE | typeof ETAT_EXTERNE;
+// there's nothing to rename-drift against. ETAT itself is admin-editable
+// at /admin/config (options.ETAT_OPTIONS, live set as of 2026-08:
+// INTERNE/EXTERNE/DISPONIBLE, plus ANNULE/ANNULEE in the fallback with no
+// live rows currently) — see the comment in lib/types.ts for the
+// rename-drift risk. Fleet is a plain string (not a literal union) because
+// the chip row below renders every option.ETAT_OPTIONS value, not just the
+// two that used to be hardcoded here.
+type Fleet = string;
 
 const EMPTY_ROWS: BddRow[] = [];
 
@@ -314,12 +391,20 @@ export default function SuiviRlPage() {
   const rows = rowsQuery.data ?? EMPTY_ROWS;
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [activeFleet, setActiveFleet] = useState<Fleet>(ETAT_INTERNE);
-  const [activeEmplacement, setActiveEmplacement] = useState("TOUS");
-  const [activePrestataire, setActivePrestataire] = useState("TOUS");
-  const [activeFlag, setActiveFlag] = useState("TOUS");
+  // Multi-select per axis (empty array = "TOUS"/no filter on that axis) —
+  // axes still combine with AND, same as before (Flotte ∩ Emplacement ∩
+  // Prestataire ∩ Flag), but each axis can now hold more than one selected
+  // value, ORed together within that axis. Selecting/deselecting an
+  // upstream axis still resets every downstream axis to "TOUS" (see
+  // selectFleet/selectEmplacement/selectPrestataire below) — same cascade
+  // as before, just operating on arrays now.
+  const [activeFleet, setActiveFleet] = useState<Fleet[]>([ETAT_INTERNE]);
+  const [activeEmplacement, setActiveEmplacement] = useState<string[]>([]);
+  const [activePrestataire, setActivePrestataire] = useState<string[]>([]);
+  const [activeFlag, setActiveFlag] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   async function handleDelete(row: number, imm: string) {
     try {
@@ -330,18 +415,24 @@ export default function SuiviRlPage() {
     }
   }
 
+  // "TOUS" (empty selection) deliberately stays scoped to INTERNE+EXTERNE
+  // (the page's default active-fleet view), not every ETAT value —
+  // DISPONIBLE/ANNULE/ANNULEE vehicles aren't under RL/immobilisation
+  // tracking and shouldn't flood the default view. They're reachable via
+  // their own explicit chip instead. Multi-select: any selected value
+  // matches (OR within the axis).
   const fleetFiltered = useMemo(() => {
-    if (activeFleet === "TOUS") {
+    if (activeFleet.length === 0) {
       return rows.filter((r) => r.ETAT?.toUpperCase() === ETAT_INTERNE || r.ETAT?.toUpperCase() === ETAT_EXTERNE);
     }
-    return rows.filter((r) => r.ETAT?.toUpperCase() === activeFleet);
+    return rows.filter((r) => activeFleet.includes(r.ETAT?.toUpperCase() ?? ""));
   }, [rows, activeFleet]);
 
   // Fixed 5-value dropdown (EMPLACEMENT_OPTIONS), not derived from what's
   // currently visible — unlike Prestataire/Flag below, so this chip row
   // doesn't need its own "visible*" list.
   const emplacementFiltered = useMemo(
-    () => (activeEmplacement === "TOUS" ? fleetFiltered : fleetFiltered.filter((r) => r.Emplacement === activeEmplacement)),
+    () => (activeEmplacement.length === 0 ? fleetFiltered : fleetFiltered.filter((r) => activeEmplacement.includes(r.Emplacement))),
     [fleetFiltered, activeEmplacement]
   );
 
@@ -351,7 +442,7 @@ export default function SuiviRlPage() {
   );
 
   const prestataireFiltered = useMemo(
-    () => (activePrestataire === "TOUS" ? emplacementFiltered : emplacementFiltered.filter((r) => r.prestataire === activePrestataire)),
+    () => (activePrestataire.length === 0 ? emplacementFiltered : emplacementFiltered.filter((r) => activePrestataire.includes(r.prestataire))),
     [emplacementFiltered, activePrestataire]
   );
 
@@ -361,7 +452,7 @@ export default function SuiviRlPage() {
   );
 
   const flagFiltered = useMemo(
-    () => (activeFlag === "TOUS" ? prestataireFiltered : prestataireFiltered.filter((r) => r.flag === activeFlag)),
+    () => (activeFlag.length === 0 ? prestataireFiltered : prestataireFiltered.filter((r) => activeFlag.includes(r.flag))),
     [prestataireFiltered, activeFlag]
   );
 
@@ -388,34 +479,47 @@ export default function SuiviRlPage() {
   // bypasses the chip cascade entirely (see the comment above), so the
   // filter summary shown in the exported PDF must too — otherwise it would
   // claim chips were applied when they weren't.
+  // Multiple selected values within one axis are joined with " ou " in the
+  // exported header line/filename slug — e.g. "Emplacement: Atelier ou
+  // Dépôt" — rather than one filter entry per value, so it still reads as
+  // a single filter per axis.
   const activeFilters = useMemo(() => {
     if (search.trim()) return [];
     const filters: { label: string; value: string }[] = [];
-    if (activeFleet !== "TOUS") filters.push({ label: "Flotte", value: activeFleet });
-    if (activeEmplacement !== "TOUS") filters.push({ label: "Emplacement", value: activeEmplacement });
-    if (activePrestataire !== "TOUS") filters.push({ label: "Prestataire", value: activePrestataire });
-    if (activeFlag !== "TOUS") filters.push({ label: "Flag", value: activeFlag });
+    if (activeFleet.length > 0) filters.push({ label: "Flotte", value: activeFleet.join(" ou ") });
+    if (activeEmplacement.length > 0) filters.push({ label: "Emplacement", value: activeEmplacement.join(" ou ") });
+    if (activePrestataire.length > 0) filters.push({ label: "Prestataire", value: activePrestataire.join(" ou ") });
+    if (activeFlag.length > 0) filters.push({ label: "Flag", value: activeFlag.join(" ou ") });
     return filters;
   }, [search, activeFleet, activeEmplacement, activePrestataire, activeFlag]);
 
   function handleExportPdf() {
     downloadBddPdf(searched, activeFilters, search.trim(), setExportingPdf);
   }
+  function handleExportExcel() {
+    downloadBddExcel(searched, activeFilters, search.trim(), setExportingExcel);
+  }
 
-  function selectFleet(f: Fleet) {
+  // Multi-select within each axis (OR), still ANDed across axes — selecting
+  // an upstream axis still resets every downstream axis to "TOUS" (empty
+  // array), same cascade as the single-select version this replaced: the
+  // "visible*" lists (visiblePrestataires/visibleFlags) are computed from
+  // whatever's still in scope upstream, so a stale downstream selection
+  // could otherwise reference a value no longer reachable.
+  function selectFleet(f: Fleet[]) {
     setActiveFleet(f);
-    setActiveEmplacement("TOUS");
-    setActivePrestataire("TOUS");
-    setActiveFlag("TOUS");
+    setActiveEmplacement([]);
+    setActivePrestataire([]);
+    setActiveFlag([]);
   }
-  function selectEmplacement(e: string) {
+  function selectEmplacement(e: string[]) {
     setActiveEmplacement(e);
-    setActivePrestataire("TOUS");
-    setActiveFlag("TOUS");
+    setActivePrestataire([]);
+    setActiveFlag([]);
   }
-  function selectPrestataire(p: string) {
+  function selectPrestataire(p: string[]) {
     setActivePrestataire(p);
-    setActiveFlag("TOUS");
+    setActiveFlag([]);
   }
 
   // Original page only surfaced fetch errors when it had nothing cached to
@@ -457,12 +561,13 @@ export default function SuiviRlPage() {
 
         <div className="mt-2 flex items-center gap-1.5 overflow-x-auto">
           <span className="mr-1 flex-shrink-0 text-micro font-bold uppercase text-muted-foreground">Flotte</span>
+          <AllChip active={activeFleet.length === 0} onClick={() => selectFleet([])} />
           <ToggleGroup
-            type="single"
+            type="multiple"
             value={activeFleet}
-            onValueChange={(v) => v && selectFleet(v as Fleet)}
+            onValueChange={(v) => selectFleet(v)}
           >
-            {(["TOUS", ETAT_INTERNE, ETAT_EXTERNE] as const).map((f) => (
+            {options.ETAT_OPTIONS.map((f) => (
               <ToggleGroupItem key={f} value={f}>
                 {f}
               </ToggleGroupItem>
@@ -471,12 +576,12 @@ export default function SuiviRlPage() {
         </div>
         <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
           <span className="mr-1 flex-shrink-0 text-micro font-bold uppercase text-muted-foreground">Emplacement</span>
+          <AllChip active={activeEmplacement.length === 0} onClick={() => selectEmplacement([])} />
           <ToggleGroup
-            type="single"
+            type="multiple"
             value={activeEmplacement}
-            onValueChange={(v) => v && selectEmplacement(v)}
+            onValueChange={(v) => selectEmplacement(v)}
           >
-            <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
             {options.EMPLACEMENT_OPTIONS.map((e) => (
               <ToggleGroupItem key={e} value={e}>
                 {e}
@@ -485,12 +590,12 @@ export default function SuiviRlPage() {
           </ToggleGroup>
         </div>
         <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
+          <AllChip active={activePrestataire.length === 0} onClick={() => selectPrestataire([])} />
           <ToggleGroup
-            type="single"
+            type="multiple"
             value={activePrestataire}
-            onValueChange={(v) => v && selectPrestataire(v)}
+            onValueChange={(v) => selectPrestataire(v)}
           >
-            <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
             {visiblePrestataires.map((p) => (
               <ToggleGroupItem key={p} value={p}>
                 {p}
@@ -500,12 +605,12 @@ export default function SuiviRlPage() {
         </div>
         {visibleFlags.length > 0 && (
           <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
+            <AllChip active={activeFlag.length === 0} onClick={() => setActiveFlag([])} />
             <ToggleGroup
-              type="single"
+              type="multiple"
               value={activeFlag}
-              onValueChange={(v) => v && setActiveFlag(v)}
+              onValueChange={(v) => setActiveFlag(v)}
             >
-              <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
               {visibleFlags.map((f) => (
                 <ToggleGroupItem key={f} value={f}>
                   {f}
@@ -515,7 +620,17 @@ export default function SuiviRlPage() {
           </div>
         )}
 
-        <div className="mt-2 flex items-center justify-end">
+        <div className="mt-2 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={searched.length === 0 || exportingExcel}
+            title={searched.length === 0 ? "Aucune ligne à exporter" : "Exporter la liste filtrée en Excel"}
+            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-400"
+          >
+            <DlIcon spinning={exportingExcel} />
+            {exportingExcel ? "Génération…" : `Export Excel (${searched.length})`}
+          </button>
           <button
             type="button"
             onClick={handleExportPdf}
