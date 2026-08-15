@@ -106,6 +106,10 @@ async function downloadBddPdf(
           // non-string modele fails the export route's strict isValidRow()
           // check and rejects the WHOLE batch, not just that row.
           modele: String(r.modele ?? ""),
+          // Same field/source as the Excel export's Emplacement column
+          // (downloadBddExcel below) — kept in sync deliberately, not
+          // derived, since the two routes validate independently.
+          Emplacement: String(r.Emplacement ?? ""),
           commentaire: String(r.commentaire ?? ""),
         })),
         activeFilters,

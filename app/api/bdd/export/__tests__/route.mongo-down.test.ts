@@ -12,7 +12,7 @@ vi.mock("@/lib/mongo", () => ({
 
 import { POST } from "@/app/api/bdd/export/route";
 
-const validRow = { IMM: "12345-B-6", client: "Acme", modele: "208", commentaire: "RAS" };
+const validRow = { IMM: "12345-B-6", client: "Acme", modele: "208", Emplacement: "PARKING", commentaire: "RAS" };
 
 describe("POST /api/bdd/export — resilience to a real Mongo outage", () => {
   it("still returns a real PDF when the rate-limiter's Mongo call fails, instead of a 500", async () => {

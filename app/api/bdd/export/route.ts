@@ -31,14 +31,21 @@ const MAX_ROWS = 2000;
 const MAX_FIELD_LENGTH = 500;
 const MAX_COMMENTAIRE_LENGTH = 2000;
 
-// Just the 4 identity/reference fields — the filter-axis fields (ETAT,
-// Emplacement, prestataire, flag, Catégorie, Technicien, date_fin_contrat)
-// were dropped from the table: they're already stated in the "Filtres
-// actifs" header line, so repeating them as columns was redundant.
+// Identity/reference fields, plus Emplacement. The other filter-axis fields
+// (ETAT, prestataire, flag, Catégorie, Technicien, date_fin_contrat) stay
+// dropped from the table — still redundant with the "Filtres actifs" header
+// line, since none of those axes support selecting multiple values.
+// Emplacement is the exception: it was originally dropped for the same
+// reason, but Suivi RL's Emplacement filter is now multi-select, so a single
+// export can legitimately span several different Emplacement values at
+// once — the header line alone can no longer tell you which row is which.
+// Same field/source as the Excel export's Emplacement column
+// (app/api/bdd/export-excel/route.ts's BddExcelExportRow).
 type BddExportRow = {
   IMM: string;
   client: string;
   modele: string;
+  Emplacement: string;
   commentaire: string;
 };
 
@@ -51,7 +58,7 @@ type BddExportPayload = {
 export function isValidRow(r: unknown): r is BddExportRow {
   if (!r || typeof r !== "object") return false;
   const obj = r as Record<string, unknown>;
-  const shortKeys: (keyof BddExportRow)[] = ["IMM", "client", "modele"];
+  const shortKeys: (keyof BddExportRow)[] = ["IMM", "client", "modele", "Emplacement"];
   if (!shortKeys.every((k) => typeof obj[k] === "string" && (obj[k] as string).length <= MAX_FIELD_LENGTH)) {
     return false;
   }
@@ -268,17 +275,25 @@ async function buildPdf(
   // a real plate ("94102-E-1" etc.) measures ~90-95pt at 20pt bold
   // (confirmed via widthOfTextAtSize on real live plates), so 115pt clears
   // every real value with room for the cell padding on both sides.
-  // Client/Modèle/Commentaire split whatever width remains, same relative
-  // proportions as before.
+  // Client/Modèle/Emplacement/Commentaire split whatever width remains.
+  // Emplacement's weight is NOT the same as Modèle's despite both being
+  // "short" values — confirmed via widthOfTextAtSize that modele's 1.1
+  // weight is too narrow for Emplacement: the column header "Emplacement"
+  // itself needs ~65pt at 10pt bold, and EMPLACEMENT_INTROUVABLE ("Emplacement
+  // introuvable"'s live sheet value, "INTROUVABLE") needs ~70pt at 10pt —
+  // both would truncate (found via a real export + decoding the PDF's
+  // content stream, not assumed) at modele's width. 1.3 gives ~84pt, with
+  // headroom for both.
   const IMM_W = 115;
-  const restWeights = { client: 1.6, modele: 1.1, commentaire: 2.3 };
-  const restTotalWeight = restWeights.client + restWeights.modele + restWeights.commentaire;
+  const restWeights = { client: 1.6, modele: 1.1, emplacement: 1.3, commentaire: 2.3 };
+  const restTotalWeight = restWeights.client + restWeights.modele + restWeights.emplacement + restWeights.commentaire;
   const restW = PW - IMM_W;
 
   const columns: { key: keyof BddExportRow; label: string; width: number }[] = [
     { key: "IMM", label: "IMM", width: IMM_W },
     { key: "client", label: "Client", width: (restWeights.client / restTotalWeight) * restW },
     { key: "modele", label: "Modèle", width: (restWeights.modele / restTotalWeight) * restW },
+    { key: "Emplacement", label: "Emplacement", width: (restWeights.emplacement / restTotalWeight) * restW },
     { key: "commentaire", label: "Commentaire", width: (restWeights.commentaire / restTotalWeight) * restW },
   ];
   const colWidths = columns.map((col) => col.width);
@@ -324,9 +339,13 @@ async function buildPdf(
     const immY = cy + CELL_PAD_TOP + (rowH - CELL_PAD_TOP - CELL_PAD_BOTTOM - IMM_SIZE) / 2 + IMM_SIZE * 0.15;
     drawText(row.IMM, colX[0] + 3, immY, colWidths[0] - 6, fontB, IMM_SIZE, NAVY);
 
-    // Client / Modèle — single line, top-aligned, same treatment as before.
+    // Client / Modèle / Emplacement — single line, top-aligned, same
+    // treatment. Emplacement can legitimately be blank (a row where nobody
+    // has set it yet) — drawText/truncate/sanitize all handle an empty
+    // string fine, so this just draws nothing in that cell.
     drawText(row.client, colX[1] + 3, cy + CELL_PAD_TOP + 1, colWidths[1] - 6, fontR, BODY_SIZE, DARK);
     drawText(row.modele, colX[2] + 3, cy + CELL_PAD_TOP + 1, colWidths[2] - 6, fontR, BODY_SIZE, DARK);
+    drawText(row.Emplacement, colX[3] + 3, cy + CELL_PAD_TOP + 1, colWidths[3] - 6, fontR, BODY_SIZE, DARK);
 
     // Commentaire — wrapped, one line drawn per entry, never truncated.
     commentLines.forEach((line, li) => {

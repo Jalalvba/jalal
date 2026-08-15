@@ -14,7 +14,7 @@ function req(body: unknown): Request {
   });
 }
 
-const validRow = { IMM: "12345-B-6", client: "Acme", modele: "208", commentaire: "RAS" };
+const validRow = { IMM: "12345-B-6", client: "Acme", modele: "208", Emplacement: "PARKING", commentaire: "RAS" };
 
 describe("POST /api/bdd/export — validation", () => {
   it("rejects a row with a numeric modele — the whole batch fails, not a silent partial export", async () => {
