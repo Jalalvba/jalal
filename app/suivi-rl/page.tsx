@@ -31,11 +31,21 @@ import { InlineEditText } from "@/components/fleet/InlineEditText";
 import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
 import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
 import { cn } from "@/components/ui/utils";
-import { useBddRows, useUpdateBddRow, useOptimisticBddUpdate, useDeleteBddRow, useRefreshBddRows } from "@/hooks/useBddRows";
+import {
+  useBddRows,
+  useUpdateBddRow,
+  useOptimisticBddUpdate,
+  useDeleteBddRow,
+  useRefreshBddRows,
+  useReformulateComment,
+} from "@/hooks/useBddRows";
 import { AddBddPlateDialog } from "@/components/fleet/AddBddPlateDialog";
 import { useVehicleZone } from "@/hooks/useVehicleZone";
 import { ZoneBadges } from "@/components/fleet/ZoneBadges";
 import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
+import { Sparkles } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 function formatAge(dataUpdatedAt: number): string {
   if (!dataUpdatedAt) return "";
@@ -354,12 +364,16 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
             <FieldRowTrigger label="Prestataire" placeholder="— Aucun —" dot={dot} {...state} />
           )}
         />
-        <InlineEditText
-          value={row.commentaire}
-          resyncDeps={[row._row, row.commentaire]}
-          onCommit={commitField("commentaire")}
-          placeholder="Commentaire…"
-        />
+        <div className="flex items-start gap-1.5">
+          <InlineEditText
+            value={row.commentaire}
+            resyncDeps={[row._row, row.commentaire]}
+            onCommit={commitField("commentaire")}
+            placeholder="Commentaire…"
+            className="flex-1"
+          />
+          <ReformulateCommentButton comment={row.commentaire} onAccept={commitField("commentaire")} />
+        </div>
       </div>
 
       <ReadonlyFieldList fields={READONLY_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))} />
@@ -368,6 +382,124 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
         fields={BDD_ZONE_DETECTION_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))}
       />
     </RecordCard>
+  );
+}
+
+// ─── Reformulate Commentaire (Gemini) ──────────────────────────────────────
+//
+// Suggestion-only: /api/bdd/reformulate-comment never touches the Sheet.
+// Confirm reuses the row's own commitField("commentaire") (same save path
+// as a manual edit) — Cancel just closes the dialog, no mutation call.
+function ReformulateCommentButton({
+  comment,
+  onAccept,
+}: {
+  comment: string;
+  onAccept: (value: string) => Promise<void>;
+}) {
+  const reformulateMutation = useReformulateComment();
+  const [open, setOpen] = useState(false);
+  const [suggestion, setSuggestion] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleClick() {
+    if (!comment.trim()) {
+      setError("Aucun commentaire à reformuler.");
+      setSuggestion("");
+      setOpen(true);
+      return;
+    }
+    setError("");
+    setSuggestion("");
+    setOpen(true);
+    try {
+      const res = await reformulateMutation.mutateAsync(comment);
+      setSuggestion(res.reformulated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Échec de la reformulation");
+    }
+  }
+
+  async function handleConfirm() {
+    setSaving(true);
+    try {
+      await onAccept(suggestion);
+      setOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Échec de l'enregistrement");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={handleClick}
+        title="Reformuler avec l'IA"
+        aria-label="Reformuler avec l'IA"
+        className="mt-0.5"
+      >
+        <Sparkles className="h-4 w-4" />
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogTitle>Reformuler le commentaire</DialogTitle>
+          <DialogDescription>
+            Suggestion générée par IA — vérifiez avant d&apos;enregistrer.
+          </DialogDescription>
+
+          {error && <div className="mt-3 text-xs text-red-400">{error}</div>}
+
+          {!error && (
+            <div className="mt-3 space-y-3">
+              <div>
+                <div className="text-micro font-medium uppercase tracking-wide text-muted-foreground">
+                  Original
+                </div>
+                <div className="mt-1 rounded-lg border border-border bg-muted px-2.5 py-2 text-xs text-foreground">
+                  {comment}
+                </div>
+              </div>
+              <div>
+                <div className="text-micro font-medium uppercase tracking-wide text-muted-foreground">
+                  Suggestion
+                </div>
+                {reformulateMutation.isPending ? (
+                  <div className="mt-1 text-xs text-muted-foreground">Génération…</div>
+                ) : (
+                  <textarea
+                    value={suggestion}
+                    onChange={(e) => setSuggestion(e.target.value)}
+                    rows={3}
+                    className="mt-1 w-full resize-none rounded-lg border border-amber-500/60 bg-muted px-2.5 py-2 text-xs leading-snug text-foreground outline-none"
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
+              Annuler
+            </Button>
+            {!error && (
+              <Button
+                type="button"
+                onClick={handleConfirm}
+                disabled={reformulateMutation.isPending || !suggestion.trim() || saving}
+              >
+                {saving ? "Enregistrement…" : "Confirmer"}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

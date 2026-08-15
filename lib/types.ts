@@ -752,3 +752,11 @@ export type GenerateEmailRequest = {
 export type GenerateEmailResponse =
   | { ok: true; email: string }
   | { ok: false; error: string };
+
+export type ReformulateCommentRequest = {
+  comment: string;
+};
+
+export type ReformulateCommentResponse =
+  | { ok: true; reformulated: string }
+  | { ok: false; error: string };

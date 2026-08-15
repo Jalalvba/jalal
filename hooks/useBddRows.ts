@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { BddRow, BddUpdateResult, ParkingAddResponse } from "@/lib/types";
+import type { BddRow, BddUpdateResult, ParkingAddResponse, ReformulateCommentResponse } from "@/lib/types";
 
 // Same pattern as hooks/useParkingRows.ts / useAtelierRows.ts, against the
 // existing /api/bdd and /api/bdd/update endpoints (unchanged).
@@ -81,6 +81,22 @@ export function useUpdateBddRow() {
       }),
     meta: { successMessage: "Champ mis à jour" },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+  });
+}
+
+/**
+ * Calls Gemini to suggest a reformulated Commentaire — never saves anything
+ * itself. The caller reviews the suggestion and, on confirm, saves it via
+ * the same useUpdateBddRow() mutation as any other manual Commentaire edit.
+ */
+export function useReformulateComment() {
+  return useMutation({
+    mutationFn: (comment: string) =>
+      fetchJson<ReformulateCommentResponse & { ok: true }>("/api/bdd/reformulate-comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment }),
+      }),
   });
 }
 
