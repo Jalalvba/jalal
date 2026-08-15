@@ -21,7 +21,9 @@ test("suivi-rl: Emplacement filter shows exactly the rows matching that value", 
   const emplacementValue = "ATELIER";
   const expectedCount = fleetFiltered.filter((r) => r.Emplacement === emplacementValue).length;
 
-  await page.getByRole("radio", { name: emplacementValue, exact: true }).click();
+  // ToggleGroup here is type="multiple" (Radix renders role="button" for
+  // multi-select items, "radio" only applies to type="single").
+  await page.getByRole("button", { name: emplacementValue, exact: true }).click();
   await page.waitForTimeout(400);
 
   const countBadge = page.locator("span.font-mono.text-micro").first();

@@ -535,11 +535,30 @@ type Fleet = string;
 
 const EMPTY_ROWS: BddRow[] = [];
 
+// Sentinel for the "Non renseigné" chip on each filter axis — matches rows
+// where that field is blank, never a real field value (real values are
+// always filtered through .filter(Boolean) before becoming chips, so this
+// string can't collide with one). Kept out of BDD_HEADERS/BddRow entirely;
+// purely a filter-axis UI concept.
+const NON_RENSEIGNE = "__NON_RENSEIGNE__";
+
+function displayAxisValue(v: string): string {
+  return v === NON_RENSEIGNE ? "Non renseigné" : v;
+}
+
+// One predicate shared by all four axes: a selected NON_RENSEIGNE matches a
+// blank field, any other selected value is an exact (optionally normalized,
+// e.g. ETAT's uppercase compare) match — OR'd across whatever's selected in
+// this axis, same "multi-select within an axis" semantics as before.
+function axisMatches(value: string | undefined, selected: string[], normalize?: (v: string) => string): boolean {
+  const v = normalize ? normalize(value ?? "") : value ?? "";
+  return selected.some((s) => (s === NON_RENSEIGNE ? !v.trim() : v === s));
+}
+
 export default function SuiviRlPage() {
   const rowsQuery = useBddRows();
   const deleteMutation = useDeleteBddRow();
   const refreshMutation = useRefreshBddRows();
-  const { options } = useSheetFieldOptions();
 
   const rows = rowsQuery.data ?? EMPTY_ROWS;
   const [search, setSearch] = useState("");
@@ -578,24 +597,46 @@ export default function SuiviRlPage() {
     if (activeFleet.length === 0) {
       return rows.filter((r) => r.ETAT?.toUpperCase() === ETAT_INTERNE || r.ETAT?.toUpperCase() === ETAT_EXTERNE);
     }
-    return rows.filter((r) => activeFleet.includes(r.ETAT?.toUpperCase() ?? ""));
+    return rows.filter((r) => axisMatches(r.ETAT, activeFleet, (v) => v.toUpperCase()));
   }, [rows, activeFleet]);
 
-  // Fixed 5-value dropdown (EMPLACEMENT_OPTIONS), not derived from what's
-  // currently visible — unlike Prestataire/Flag below, so this chip row
-  // doesn't need its own "visible*" list.
+  // Flotte/Emplacement chip options used to come from admin-config lists
+  // (options.ETAT_OPTIONS/EMPLACEMENT_OPTIONS) rather than the live data —
+  // unlike Prestataire/Flag below, which already derive from what's
+  // currently in scope. That meant a config-only value with zero live rows
+  // (e.g. ANNULE/ANNULEE, confirmed via live data to currently have none)
+  // still rendered as a clickable, always-empty chip. Switched to the same
+  // cascade-narrowing, data-derived pattern Prestataire/Flag already use:
+  // Flotte from the full dataset (top of the cascade, nothing upstream of
+  // it), Emplacement from fleetFiltered (narrowed by the Flotte selection).
+  // options.ETAT_OPTIONS/EMPLACEMENT_OPTIONS are untouched elsewhere — the
+  // per-row InlineEditSelect editors still need the full admin-config list,
+  // since editing a row can set a value no other row currently has.
+  const visibleFleetValues = useMemo(
+    () => [...new Set(rows.map((r) => r.ETAT?.toUpperCase()).filter(Boolean) as string[])].sort(),
+    [rows]
+  );
+  const hasBlankFleet = useMemo(() => rows.some((r) => !r.ETAT?.trim()), [rows]);
+
   const emplacementFiltered = useMemo(
-    () => (activeEmplacement.length === 0 ? fleetFiltered : fleetFiltered.filter((r) => activeEmplacement.includes(r.Emplacement))),
+    () => (activeEmplacement.length === 0 ? fleetFiltered : fleetFiltered.filter((r) => axisMatches(r.Emplacement, activeEmplacement))),
     [fleetFiltered, activeEmplacement]
   );
+
+  const visibleEmplacements = useMemo(
+    () => [...new Set(fleetFiltered.map((r) => r.Emplacement).filter(Boolean))].sort(),
+    [fleetFiltered]
+  );
+  const hasBlankEmplacement = useMemo(() => fleetFiltered.some((r) => !r.Emplacement?.trim()), [fleetFiltered]);
 
   const visiblePrestataires = useMemo(
     () => [...new Set(emplacementFiltered.map((r) => r.prestataire).filter(Boolean))].sort(),
     [emplacementFiltered]
   );
+  const hasBlankPrestataire = useMemo(() => emplacementFiltered.some((r) => !r.prestataire?.trim()), [emplacementFiltered]);
 
   const prestataireFiltered = useMemo(
-    () => (activePrestataire.length === 0 ? emplacementFiltered : emplacementFiltered.filter((r) => activePrestataire.includes(r.prestataire))),
+    () => (activePrestataire.length === 0 ? emplacementFiltered : emplacementFiltered.filter((r) => axisMatches(r.prestataire, activePrestataire))),
     [emplacementFiltered, activePrestataire]
   );
 
@@ -603,9 +644,10 @@ export default function SuiviRlPage() {
     () => [...new Set(prestataireFiltered.map((r) => r.flag).filter(Boolean))].sort(),
     [prestataireFiltered]
   );
+  const hasBlankFlag = useMemo(() => prestataireFiltered.some((r) => !r.flag?.trim()), [prestataireFiltered]);
 
   const flagFiltered = useMemo(
-    () => (activeFlag.length === 0 ? prestataireFiltered : prestataireFiltered.filter((r) => activeFlag.includes(r.flag))),
+    () => (activeFlag.length === 0 ? prestataireFiltered : prestataireFiltered.filter((r) => axisMatches(r.flag, activeFlag))),
     [prestataireFiltered, activeFlag]
   );
 
@@ -639,10 +681,10 @@ export default function SuiviRlPage() {
   const activeFilters = useMemo(() => {
     if (search.trim()) return [];
     const filters: { label: string; value: string }[] = [];
-    if (activeFleet.length > 0) filters.push({ label: "Flotte", value: activeFleet.join(" ou ") });
-    if (activeEmplacement.length > 0) filters.push({ label: "Emplacement", value: activeEmplacement.join(" ou ") });
-    if (activePrestataire.length > 0) filters.push({ label: "Prestataire", value: activePrestataire.join(" ou ") });
-    if (activeFlag.length > 0) filters.push({ label: "Flag", value: activeFlag.join(" ou ") });
+    if (activeFleet.length > 0) filters.push({ label: "Flotte", value: activeFleet.map(displayAxisValue).join(" ou ") });
+    if (activeEmplacement.length > 0) filters.push({ label: "Emplacement", value: activeEmplacement.map(displayAxisValue).join(" ou ") });
+    if (activePrestataire.length > 0) filters.push({ label: "Prestataire", value: activePrestataire.map(displayAxisValue).join(" ou ") });
+    if (activeFlag.length > 0) filters.push({ label: "Flag", value: activeFlag.map(displayAxisValue).join(" ou ") });
     return filters;
   }, [search, activeFleet, activeEmplacement, activePrestataire, activeFlag]);
 
@@ -720,11 +762,16 @@ export default function SuiviRlPage() {
             value={activeFleet}
             onValueChange={(v) => selectFleet(v)}
           >
-            {options.ETAT_OPTIONS.map((f) => (
+            {visibleFleetValues.map((f) => (
               <ToggleGroupItem key={f} value={f}>
                 {f}
               </ToggleGroupItem>
             ))}
+            {hasBlankFleet && (
+              <ToggleGroupItem key={NON_RENSEIGNE} value={NON_RENSEIGNE}>
+                Non renseigné
+              </ToggleGroupItem>
+            )}
           </ToggleGroup>
         </div>
         <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
@@ -735,11 +782,16 @@ export default function SuiviRlPage() {
             value={activeEmplacement}
             onValueChange={(v) => selectEmplacement(v)}
           >
-            {options.EMPLACEMENT_OPTIONS.map((e) => (
+            {visibleEmplacements.map((e) => (
               <ToggleGroupItem key={e} value={e}>
                 {e}
               </ToggleGroupItem>
             ))}
+            {hasBlankEmplacement && (
+              <ToggleGroupItem key={NON_RENSEIGNE} value={NON_RENSEIGNE}>
+                Non renseigné
+              </ToggleGroupItem>
+            )}
           </ToggleGroup>
         </div>
         <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
@@ -754,9 +806,14 @@ export default function SuiviRlPage() {
                 {p}
               </ToggleGroupItem>
             ))}
+            {hasBlankPrestataire && (
+              <ToggleGroupItem key={NON_RENSEIGNE} value={NON_RENSEIGNE}>
+                Non renseigné
+              </ToggleGroupItem>
+            )}
           </ToggleGroup>
         </div>
-        {visibleFlags.length > 0 && (
+        {(visibleFlags.length > 0 || hasBlankFlag) && (
           <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
             <AllChip active={activeFlag.length === 0} onClick={() => setActiveFlag([])} />
             <ToggleGroup
@@ -769,6 +826,11 @@ export default function SuiviRlPage() {
                   {f}
                 </ToggleGroupItem>
               ))}
+              {hasBlankFlag && (
+                <ToggleGroupItem key={NON_RENSEIGNE} value={NON_RENSEIGNE}>
+                  Non renseigné
+                </ToggleGroupItem>
+              )}
             </ToggleGroup>
           </div>
         )}
