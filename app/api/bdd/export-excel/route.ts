@@ -18,13 +18,17 @@ const MAX_ROWS = 2000;
 const MAX_FIELD_LENGTH = 500;
 const MAX_COMMENTAIRE_LENGTH = 2000;
 
-// Unlike the PDF export's BddExportRow, this includes Emplacement as a real
-// column — the PDF route deliberately drops filter-axis fields because a
-// single-select cascade meant every exported row shared the same
-// Emplacement value already stated in the "Filtres actifs" line. Now that
-// Suivi RL's Emplacement filter is multi-select, an export can legitimately
-// contain rows spanning several different Emplacement values at once, so
-// per-row Emplacement is no longer redundant with the header summary here.
+// Identical field-for-field to the PDF export's BddExportRow
+// (app/api/bdd/export/route.ts) — Emplacement included. This route got the
+// Emplacement column first (12bdc5e), when multi-select made an export able to
+// span several Emplacement values so the "Filtres actifs" header line could no
+// longer tell you which row was which; e3bc354 then applied the same reasoning
+// to the PDF export, which is why the two row types now match exactly.
+//
+// The two types are still declared separately on purpose: each route validates
+// its own payload independently (see the caps above), so neither can silently
+// widen the other's accepted input. Keep them in sync by hand when either
+// changes.
 type BddExcelExportRow = {
   IMM: string;
   client: string;

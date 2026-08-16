@@ -186,7 +186,8 @@ export type BddRow = {
 };
 
 // Business-rule allowlist (not derived from the sheet — a deliberate policy:
-// only these of the 27 real columns are writable from this app). Shared
+// only these 7 of the 28 real columns in BDD_HEADERS above are writable from
+// this app; Emplacement joined the list in 3d9bd87). Shared
 // between the server-side check in lib/googleSheetsBdd.ts and the UI's edit
 // form so both agree on the same set without duplicating the literal list.
 export const BDD_EDITABLE_FIELDS = [

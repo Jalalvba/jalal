@@ -31,14 +31,26 @@ const MAX_ROWS = 2000;
 const MAX_FIELD_LENGTH = 500;
 const MAX_COMMENTAIRE_LENGTH = 2000;
 
-// Identity/reference fields, plus Emplacement. The other filter-axis fields
-// (ETAT, prestataire, flag, Catégorie, Technicien, date_fin_contrat) stay
-// dropped from the table — still redundant with the "Filtres actifs" header
-// line, since none of those axes support selecting multiple values.
-// Emplacement is the exception: it was originally dropped for the same
-// reason, but Suivi RL's Emplacement filter is now multi-select, so a single
-// export can legitimately span several different Emplacement values at
-// once — the header line alone can no longer tell you which row is which.
+// Identity/reference fields, plus Emplacement.
+//
+// The original rule was "drop every filter-axis field, since a single-select
+// cascade means every exported row shares the axis value already printed on
+// the 'Filtres actifs' header line". Emplacement broke that rule first
+// (multi-select landed in 12bdc5e, so one export can span several values and
+// the header line alone can no longer tell you which row is which), and as of
+// c0d5965 ALL FOUR axes are multi-select — Flotte/ETAT, Emplacement,
+// prestataire, flag. So the redundancy argument no longer justifies excluding
+// ETAT/prestataire/flag either.
+//
+// They stay out anyway, for a different and still-current reason: this is a
+// portrait A4 table, and the five columns below already consume the page
+// width (see the IMM_W/restWeights measurements further down — Commentaire
+// needs the space it has). Adding a sixth column means re-measuring every
+// weight against real live values, not just appending to this type.
+//
+// Catégorie/Technicien/date_fin_contrat are NOT filter axes on this page at
+// all, so their exclusion is unaffected by any of the above.
+//
 // Same field/source as the Excel export's Emplacement column
 // (app/api/bdd/export-excel/route.ts's BddExcelExportRow).
 type BddExportRow = {
@@ -135,9 +147,9 @@ async function buildPdf(
   const fontR = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontB = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  // Portrait A4 — only 4 (narrower) columns now, and portrait's taller page
-  // fits more rows before paginating, which matters more than extra width
-  // now that the wide filter-axis columns are gone.
+  // Portrait A4 — 5 narrow columns (see BddExportRow above), and portrait's
+  // taller page fits more rows before paginating, which matters more than
+  // extra width now that the wide filter-axis columns are gone.
   const PW_PAGE = 595.28;
   const PH_PAGE = 841.89;
   const ML = 36;

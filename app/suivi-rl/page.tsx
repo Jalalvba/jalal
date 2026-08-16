@@ -153,9 +153,9 @@ async function downloadBddPdf(
 
 // Mirrors downloadBddPdf above, against /api/bdd/export-excel instead —
 // same filtered-rows-only behavior, same activeFilters/searchTerm header
-// info, but includes Emplacement as a real column (see that route's
-// BddExcelExportRow comment for why the PDF export deliberately omits it
-// and this one doesn't).
+// info, and the same five columns. Both exports include Emplacement: this
+// one got it first (12bdc5e), the PDF export followed in e3bc354 — see that
+// route's BddExportRow comment for which fields are excluded and why.
 async function downloadBddExcel(
   rows: BddRow[],
   activeFilters: { label: string; value: string }[],

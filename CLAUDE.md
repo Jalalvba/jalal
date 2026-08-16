@@ -154,7 +154,7 @@ against one Sheet tab, except DS History/Articles (MongoDB).
 
 | Feature | Files | Notes |
 |---|---|---|
-| BDD / Suivi RL | `app/suivi-rl/page.tsx`, `lib/googleSheetsBdd.ts`, `/api/bdd*` | 6-field editable allowlist, per-field inline commit (no card save button). Plate/WW search; Prestataire/Flag/Flotte chips, bypassed by plate search. Read-only RDV/CONVOYEUR/Intervention via XLOOKUP. |
+| BDD / Suivi RL | `app/suivi-rl/page.tsx`, `lib/googleSheetsBdd.ts`, `/api/bdd*` | 7-field editable allowlist, per-field inline commit (no card save button). Plate-only search, which bypasses the chips. Four multi-select chip axes (Flotte/Emplacement/Prestataire/Flag), OR within an axis and AND across, each with a data-derived option list + "Non renseigné" blank chip. PDF + Excel export of the filtered view; AI comment reformulation. Read-only RDV/CONVOYEUR/Intervention via XLOOKUP. |
 | Parking | `app/parking/page.tsx`, `lib/googleSheetsParking.ts`, `/api/parking/*` | GAS port. Delete = real row deletion, not cell-clear; add always appends. |
 | Atelier | `app/atelier/page.tsx`, `lib/googleSheetsAtelier.ts`, `/api/atelier/*` | GAS port, reuses Parking's `resolveIMM`/`getIMMList`. No ACTION field; editable surface is COMMENTAIRE/CATÉGORIE/TECHNICIEN/BESOIN PIÈCE only. |
 | Depot | `app/depot/page.tsx`, `lib/googleSheetsDepot.ts`, `/api/depot/*` | Structural clone of Parking; only ACTION editable. |
