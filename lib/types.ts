@@ -340,19 +340,24 @@ export const FLAG_OPTIONS_FALLBACK: ColoredOption[] = [
 // verbatim, not invented; unchanged here, just renamed.
 export const ETAT_OPTIONS_FALLBACK = ["INTERNE", "EXTERNE", "DISPONIBLE", "ANNULE", "ANNULEE"];
 
-// Named handles for the ETAT_OPTIONS_FALLBACK values app/suivi-rl/page.tsx
-// (the INTERNE/EXTERNE Flotte filter) and app/ds-history/page.tsx's
-// etatStyle() (per-value badge color) compare against directly. Same
-// caveat as EMPLACEMENT_INTROUVABLE above: ETAT is admin-editable at
+// Named handles for the three ETAT_OPTIONS_FALLBACK values that code actually
+// compares against: app/suivi-rl/page.tsx's INTERNE/EXTERNE Flotte default
+// scope, and etatBadgeClass() below (which ds-history aliases as etatStyle).
+// Same caveat as EMPLACEMENT_INTROUVABLE above: ETAT is admin-editable at
 // /admin/config, and these are still plain string comparisons, not derived
-// from the live option list — renaming any of these five values there
+// from the live option list — renaming any of these three values there
 // silently breaks the corresponding filter/color, with no error. Centralizing
 // the literals here at least means a rename only needs updating in one place.
+//
+// ANNULE/ANNULEE deliberately have NO named constant. They are real
+// ETAT_OPTIONS_FALLBACK values, but nothing compares against them — they
+// render through etatBadgeClass()'s muted fallback (see below), which is
+// intended. Handles existed for both until 2026-08 and were removed once
+// confirmed to have zero references repo-wide: an unused constant is just
+// another thing to keep in sync, for no reader.
 export const ETAT_INTERNE = "INTERNE";
 export const ETAT_EXTERNE = "EXTERNE";
 export const ETAT_DISPONIBLE = "DISPONIBLE";
-export const ETAT_ANNULE = "ANNULE";
-export const ETAT_ANNULEE = "ANNULEE";
 
 /**
  * ETAT's badge color mapping — a deliberate literal-color exception (see
@@ -362,10 +367,16 @@ export const ETAT_ANNULEE = "ANNULEE";
  * (despite ETAT_OPTIONS_FALLBACK including both), and app/suivi-rl/page.tsx
  * had its own, simpler two-branch (EXTERNE vs everything-else) ternary that
  * didn't distinguish DISPONIBLE/ANNULE/ANNULEE at all. Centralized here so
- * the same ETAT value renders identically on both pages, with both
- * ANNULE and ANNULEE covered. The fallback/unknown-value and
- * ANNULE/ANNULEE branches use the semantic muted/border tokens rather than
- * a literal zinc shade — that literal (bg-zinc-700 text-zinc-200) was also
+ * the same ETAT value renders identically on both pages.
+ *
+ * ANNULE/ANNULEE have no branch of their own: they are real
+ * ETAT_OPTIONS_FALLBACK values that deliberately fall through to the single
+ * `return` at the bottom and render muted. That is the intended treatment,
+ * not an oversight — lib/__tests__/etatBadgeClass.test.ts pins
+ * etatBadgeClass("ANNULE") === etatBadgeClass("ANNULEE") so it stays true.
+ *
+ * That fallback uses the semantic muted/border tokens rather than a literal
+ * zinc shade — the literal it replaced (bg-zinc-700 text-zinc-200) was also
  * a real light/dark bug, not just a token-naming nitpick: it rendered a
  * dark surface unconditionally, regardless of the app's light/dark theme.
  */

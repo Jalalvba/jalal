@@ -528,9 +528,15 @@ function ReformulateCommentButton({
 // at /admin/config (options.ETAT_OPTIONS, live set as of 2026-08:
 // INTERNE/EXTERNE/DISPONIBLE, plus ANNULE/ANNULEE in the fallback with no
 // live rows currently) — see the comment in lib/types.ts for the
-// rename-drift risk. Fleet is a plain string (not a literal union) because
-// the chip row below renders every option.ETAT_OPTIONS value, not just the
-// two that used to be hardcoded here.
+// rename-drift risk.
+//
+// Fleet is a plain string (not a literal union) because the chip row below
+// renders visibleFleetValues — the distinct ETAT values actually present in
+// the loaded rows (c0d5965), not a fixed list. Those come straight from live
+// sheet data, so no union could enumerate them ahead of time. (This comment
+// previously said the chips render every options.ETAT_OPTIONS value, which
+// was true only before c0d5965 switched Flotte to the data-derived,
+// cascade-narrowing pattern Prestataire/Flag already used.)
 type Fleet = string;
 
 const EMPTY_ROWS: BddRow[] = [];

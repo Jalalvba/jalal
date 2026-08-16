@@ -29,8 +29,14 @@ under `**/__tests__/*.test.ts`.
 | `app/api/bdd/export/__tests__/route.test.ts` | Route-level validation (empty rows, >2000 rows, malformed filters, bad JSON) and the happy path — asserts a real `%PDF`-prefixed byte stream comes back, not just a 200 |
 | `app/api/bdd/export/__tests__/route.mongo-down.test.ts` | The rate-limiter fix verified **at the exact route where it was reported**, with the real (unmocked) `lib/rateLimit.ts` and only Mongo mocked to fail |
 | `app/api/trigger-import/__tests__/route.test.ts` | Missing token, rate-limited, network failure, 401, malformed response, successful passthrough, and graceful degradation to the compact step summary when a run's status lookup fails |
-| `app/api/import-status/__tests__/route.test.ts` | Missing `run_id`, successful lookup, 404 passthrough, network failure, rate-limited |
+| `app/api/import-status/__tests__/route.test.ts` | Missing `run_id`, successful lookup, 404 passthrough, network failure, rate-limited — plus a parameterised pass over all five real `ImportPipelineRunStatus` values and one unrecognised one, the regression guard for `ef630e0` (`skipped_absent`/`skipped_unchanged` used to coerce to `"failed"`) |
 | `components/fleet/__tests__/buildSummary.test.ts` | Every `ImportPipelineRunStatus` combination (success / failed / skipped_unchanged / skipped_absent / mixed) — the exact status-string distinction a past bug collapsed into a bare `"skipped"` |
+| `lib/__tests__/proxy.test.ts` | The auth boundary itself — an unauthenticated API request gets 401 JSON, an unauthenticated page request redirects to `/login`, and a real sealed session cookie passes through |
+| `lib/__tests__/googleSheetsBdd.test.ts` | `updateSheetRow()` calls `verifyRowIdentity()` before writing and refuses the write on a stale row, plus `BDD_EDITABLE_FIELDS` allowlist enforcement |
+| `app/api/auth/google/callback/__tests__/authorizedEmail.test.ts` | `AUTHORIZED_EMAIL` enforcement — a verified non-authorized email creates no session, the exact authorized email logs in, and `email_verified: false` is rejected even for the right address |
+| `lib/__tests__/adminConfigKeys.test.ts` | `/admin/config`'s `PLAIN_KEYS`/`COLORED_KEYS` are derived from `OPTION_KEYS`, not hand-copied (I4) — includes a test asserting the old hand-copied pattern would have silently missed a newly-added key |
+| `lib/__tests__/etatBadgeClass.test.ts` | The shared ETAT colour mapping (M4) — every `ETAT_OPTIONS_FALLBACK` value returns a class, `ANNULE` and `ANNULEE` get identical treatment (the gap ds-history's old `etatStyle()` had), DISPONIBLE/INTERNE/EXTERNE stay visually distinct, case-insensitivity, and an unknown value falls back to `bg-muted` rather than a literal zinc shade |
+| `lib/__tests__/rdvExportColumns.test.ts` | RDV's export columns are derived from `RDV_HEADERS` minus `Date` (M2), using the real sheet header text `CONVOYEUR` rather than the hand-copied `Convoyeur` that had drifted |
 
 **Mocking approach:** `vi.mock()` at the module boundary (`@/lib/mongo`,
 `@/lib/rateLimit`, `global.fetch`), not a database emulator. Justification:
@@ -104,6 +110,7 @@ exercised — see Gaps below.
 | `e2e/suivi-rl.spec.ts` | Clicks the Emplacement=ATELIER chip, cross-checks the displayed count against `/api/bdd`'s real data (mirroring the page's own Flotte=INTERNE-default + Emplacement filter cascade) rather than a hardcoded number |
 | `e2e/atelier.spec.ts` | Two cases: a named Technicien chip isolates exactly their rows; the new "Non assigné" chip isolates exactly the blank-Technicien rows — both cross-checked against `/api/atelier` |
 | `e2e/admin-config.spec.ts` | Adds a uniquely-named test value to Technicien via `/admin/config`, confirms it reaches the dependent Atelier `<select>`, removes it, confirms cleanup in both the UI and (implicitly) Mongo. Wraps the add/verify in try/finally so a failed assertion still triggers cleanup — writes to the same collection the deployed app reads from |
+| `e2e/logout.spec.ts` | Logging out clears the persisted BDD query cache from `localStorage` (I3) — the fixture that made this worth an E2E rather than a unit test is that the cache is written by the real `PersistQueryClientProvider`, not by app code |
 
 Each spec computes its own expected value from a live API call rather than
 asserting a hardcoded count, specifically because this data was observed
