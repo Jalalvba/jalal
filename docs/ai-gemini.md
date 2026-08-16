@@ -6,7 +6,7 @@
 · client: [`hooks/useBddRows.ts:98`](../hooks/useBddRows.ts#L98) and
 `ReformulateCommentButton` in
 [`app/suivi-rl/page.tsx:408`](../app/suivi-rl/page.tsx#L408) · types:
-[`lib/types.ts:747-774`](../lib/types.ts#L747)
+[`lib/types.ts:758-785`](../lib/types.ts#L758)
 
 Two routes, one provider. `reformulate-comment` was built second and
 deliberately mirrors `generate-email`'s structure — it defers to that file for
@@ -137,7 +137,7 @@ Clients only ever see the four fixed messages in §5.
 
 ### 4.1 The six context fields
 
-`ReformulateCommentContext` ([`lib/types.ts:757-764`](../lib/types.ts#L757)) —
+`ReformulateCommentContext` ([`lib/types.ts:768-775`](../lib/types.ts#L768)) —
 all optional:
 
 | Key | BDD field | Sent as |

@@ -1,9 +1,11 @@
 # Cleanup candidates — Phase 2 report
 
-**Working document, 2026-08-16, against `b2fcb80`.** A proposal only — nothing
-in this report has been deleted, renamed, or modified. Each item states what it
+**Working document, 2026-08-16.** Originally written against `b2fcb80` as a
+proposal only. **The four ✅ items below have since been applied** — they were
+every 🟢 candidate. Nothing 🟡 or 🔵 has been touched. Each item states what it
 is, why it is a candidate, and a confidence level:
 
+- ✅ **Done** — applied; the entry records what changed and why.
 - 🟢 **Safe to remove** — machine-verified zero references, no behavioural risk.
 - 🟡 **Needs your judgment** — genuinely unused, but plausibly deliberate. The
   call is about intent, not facts.
@@ -90,8 +92,8 @@ The real cause is that `lib/types.ts` declares both vocabularies as
 hand-written type unions with **no runtime counterpart**:
 
 ```ts
-export type ImportPipelineStepStatus = "started" | "success" | "failed" | "skipped";                        // :697
-export type ImportPipelineRunStatus  = "success" | "failed" | "skipped_absent" | "skipped_unchanged" | "running";  // :716
+export type ImportPipelineStepStatus = "started" | "success" | "failed" | "skipped";                        // :708
+export type ImportPipelineRunStatus  = "success" | "failed" | "skipped_absent" | "skipped_unchanged" | "running";  // :727
 ```
 
 A TypeScript union cannot be enumerated at runtime. So when a route needed to
@@ -246,7 +248,7 @@ Within this repo, nothing does.
 ## 2.2 🟡 `app/api/generate-email/route.ts` — no UI caller
 
 **Verified:** zero references outside the route file. Its types
-(`GenerateEmailRequest` / `GenerateEmailResponse`, `lib/types.ts:747-754`) are
+(`GenerateEmailRequest` / `GenerateEmailResponse`, `lib/types.ts:758-765`) are
 used only by it.
 
 **Do not treat this as dead code by default.** `cb13749` describes it as *"a
@@ -277,21 +279,24 @@ agrees with the inline script's boundaries (06:59 → dark, 07:00 → light,
 18:59 → light, 19:00 → dark). That turns an unused duplicate into an executable
 specification of the shipped behaviour. See §1.5(b).
 
-## 2.4 🟢 `ETAT_ANNULE` / `ETAT_ANNULEE` — no references
+## 2.4 ✅ DONE — `ETAT_ANNULE` / `ETAT_ANNULEE` removed
 
-[`lib/types.ts:354-355`](../lib/types.ts#L354). Zero references anywhere,
-including `etatBadgeClass()` a few lines above, which branches only on
-`DISPONIBLE` / `INTERNE` / `EXTERNE` and lets everything else fall through to
-the muted default.
+Had zero references anywhere, including `etatBadgeClass()` a few lines above,
+which branches only on `DISPONIBLE` / `INTERNE` / `EXTERNE` and lets everything
+else fall through to the muted default. Their own comment claimed they existed
+because `suivi-rl` and `ds-history` *"compare against [them] directly"* —
+neither did, any more.
 
-Their own comment claims they exist because `suivi-rl` and `ds-history`
-*"compare against [them] directly"* — neither does, any more.
+Removed, with the fact they carried preserved in two places rather than one:
+`etatBadgeClass()`'s docstring now states that `ANNULE`/`ANNULEE` are real
+`ETAT_OPTIONS_FALLBACK` values deliberately falling through to the muted
+`return`, and points at `lib/__tests__/etatBadgeClass.test.ts`, which already
+pinned `etatBadgeClass("ANNULE") === etatBadgeClass("ANNULEE")` — so the
+behaviour was executable-specified before the constants went, not just
+commented.
 
-**Caveat before removing:** they document that `ANNULE`/`ANNULEE` are real
-`ETAT_OPTIONS_FALLBACK` values deliberately rendered muted rather than
-overlooked. If you delete them, keep that fact as a comment on
-`etatBadgeClass()`'s fallback branch. `ETAT_INTERNE`, `ETAT_EXTERNE`, and
-`ETAT_DISPONIBLE` are all in live use — **do not** remove those.
+`ETAT_INTERNE`, `ETAT_EXTERNE`, and `ETAT_DISPONIBLE` are in live use and were
+**not** touched.
 
 ## 2.5 🟡 `/api/import-status` — live route, no client caller
 
@@ -387,26 +392,21 @@ the repo. Keep it.
 Six were corrected in `443626c`. Scanning found **one more of the same family**,
 plus two minor imprecisions.
 
-## 4.1 🟢 `app/suivi-rl/page.tsx:531-533` — falsified by `c0d5965`
+## 4.1 ✅ DONE — `app/suivi-rl/page.tsx` comment falsified by `c0d5965`
 
-```ts
-// … Fleet is a plain string (not a literal union) because
-// the chip row below renders every option.ETAT_OPTIONS value, not just the
-// two that used to be hardcoded here.
-type Fleet = string;
-```
+The comment justified `type Fleet = string` on the grounds that *"the chip row
+below renders every `option.ETAT_OPTIONS` value"*. **It no longer does** — since
+`c0d5965` it renders `visibleFleetValues`, derived from live row data. The
+stated justification was exactly backwards from the source beneath it.
 
-**The chip row no longer renders `options.ETAT_OPTIONS`.** Since `c0d5965` it
-renders `visibleFleetValues` — derived from live row data
-([`page.tsx:615-618`](../app/suivi-rl/page.tsx#L615)). The stated justification
-is exactly backwards from the current source.
+Corrected. The conclusion (`Fleet` stays a plain string) was always right, just
+for a stronger reason than the one given: the values now come from arbitrary
+live sheet data, which no literal union could enumerate ahead of time. The
+rewritten comment says that, and records what the old claim was true of, so the
+next reader doesn't re-derive the confusion.
 
-The conclusion (`Fleet` must stay a plain string) is still *correct*, just for a
-different reason: the values now come from arbitrary live sheet data, which is
-an even stronger argument against a literal union.
-
-**Same family as the six already fixed** — accurate when written, falsified by a
-later commit that changed behaviour without revisiting the prose.
+**Same family as the six corrected in `443626c`** — accurate when written,
+falsified by a later commit that changed behaviour without revisiting the prose.
 
 ## 4.2 🟡 `type Fleet = string` is a no-op alias
 
@@ -418,21 +418,43 @@ Either drop it (use `string[]` like its three siblings) or keep it purely as
 documentation — but then fix its comment per §4.1. Behaviour is identical
 either way.
 
-## 4.3 🟡 `etatBadgeClass()` docstring — "branches" that aren't
+## 4.3 ✅ DONE — `etatBadgeClass()` docstring: "branches" that aren't
 
-[`lib/types.ts:366-367`](../lib/types.ts#L366) refers to *"The
-fallback/unknown-value **and** `ANNULE`/`ANNULEE` **branches**"*, implying
-separate branches. There is one shared `return`; `ANNULE`/`ANNULEE` reach it by
-falling through.
+The docstring referred to *"The fallback/unknown-value **and**
+`ANNULE`/`ANNULEE` **branches**"*, implying separate branches. There is one
+shared `return`; `ANNULE`/`ANNULEE` reach it by falling through.
 
-Behaviourally fine — they do render muted, as intended. Only the wording implies
-structure that isn't there. Relevant to §2.4: if `ETAT_ANNULE`/`ETAT_ANNULEE`
-are deleted, this is where the fact belongs.
+Behaviourally fine — they do render muted, as intended; only the wording implied
+structure that wasn't there. Corrected as part of §2.4, since that is the same
+sentence the removed constants' fact had to move into.
 
-## 4.4 🟢 `TESTING.md` — two test files missing
+## 4.4 ✅ DONE — `TESTING.md` was missing **seven** test files, not two
 
-`lib/__tests__/adminConfigKeys.test.ts` and `lib/__tests__/etatBadgeClass.test.ts`
-exist and pass but aren't listed. Repo has 26 test files / 146 passing tests.
+**Correction to this report's own first draft.** It claimed two
+(`adminConfigKeys.test.ts`, `etatBadgeClass.test.ts`) because only those two
+were spot-checked. A full pass — every file from
+`git ls-files '*__tests__/*.test.ts' 'e2e/*.spec.ts'` checked against the
+document — found **seven** unlisted:
+
+| Unlisted file | Covers |
+|---|---|
+| `lib/__tests__/proxy.test.ts` | the auth boundary itself — 401 for API, redirect for pages, sealed cookie passes |
+| `lib/__tests__/googleSheetsBdd.test.ts` | `verifyRowIdentity()` before write + `BDD_EDITABLE_FIELDS` enforcement |
+| `app/api/auth/google/callback/__tests__/authorizedEmail.test.ts` | `AUTHORIZED_EMAIL` enforcement, incl. `email_verified: false` |
+| `lib/__tests__/adminConfigKeys.test.ts` | derived `PLAIN_KEYS`/`COLORED_KEYS` (I4) |
+| `lib/__tests__/etatBadgeClass.test.ts` | the shared ETAT colour mapping (M4) |
+| `lib/__tests__/rdvExportColumns.test.ts` | RDV export columns derived from `RDV_HEADERS` (M2) |
+| `e2e/logout.spec.ts` | logout clears the persisted BDD query cache (I3) |
+
+Three of those cover the **security model** (`proxy`, `authorizedEmail`,
+`googleSheetsBdd`'s allowlist) — the gap mattered more than a documentation
+nicety, since `TESTING.md`'s "Deliberately NOT covered" section is what a reader
+consults to decide whether a risk is untested. It read as untested when it
+wasn't.
+
+All 26 test files are now listed; verified by script rather than by eye. The
+`import-status` row was also updated for the run-status coverage added in
+`ef630e0`.
 
 ---
 
@@ -446,20 +468,26 @@ exist and pass but aren't listed. Repo has 26 test files / 146 passing tests.
 | 2.1 | `/api/query/search` — no caller | 🟡 | Delete after confirming no external consumer |
 | 2.2 | `/api/generate-email` — no UI caller | 🟡 | Product decision |
 | 2.3 | `getTimeBasedTheme()` — no callers | 🟡 | Prefer a test over deletion (see 1.5b) |
-| 2.4 | `ETAT_ANNULE` / `ETAT_ANNULEE` | 🟢 | Safe — preserve the fact in a comment |
+| 2.4 | `ETAT_ANNULE` / `ETAT_ANNULEE` | ✅ | **Done** — removed; fact preserved on `etatBadgeClass()` |
 | 2.5 | `/api/import-status` — no client caller | 🟡 | Keep unless the feature is cancelled |
 | 3.3 | `scripts/add-indexes.ts` deprecated | 🟡 | Delete, or add a runtime guard |
 | 3.4 | `DESIGN_SYSTEM.md` framing | 🟡 | Retitle — don't delete |
-| 4.1 | `page.tsx:531-533` stale comment | 🟢 | Safe |
+| 4.1 | `page.tsx` `type Fleet` stale comment | ✅ | **Done** — corrected |
 | 4.2 | `type Fleet = string` no-op alias | 🟡 | Style call |
-| 4.3 | `etatBadgeClass()` "branches" wording | 🟡 | Trivial |
-| 4.4 | `TESTING.md` missing 2 test files | 🟢 | Safe |
+| 4.3 | `etatBadgeClass()` "branches" wording | ✅ | **Done** — corrected with 2.4 |
+| 4.4 | `TESTING.md` missing test files | ✅ | **Done** — was 7, not 2; all 26 now listed |
 
 **Clean, no action needed:** temp/scratch files (none ever committed) ·
 dependencies (0 unused; 4 look-unused-but-required) · `TODO`/`FIXME` (none) ·
 commented-out code (none) · duplicate `.md` files (none).
 
-**If you only do one thing:** §1. It is the only item with a demonstrated
+## Status
+
+The four ✅ items — every 🟢 candidate — were applied in `ETAT/comment cleanup`
+below this report's original revision. Nothing 🟡 or 🔵 has been touched: those
+need either a product decision or a real refactor, not a deletion.
+
+**If you only do one thing next:** §1. It is the only item with a demonstrated
 production consequence, and §1.4's inverted `as const` declarations plus the
 §1.3 guard test are what stop it recurring — the deduplication is the smaller
 half of the value.

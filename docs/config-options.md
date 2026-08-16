@@ -267,7 +267,13 @@ case rather than leaving the disabled controls unexplained. This is audit item
    |---|---|---|
    | `EMPLACEMENT_INTROUVABLE` | Suivi RL card tint, DS History row highlight | red alert styling disappears |
    | `ETAT_INTERNE` / `ETAT_EXTERNE` | Suivi RL's "TOUS" default scope | default view stops matching |
-   | `ETAT_DISPONIBLE` / `ETAT_ANNULE` / `ETAT_ANNULEE` | `etatBadgeClass()` | badge falls through to muted |
+   | `ETAT_DISPONIBLE` | `etatBadgeClass()` | badge falls through to muted |
+
+   `ANNULE`/`ANNULEE` are *not* in this table: nothing compares against them,
+   so they already render through `etatBadgeClass()`'s muted fallback and a
+   rename changes nothing. Their named constants were removed in 2026-08 once
+   confirmed unreferenced; the fact is preserved on that function's docstring
+   and pinned by `lib/__tests__/etatBadgeClass.test.ts`.
 
    Centralising the literals in `lib/types.ts` means a rename needs updating in
    **one** place — **it does not remove the fragility**. Wiring behaviour flags

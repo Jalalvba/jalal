@@ -5,7 +5,7 @@
 [`app/api/import-status/route.ts`](../app/api/import-status/route.ts) ·
 [`components/fleet/ImportTrigger.tsx`](../components/fleet/ImportTrigger.tsx)
 (rendered from [`app/page.tsx`](../app/page.tsx)) ·
-[`lib/types.ts:679-745`](../lib/types.ts#L679)
+[`lib/types.ts:690-756`](../lib/types.ts#L690)
 
 Tests: `app/api/trigger-import/__tests__/route.test.ts`,
 `app/api/import-status/__tests__/route.test.ts`.
@@ -157,8 +157,8 @@ against **`KNOWN_RUN_STATUSES`**
 vocabulary — and coerces anything unrecognised to `"failed"`.
 
 > **The bug this replaced.** The route previously validated a **run** status
-> against `KNOWN_STEP_STATUSES`, the **step**-level set (`lib/types.ts:697` vs
-> `:716` — two different vocabularies). Since neither `skipped_absent` nor
+> against `KNOWN_STEP_STATUSES`, the **step**-level set (`lib/types.ts:708` vs
+> `:727` — two different vocabularies). Since neither `skipped_absent` nor
 > `skipped_unchanged` is a step status, **both silently became `"failed"`**,
 > reporting a legitimately skipped run as a failed one.
 >
@@ -180,7 +180,7 @@ statuses plus an unrecognised one:
 | `skipped_absent` · `skipped_unchanged` | **passed through** |
 | anything else (incl. a bare `"skipped"`) | `failed` |
 
-A bare `"skipped"` is deliberately *not* accepted: `lib/types.ts:707-716`
+A bare `"skipped"` is deliberately *not* accepted: `lib/types.ts:718-727`
 records that it is never a real run status —
 
 > *"Confirmed against `~/import/run.py`'s `run_all()` … never a bare 'skipped' —

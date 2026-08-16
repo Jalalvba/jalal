@@ -145,13 +145,17 @@ only; nothing there has been removed. Headlines:
 | Where | Issue |
 |---|---|
 | `app/api/import-status` + `app/api/trigger-import` | **Highest value.** Both re-implement the `~/import` contract — `normalizeTimestamp()` is `md5`-identical, and the step normaliser is a named function in one route and *inlined* in the other, so name-based search can't find the second copy. This is *how* the run-status bug above outlived its own fix. |
-| `lib/types.ts:697` / `:716` | The two import status vocabularies are hand-written unions with **no runtime counterpart** — the reason a validator had to hand-write a `Set` and reached for the wrong one. Four other types in the same file already use the `as const` → `(typeof X)[number]` pattern that prevents this. |
+| `lib/types.ts:708` / `:727` | The two import status vocabularies are hand-written unions with **no runtime counterpart** — the reason a validator had to hand-write a `Set` and reached for the wrong one. Four other types in the same file already use the `as const` → `(typeof X)[number]` pattern that prevents this. |
 | `app/api/bdd/export{,-excel}/route.ts` | Same class, latent: `MAX_*` caps duplicated and the row validators byte-identical. |
 | `app/api/query/search/route.ts` | No caller found; superseded by client-side filtering (`26e53fb`). |
 | `app/api/generate-email/route.ts` | No UI caller. Deliberately headless, but unreferenced. |
-| `lib/types.ts:354-355` | `ETAT_ANNULE` / `ETAT_ANNULEE` — zero references repo-wide. |
-| `app/suivi-rl/page.tsx:531-533` | Stale comment falsified by `c0d5965` (claims the Flotte chip row renders `options.ETAT_OPTIONS`; it renders data-derived values). |
-| [`TESTING.md`](./TESTING.md) | Doesn't list `adminConfigKeys.test.ts` or `etatBadgeClass.test.ts`. |
+| `scripts/add-indexes.ts` | Self-declared deprecated, but the deprecation is a comment rather than a runtime guard. |
+| `DESIGN_SYSTEM.md` | Still framed as a proposal ("Sequencing — once approved") for work that shipped across seven commits. |
+
+Every 🟢 candidate has been actioned: `ETAT_ANNULE`/`ETAT_ANNULEE` removed, the
+`type Fleet` and `etatBadgeClass()` comments corrected, and `TESTING.md`
+completed (it was missing seven test files, three of them security-model
+coverage — not the two originally reported).
 
 ---
 

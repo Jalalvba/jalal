@@ -37,8 +37,8 @@ and the rest read-only.
 | 3 | **Prestataire** | `activePrestataire: string[]` | `emplacementFiltered` | `hasBlankPrestataire` |
 | 4 | **Flag** | `activeFlag: string[]` | `prestataireFiltered` | `hasBlankFlag` |
 
-Defined at [`page.tsx:573`](../app/suivi-rl/page.tsx#L573) (state) and
-`page.tsx:596-652` (derivation).
+Defined at [`page.tsx:579-582`](../app/suivi-rl/page.tsx#L579) (state) and
+`page.tsx:602-607` (derivation).
 
 ### 2.1 Combination semantics — OR within, AND across
 
@@ -47,7 +47,7 @@ Defined at [`page.tsx:573`](../app/suivi-rl/page.tsx#L573) (state) and
 - **Across axes:** AND. `Flotte ∩ Emplacement ∩ Prestataire ∩ Flag`.
 
 Both are implemented by the single shared predicate `axisMatches()`
-([`page.tsx:553`](../app/suivi-rl/page.tsx#L553)):
+([`page.tsx:559-562`](../app/suivi-rl/page.tsx#L559)):
 
 ```ts
 function axisMatches(value: string | undefined, selected: string[], normalize?: (v: string) => string): boolean {
@@ -67,7 +67,7 @@ times with four chances to diverge.
 
 **Why `normalize` is a parameter, not built in:** only Flotte needs it —
 `ETAT` is compared case-insensitively (`(v) => v.toUpperCase()`,
-[`page.tsx:600`](../app/suivi-rl/page.tsx#L600)). Emplacement, Prestataire,
+[`page.tsx:606`](../app/suivi-rl/page.tsx#L606)). Emplacement, Prestataire,
 and Flag are exact-match. That asymmetry is deliberate: `ETAT` values arrive
 from the sheet with inconsistent casing; the other three come from
 admin-config dropdowns and are already canonical.
@@ -76,7 +76,7 @@ admin-config dropdowns and are already canonical.
 
 An empty array means "no filter on this axis". For Emplacement/Prestataire/Flag
 that literally means *pass everything through*. **Flotte is different**
-([`page.tsx:596`](../app/suivi-rl/page.tsx#L596)):
+([`page.tsx:602-607`](../app/suivi-rl/page.tsx#L602)):
 
 ```ts
 if (activeFleet.length === 0) {
@@ -96,7 +96,7 @@ via their own explicit chip.
 ### 2.3 Default state
 
 `activeFleet` initialises to `[ETAT_INTERNE]`
-([`page.tsx:573`](../app/suivi-rl/page.tsx#L573)) — **not** empty. First paint
+([`page.tsx:579-582`](../app/suivi-rl/page.tsx#L579)) — **not** empty. First paint
 shows INTERNE only. The other three axes start empty.
 
 `e2e/suivi-rl.spec.ts:20` depends on this default; changing it breaks that test.
@@ -133,7 +133,7 @@ const visibleEmplacements = useMemo(
 
 ### 3.1 Selecting an upstream axis resets everything downstream
 
-[`page.tsx:704`](../app/suivi-rl/page.tsx#L704):
+[`page.tsx:710-724`](../app/suivi-rl/page.tsx#L710):
 
 ```ts
 function selectFleet(f)        { setActiveFleet(f);        setActiveEmplacement([]); setActivePrestataire([]); setActiveFlag([]); }
@@ -148,7 +148,7 @@ no longer reachable — producing a filter chip that is *selected* but not
 cheap, legible fix.
 
 Flag (axis 4) has nothing downstream, so it calls `setActiveFlag` directly
-([`page.tsx:818`](../app/suivi-rl/page.tsx#L818)) rather than a `select*`
+([`page.tsx:824`](../app/suivi-rl/page.tsx#L824)) rather than a `select*`
 wrapper. That asymmetry is intentional, not an oversight.
 
 ---
@@ -158,7 +158,7 @@ wrapper. That asymmetry is intentional, not an oversight.
 ### 4.1 The sentinel
 
 ```ts
-const NON_RENSEIGNE = "__NON_RENSEIGNE__";   // page.tsx:543
+const NON_RENSEIGNE = "__NON_RENSEIGNE__";   // page.tsx:549
 ```
 
 **Why a sentinel and not `""`:** Radix's `ToggleGroupItem` needs a non-empty
@@ -170,7 +170,7 @@ being rendered, and no BDD field legitimately contains the literal
 It is deliberately **kept out of `BDD_HEADERS` / `BddRow` entirely** — it is a
 filter-axis UI concept, never a field value, never written to the sheet.
 
-`displayAxisValue()` ([`page.tsx:545`](../app/suivi-rl/page.tsx#L545))
+`displayAxisValue()` ([`page.tsx:551-553`](../app/suivi-rl/page.tsx#L551))
 maps it to the human-readable `"Non renseigné"` for the PDF/Excel header line
 and the download filename slug.
 
@@ -184,10 +184,10 @@ i.e. post-cascade, not the full table:
 
 | Axis | Flag | Computed over | Code |
 |---|---|---|---|
-| Flotte | `hasBlankFleet` | `rows` | [`page.tsx:619`](../app/suivi-rl/page.tsx#L619) |
-| Emplacement | `hasBlankEmplacement` | `fleetFiltered` | [`page.tsx:630`](../app/suivi-rl/page.tsx#L630) |
-| Prestataire | `hasBlankPrestataire` | `emplacementFiltered` | [`page.tsx:636`](../app/suivi-rl/page.tsx#L636) |
-| Flag | `hasBlankFlag` | `prestataireFiltered` | [`page.tsx:647`](../app/suivi-rl/page.tsx#L647) |
+| Flotte | `hasBlankFleet` | `rows` | [`page.tsx:625`](../app/suivi-rl/page.tsx#L625) |
+| Emplacement | `hasBlankEmplacement` | `fleetFiltered` | [`page.tsx:642`](../app/suivi-rl/page.tsx#L642) |
+| Prestataire | `hasBlankPrestataire` | `emplacementFiltered` | [`page.tsx:642`](../app/suivi-rl/page.tsx#L642) |
+| Flag | `hasBlankFlag` | `prestataireFiltered` | [`page.tsx:653`](../app/suivi-rl/page.tsx#L653) |
 
 "Blank" means `!value?.trim()` — so `undefined`, `""`, and `"   "` all count.
 
@@ -254,7 +254,7 @@ Active state is `activeX.length === 0`; clicking it calls the axis's
 
 ## 7. Search bypasses the chip cascade
 
-[`page.tsx:667`](../app/suivi-rl/page.tsx#L667):
+[`page.tsx:673-677`](../app/suivi-rl/page.tsx#L673):
 
 ```ts
 const searched = useMemo(() => {
@@ -278,7 +278,7 @@ matching** on this page — `searched` reads `r.IMM` only.
 
 ### 7.1 The export summary mirrors the bypass
 
-`activeFilters` ([`page.tsx:681`](../app/suivi-rl/page.tsx#L681)) returns
+`activeFilters` ([`page.tsx:687-695`](../app/suivi-rl/page.tsx#L687)) returns
 `[]` when a search term is present. Without this, an exported PDF would print
 "Filtres actifs — Flotte: INTERNE" on a document whose rows ignored that filter
 entirely.
@@ -340,7 +340,7 @@ a `⚠ Introuvable` badge ([`page.tsx:259`](../app/suivi-rl/page.tsx#L259)).
 
 ### 8.4 ETAT badge colours
 
-`etatBadgeClass()` ([`lib/types.ts:372-378`](../lib/types.ts#L372)) is shared
+`etatBadgeClass()` ([`lib/types.ts:383-389`](../lib/types.ts#L383)) is shared
 with DS History. It replaced this page's own two-branch
 (EXTERNE-vs-everything-else) ternary, which rendered
 `DISPONIBLE`/`ANNULE`/`ANNULEE` identically to `INTERNE`.
