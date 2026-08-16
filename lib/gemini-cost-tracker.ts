@@ -42,6 +42,11 @@ export const PRICING: Record<string, { inputPer1M: number; outputPer1M: number }
 // alias to a concrete priced model for costing purposes only — the alias string
 // is still what gets sent to the API, and is what's logged.
 const MODEL_ALIASES: Record<string, string> = {
+  // Verified live in production on 2026-08-16: a real call sent
+  // "gemini-flash-lite-latest" and came back with modelVersion
+  // "gemini-3.5-flash-lite" (alias_drift: false). Not an assumption — but it
+  // can still change under us at any time, which is what detectAliasDrift()
+  // below is for.
   "gemini-flash-lite-latest": "gemini-3-5-flash-lite",
   "gemini-flash-latest": "gemini-3-5-flash",
 };
