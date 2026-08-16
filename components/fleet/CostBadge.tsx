@@ -24,7 +24,10 @@ export function CostBadge({ costInfo, className }: { costInfo: CostInfo; classNa
       className={className}
       title={
         `Estimation locale, pas une facture — à recouper avec le tableau de bord Google AI Studio.\n` +
-        `Modèle : ${costInfo.model}\n` +
+        `Modèle demandé : ${costInfo.model}\n` +
+        (costInfo.servedModel ? `Modèle servi : ${costInfo.servedModel}\n` : "") +
+        `Tarifé comme : ${costInfo.pricedAs}\n` +
+        (costInfo.aliasDrift ? `⚠ L'alias a changé de modèle — coût non fiable.\n` : "") +
         `Tokens : ${costInfo.inputTokens} entrée / ${costInfo.outputTokens} sortie\n` +
         `Coût : ${costInfo.costUsd.toFixed(6)} USD` +
         (isFree ? "" : `\nCrédit restant : ${costInfo.remainingCreditUsd.toFixed(2)} USD`)

@@ -10,6 +10,7 @@ import {
   computeCallCost,
   resolvePricingKey,
   quotaDayKey,
+  detectAliasDrift,
   PRICING,
   FREE_TIER_LIMITS,
 } from "@/lib/gemini-cost-tracker";
@@ -104,5 +105,37 @@ describe("FREE_TIER_LIMITS", () => {
 
   it("has an entry for whatever the routes' rolling alias resolves to", () => {
     expect(FREE_TIER_LIMITS[resolvePricingKey("gemini-flash-lite-latest")]).toBeDefined();
+  });
+});
+
+describe("detectAliasDrift", () => {
+  it("reports no drift when the served model matches what we priced", () => {
+    expect(detectAliasDrift("gemini-flash-lite-latest", "gemini-3.5-flash-lite")).toEqual({
+      drifted: false,
+      assumedKey: "gemini-3-5-flash-lite",
+      servedKey: "gemini-3-5-flash-lite",
+    });
+  });
+
+  it("tolerates a suffix on the served version", () => {
+    // Google appends dated/preview suffixes; that is the same model, not drift.
+    expect(
+      detectAliasDrift("gemini-flash-lite-latest", "gemini-3.5-flash-lite-preview-09-2025").drifted
+    ).toBe(false);
+  });
+
+  it("flags drift when the alias has been repointed at another model", () => {
+    const res = detectAliasDrift("gemini-flash-lite-latest", "gemini-3.6-flash-lite");
+    expect(res.drifted).toBe(true);
+    expect(res.assumedKey).toBe("gemini-3-5-flash-lite");
+    expect(res.servedKey).toBe("gemini-3-6-flash-lite");
+  });
+
+  it("treats an absent modelVersion as no evidence, not as drift", () => {
+    expect(detectAliasDrift("gemini-flash-lite-latest", undefined)).toEqual({
+      drifted: false,
+      assumedKey: "gemini-3-5-flash-lite",
+      servedKey: null,
+    });
   });
 });

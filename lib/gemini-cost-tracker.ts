@@ -53,6 +53,32 @@ export function resolvePricingKey(model: string): string {
   return model.replace(/\./g, "-");
 }
 
+/**
+ * Detects alias drift: whether the model that actually served the call matches
+ * the one we assumed when pricing it.
+ *
+ * The response's top-level `modelVersion` field ("Output only. The model
+ * version used to generate the response.", verified 2026-08-16 against
+ * https://ai.google.dev/api/generate-content) is what makes this possible —
+ * it's the only place Google tells us what a rolling "-latest" alias actually
+ * resolved to on this request. Without it, MODEL_ALIASES is an unfalsifiable
+ * guess that would keep costing calls at a stale price indefinitely after
+ * Google reassigns the alias.
+ *
+ * A served version may carry a suffix the pricing key doesn't
+ * ("gemini-3-5-flash-lite-preview-09-2025"), so this is a prefix match, not
+ * equality. An absent modelVersion is not drift — just no evidence either way.
+ */
+export function detectAliasDrift(
+  requestedModel: string,
+  servedModelVersion: string | undefined
+): { drifted: boolean; assumedKey: string; servedKey: string | null } {
+  const assumedKey = resolvePricingKey(requestedModel);
+  if (!servedModelVersion) return { drifted: false, assumedKey, servedKey: null };
+  const servedKey = servedModelVersion.replace(/\./g, "-");
+  return { drifted: !servedKey.startsWith(assumedKey), assumedKey, servedKey };
+}
+
 // Env-overridable so the rate can be corrected without a deploy. Falls back to
 // 9.4 if unset or garbage.
 function usdToMad(): number {
@@ -172,7 +198,18 @@ async function claimFreeTierSlot(model: string): Promise<boolean> {
 // ── Persistence ────────────────────────────────────────────────────────────
 
 export type CostInfo = {
+  /** The model string we SENT — may be a rolling alias like "gemini-flash-lite-latest". */
   model: string;
+  /**
+   * The concrete model that actually SERVED the call, from the response's
+   * `modelVersion`. Undefined if the API omitted it. When `model` is an alias,
+   * this is the only way to see what it resolved to.
+   */
+  servedModel?: string;
+  /** The PRICING key the cost below was actually computed from. */
+  pricedAs: string;
+  /** True when servedModel doesn't match pricedAs — the quoted cost is suspect. */
+  aliasDrift: boolean;
   tier: "free" | "paid";
   inputTokens: number;
   outputTokens: number;
@@ -228,6 +265,12 @@ async function recordUsage(params: {
     timestamp: new Date().toISOString(),
     action,
     model,
+    // Recorded on every line, not just drifting ones, so the log answers
+    // "when did this alias change?" retrospectively — a drift warning only
+    // fires once you notice it, but the history is always there.
+    served_model: costInfo.servedModel ?? null,
+    priced_as: costInfo.pricedAs,
+    alias_drift: costInfo.aliasDrift,
     input_tokens: costInfo.inputTokens,
     output_tokens: costInfo.outputTokens,
     tier: costInfo.tier,
@@ -377,12 +420,32 @@ export async function callGeminiWithTracking(
       (Number(usage.candidatesTokenCount) || 0) + (Number(usage.thoughtsTokenCount) || 0);
     const totalTokens = Number(usage.totalTokenCount) || inputTokens + outputTokens;
 
+    // What actually served the call. For a rolling "-latest" alias this is the
+    // only signal that Google has repointed it at a differently-priced model.
+    const servedModel = typeof data?.modelVersion === "string" ? data.modelVersion : undefined;
+    const { drifted, assumedKey, servedKey } = detectAliasDrift(model, servedModel);
+    if (drifted) {
+      // Loud, because every cost figure for this model is wrong until
+      // MODEL_ALIASES/PRICING is updated — and nothing else would surface it.
+      console.error(
+        `[gemini-cost] ALIAS DRIFT: "${model}" was priced as "${assumedKey}" but was served by ` +
+          `"${servedKey}". Costs for this model are wrong until MODEL_ALIASES (and PRICING, if ` +
+          `"${servedKey}" is new) are updated in lib/gemini-cost-tracker.ts.`
+      );
+    }
+
+    // Pricing deliberately still follows the assumed key, not servedKey: a
+    // silent switch to the served model's price would hide the drift that this
+    // figure's mismatch is meant to expose. Fix the table, don't auto-adapt.
     const { usd, mad } = isFree
       ? { usd: 0, mad: 0 }
       : computeCallCost(model, inputTokens, outputTokens);
 
     const partial: Omit<CostInfo, "remainingCreditUsd"> = {
       model,
+      servedModel,
+      pricedAs: assumedKey,
+      aliasDrift: drifted,
       tier: isFree ? "free" : "paid",
       inputTokens,
       outputTokens,
