@@ -37,7 +37,14 @@ function loadEnvLocal(): Record<string, string> {
     if (!trimmed || trimmed.startsWith("#")) continue;
     const eq = trimmed.indexOf("=");
     if (eq === -1) continue;
-    env[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+    // Strip surrounding quotes — `vercel env pull` writes MONGODB_URI="mongodb+srv://…",
+    // and an unstripped quote makes the driver reject the scheme. (The same
+    // parser in the deprecated scripts/add-indexes.ts has this bug; not fixed
+    // there, since that script must not be run at all.)
+    env[trimmed.slice(0, eq).trim()] = trimmed
+      .slice(eq + 1)
+      .trim()
+      .replace(/^["'](.*)["']$/, "$1");
   }
   return env;
 }
