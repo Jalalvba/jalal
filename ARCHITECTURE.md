@@ -136,13 +136,21 @@ The behavioural bug in `ef630e0`; the six stale comments in `443626c`.
 | [`CLAUDE.md`](./CLAUDE.md) §6 | Stale — "6-field editable allowlist" (it's 7); "Plate/WW search" (it's plate-only); listed 3 chip axes (there are 4). |
 | [`lib/types.ts`](./lib/types.ts) | Stale — "27 real columns". `BDD_HEADERS` has 28. |
 
-### Open — Phase 2 candidates
+### Open
+
+Full analysis, with confidence levels and verification method, in
+**[`docs/cleanup-candidates.md`](./docs/cleanup-candidates.md)** — a proposal
+only; nothing there has been removed. Headlines:
 
 | Where | Issue |
 |---|---|
+| `app/api/import-status` + `app/api/trigger-import` | **Highest value.** Both re-implement the `~/import` contract — `normalizeTimestamp()` is `md5`-identical, and the step normaliser is a named function in one route and *inlined* in the other, so name-based search can't find the second copy. This is *how* the run-status bug above outlived its own fix. |
+| `lib/types.ts:697` / `:716` | The two import status vocabularies are hand-written unions with **no runtime counterpart** — the reason a validator had to hand-write a `Set` and reached for the wrong one. Four other types in the same file already use the `as const` → `(typeof X)[number]` pattern that prevents this. |
+| `app/api/bdd/export{,-excel}/route.ts` | Same class, latent: `MAX_*` caps duplicated and the row validators byte-identical. |
 | `app/api/query/search/route.ts` | No caller found; superseded by client-side filtering (`26e53fb`). |
 | `app/api/generate-email/route.ts` | No UI caller. Deliberately headless, but unreferenced. |
-| `app/api/import-status` + `app/api/trigger-import` | Both still duplicate `normalizeTimestamp()` and `KNOWN_STEP_STATUSES` verbatim — the duplication is *how* the run-status bug above outlived its own fix. |
+| `lib/types.ts:354-355` | `ETAT_ANNULE` / `ETAT_ANNULEE` — zero references repo-wide. |
+| `app/suivi-rl/page.tsx:531-533` | Stale comment falsified by `c0d5965` (claims the Flotte chip row renders `options.ETAT_OPTIONS`; it renders data-derived values). |
 | [`TESTING.md`](./TESTING.md) | Doesn't list `adminConfigKeys.test.ts` or `etatBadgeClass.test.ts`. |
 
 ---
