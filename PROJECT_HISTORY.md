@@ -1,10 +1,15 @@
 # Project history
 
 Permanent record of this project's development history, built directly from
-`git log --oneline main` (97 commits, `df5a4c3` → `c546f1d`) with diffs
+`git log --oneline main` (163 commits, `df5a4c3` → `c0d5965`) with diffs
 inspected wherever a commit message needed clarification. Every claim below
 cites the commit(s) it's based on — nothing here is inferred beyond what a
 commit message or its diff actually states.
+
+Sections 1–2 cover `df5a4c3` → `c546f1d` (synchronized by `3c83ed5`); the
+**Continuation** section after §2 covers `c546f1d` → `c0d5965`. For
+*current-state* reference documentation — what each feature does today,
+rather than when it changed — start at [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ## 1. Architecture overview
 
@@ -413,6 +418,221 @@ the same atomic-`$inc`-based mechanism (`lib/rateLimit.ts`) to all 16 Sheets
 mutation routes at 30 req/min each. `44760e9` (detailed under DS History
 above) is the largest standalone performance fix in the project.
 
+---
+
+# Continuation — `c546f1d` → `c0d5965` (2026-07-30 → 2026-08-16)
+
+Everything above was written as of `c546f1d` and synchronized by `3c83ed5`.
+The 66 commits since are recorded below, in the same commit-cited style.
+Current-state reference documentation for these features lives in
+[`ARCHITECTURE.md`](./ARCHITECTURE.md) and [`docs/`](./docs) — this section
+remains the chronology ("what changed and why"), not the reference.
+
+### Documentation split across two AI tools
+
+`3c83ed5` synchronized every doc through `c546f1d`. `97462ac` trimmed
+`CLAUDE.md` to Claude Code's official memory-file conventions, and `b8fef8d`
+established `CLAUDE.md`/`AGENTS.md`/`GEMINI.md` as a shared source of truth:
+`AGENTS.md` holds the small set of rules that apply regardless of which
+assistant is driving, with the two entry points linking to it rather than
+restating it, and Gemini/Antigravity constrained to read-only audit work.
+`1436aff` closed a long-standing naming confusion with a `DELIBERATE`
+comment in two places — the "Suivi RL" page reads the **BDD** tab; no "RL"
+tab exists, and "RL" is a business label for a view over BDD's RL-related
+columns.
+
+### Fleet Data Import trigger
+
+`e6e44a4` adds a button on the home page (`components/fleet/ImportTrigger.tsx`)
+that proxies a **separate** Vercel project (`~/import`, deployed at
+`import-red.vercel.app`) which runs the DS/CP/PARC/BC Drive→Mongo ETL — this
+repo gains no Drive or ETL code of its own, only two thin proxy routes
+(`/api/trigger-import`, `/api/import-status`). The trigger blocks 60–90s
+until all four pipelines finish, then backfills real per-step
+timestamps/detail via a follow-up `/api/status` call per run, because the
+trigger response itself only carries a compact `"step:status"` string per
+step. `9fe833d` fixed a status-matching bug found immediately after:
+`~/import`'s real run statuses are `skipped_unchanged` and `skipped_absent`
+— **never a bare `"skipped"`** — confirmed by reading that project's
+`run.py` directly rather than inferring from its HTTP surface. *(The same
+bug still exists in `/api/import-status`, which was not covered by that fix
+— see `ARCHITECTURE.md`'s open-defects table.)*
+
+### BDD gains Emplacement and automated zone-detection columns
+
+`3d9bd87` surfaces four new live BDD columns. These are **two independent
+signals, not one derived from the other**: `Emplacement` is a *manual*
+dropdown (a human's assessment of where the vehicle actually is, hence in
+`BDD_EDITABLE_FIELDS`, taking the allowlist from 6 fields to 7), while
+`ATELIER`/`DEPOT`/`PARKING` are read-only sheet-side XLOOKUP presence flags
+— the sheet-side equivalent of what `useVehicleZone()` computes client-side.
+The two can legitimately disagree (stale manual entry, or a failed automated
+match), and that disagreement is itself useful information rather than a bug
+to reconcile away. `f016018` gives DS History's `BddEditableRow` a full-row
+`INTROUVABLE` highlight to match.
+
+### Suivi RL PDF export
+
+`f2a8a93` adds a server-side PDF export of the currently filtered view
+(`/api/bdd/export`, `pdf-lib` — this app's established PDF pattern, reused
+rather than adding a second library). Four rapid corrections followed.
+`77f9eef` is the most instructive: real vehicle models (Peugeot 208/508/
+2008/3008) are literal digit strings, and the sheet sometimes stores them as
+a raw *number*, so `r.modele` can genuinely be a `number` despite `BddRow`
+typing it `string` — which made the route's strict `isValidRow()` reject the
+**whole batch**, not just that row. Found only by clicking the real button
+in a real browser, not by calling the API directly with well-formed data.
+`a3ea97a` simplified the layout to 4 columns, portrait, with wrapped
+comments; `8012835` made IMM dominant (20pt bold) and enlarged row padding
+so a typical 22-row export fills the page instead of sitting in a dense
+block above whitespace.
+
+### Config-driven dropdown options (Stage 1)
+
+`4876ddf` and `c442df2` first deduped `CATEGORIE_OPTIONS`/`TECHNICIEN_OPTIONS`
+onto `lib/types.ts`, closing a live two-copy drift. `76d60b5` then moved
+dropdown option *values* out of hardcoded arrays entirely and into a Mongo
+`sheetFieldOptions` collection, admin-editable at `/admin/config` without a
+deploy. Headers, `BddRow`'s shape, and `BDD_EDITABLE_FIELDS` were
+deliberately left out of scope for this stage. The seven `*_FALLBACK`
+constants left behind in `lib/types.ts` are **not dead code**: they serve
+server-side degradation, client-side degradation, and the one-time seed
+script. `1e47ff8` and `a1c88a4` added Atelier's Technicien chip row and its
+"Non assigné" blank-value chip — the direct precedent for Suivi RL's
+"Non renseigné" chips a month later.
+
+### Test suite, CI, and the security/quality audit
+
+`dcc5bc1` added the first real, persisted test suite (Vitest unit/integration
++ Playwright E2E), and `bde8cd9` wired type-check/lint/unit tests into GitHub
+Actions. A full audit then produced a numbered remediation pass, each commit
+citing its item: `525c16e` (C1) added the missing `verifyRowIdentity()` guard
+to BDD's `updateSheetRow`; `5cf0eed` (C2) blocked `/admin/config` editing
+until real data loads and added a `degraded` flag plus optimistic
+concurrency via Mongo's own E11000 duplicate-key signal; `5012a0a` (I1)
+stripped C1 control characters (U+0080–U+009F) before PDF text, which had
+been crashing the whole export with an opaque 500 on a Windows-1252-mangled
+paste; `0d82965` (I3) cleared the persisted BDD dataset from localStorage on
+logout; `48f3fec` (I4) derived the admin UI's plain/colored key split instead
+of hand-copying it. Then `6235a94` (M1) deduped `columnIndexToLetter`;
+`21517d5` (M2) derived RDV's `EXPORT_COLUMNS` from `RDV_HEADERS`; `3cc2686`
+(M3/M4) replaced Emplacement/ETAT magic strings with named constants and
+reconciled the two drifted ETAT badge-colour implementations — DS History's
+covered `ANNULEE` but not `ANNULE`, while Suivi RL's two-branch ternary
+didn't distinguish `DISPONIBLE`/`ANNULE`/`ANNULEE` at all; `cacf201` (M5/M6)
+capped PDF export field lengths after confirming live that 2000 rows × 20KB
+commentaire cost 106s of CPU and produced an 18.7MB PDF; `db9fa96` (M7)
+documented the import token's query-param tradeoff as accepted rather than
+silently leaving it; `74a7f92` (M8) rate-limited the two unauthenticated
+OAuth routes; `b75e390` (M10) documented why the seed script *cannot* call
+`invalidateCache()` (Next's `revalidateTag()` throws outside a request
+context). `809938b` and `794a702` closed the test-suite gaps the audit
+found. `6a82a3e` made rate limiting **fail open** on Mongo unavailability
+rather than crashing the request.
+
+### Mongo field-name migration and CI enforcement
+
+`e2e3a4f` migrated `ds`/`parc`/`bc`/`cp` field reads to post-backfill clean
+key names, with `fa9f3ec` catching `/api/cp` which the original pass missed.
+`985e3d8` added a dual-read window for `designation_consommation` during the
+backfill and, more durably, added **`field_registry.json` CI enforcement** —
+a copy of a live-scan snapshot of every real field name, with
+`scripts/verify-field-names.cjs` failing the build if any `app/api/**` Mongo
+field reference doesn't byte-match it. `6a4ecf0` resynced that snapshot after
+the upstream `~/import` whitespace-mapping fix. `8264de0` marked
+`scripts/add-indexes.ts` deprecated, pointing at `~/import`'s
+`ensure_indexes` as the single source of truth. `d4d33be` fixed Articles
+hiding a legitimate `qte: 0` behind the `"—"` fallback, and `bccc399`
+dropped an unnecessary `$toDate` wrapper on `Date BC`.
+
+### Plate search consolidation
+
+`cdbfcd7` found `getIMMList()` querying the **wrong Mongo field**, so it had
+been returning `[]` unconditionally; `143041a` then gave it a 1-week cache
+TTL invalidated on a real `parc` import. `6f24bdf` moved DS History to
+plate-only suggestions with strict prefix matching and browser caching;
+`1997ec7` sorted the suggestion list to match `getIMMList()` and opened the
+dropdown on any input; `26e53fb` consolidated everything onto a **single
+shared full-list client-side search across `parc` + `cp`**, persisted to
+localStorage so only the first page visited in a browser session fetches it.
+`4742410` stopped DS History auto-loading a hardcoded development plate
+(`48070-B-7`) on mount. `cbcf1d0`, `6aee573`, and `803454a` reworked DS
+History's zone display — separate green chips rather than concatenated
+`"A + B"` text, moved into the card header, with the card tinted by zone
+priority. `a352032` kept the Combobox input focused after selecting a
+suggestion.
+
+### Cross-cutting UX pass
+
+`5b50f48` gave BDD a manual add-plate dialog matching
+Parking/Atelier/Depot's pattern. `c00184b` added a toast confirmation to
+**every** write in the app plus `aria-label`s on icon-only buttons — hooked
+once via TanStack Query's `MutationCache`, so no call site changed; a
+mutation opts into specific wording with `meta.successMessage`. `9140e07`
+unified loading state behind one shared skeleton. `93da3c0` made every list
+page's *Actualiser* button a **genuine** hard refresh: it POSTs the tab's
+`/refresh` route to bust the server-side cache *before* refetching, since a
+client-only refetch had been re-reading the same stale server cache.
+`ed0c3a7` fixed card position jumping during field edits on
+Atelier/Parking/Depot — those lists are server-sorted by `TIMESTAMP` and an
+edit bumps it, relocating the row the user is actively working on; the new
+`useStableRowOrder` hook pins *position* to the last-known order while row
+*data* stays exactly what the query returned.
+
+### Gemini as a parallel LLM provider
+
+`cb13749` added `/api/generate-email` — a second, parallel LLM provider
+alongside the app, not a replacement for anything. `6629251` hardened it to
+the same cost/security/reliability rules as the rest of the app: a 20s
+timeout, output-token and prompt-length caps, upstream errors logged
+server-side but never returned to the client, and upstream statuses mapped
+(429→429, 5xx→502, timeout→504). The model choice is deliberate and
+documented in the route header: `gemini-flash-lite-latest`, a **rolling
+alias** verified live rather than assumed, chosen over a dated snapshot
+because `gemini-2.5-flash-lite` had already been retired once for this key
+(404). The accepted risk — a rolling alias can silently swap the underlying
+model — is recorded there with an explicit boundary: do not reuse this
+choice for anything output-sensitive without flagging the tradeoff again.
+
+### Suivi RL: multi-select filters, Excel export, AI reformulation
+
+`12bdc5e` converted all four filter axes to multi-select (OR within an axis,
+still AND across axes, with the downstream-reset cascade preserved) and
+added an Excel export (`/api/bdd/export-excel`, `exceljs` — the app's first
+xlsx output; confirmed no existing utility to reuse) alongside the PDF.
+Emplacement became a real column in the Excel export on the reasoning that a
+multi-select filter means one export can span several Emplacement values, so
+per-row Emplacement stopped being redundant with the header summary.
+`e3bc354` then applied the same reasoning to the PDF export — which required
+solving a **width/truncation bug**: giving Emplacement the same weight as
+`modele` truncated both the column header itself and the live
+`INTROUVABLE` value, found by decoding a real export's PDF content stream
+rather than by inspection, and fixed by measuring the actual strings with
+`widthOfTextAtSize` and assigning weight `1.3`.
+
+`24eec71` added AI comment reformulation via Gemini
+(`/api/bdd/reformulate-comment`), and `b8d762a` made it context-aware —
+passing Modèle/ETAT/Prestataire/Flag/Catégorie/Technicien so the model can
+tell what a terse technician note refers to, while the system instruction
+forbids restating the context, inventing details, or changing meaning. The
+load-bearing property, stated in three places in the code, is that the route
+**never writes to the Sheet**: the user reviews an editable suggestion in a
+dialog and, on confirm, saves through the same `commitField("commentaire")`
+path as any manual edit. That mandatory human review is what makes the
+rolling-model-alias risk acceptable.
+
+`c0d5965` closed the loop on the filter work with "Non renseigné" chips on
+all four axes — rendered only when the axis's own in-scope dataset actually
+contains a blank value for that field — and switched Flotte/Emplacement from
+admin-config option lists to the same data-derived, cascade-narrowing
+pattern Prestataire/Flag already used. The bug that fixed: a config-only
+value with zero live rows (confirmed: `ANNULE`/`ANNULEE`) rendered as a
+clickable, permanently-empty chip. The admin-config lists remain in use by
+the per-row editors, which must be able to set a value no other row
+currently has.
+
+---
+
 ## 3. Architectural tradeoffs & known limitations
 
 - **Single-user hardcoded authorization.** `lib/googleOAuth.ts`'s
@@ -443,6 +663,13 @@ above) is the largest standalone performance fix in the project.
 
 ## 4. Documentation index
 
+- **`ARCHITECTURE.md`** + **`docs/`** — the current-state reference: one page
+  per feature/page area, each recording what the code does now, why it was
+  built that way, what it is explicitly *not* meant to do, and the
+  limitations found while testing it. Complements this file rather than
+  replacing it — this file is the chronology, that one is the reference.
+  Start there when answering "how does X work today"; start here when
+  answering "when and why did X change".
 - **`SECURITY_VERIFICATION.md`** (added `c0fd269`) — the authoritative,
   live-verified record of this app's actual security controls
   (authentication, session/cookie settings, CSRF, write-safety, input

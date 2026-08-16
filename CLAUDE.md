@@ -154,7 +154,7 @@ against one Sheet tab, except DS History/Articles (MongoDB).
 
 | Feature | Files | Notes |
 |---|---|---|
-| BDD / Suivi RL | `app/suivi-rl/page.tsx`, `lib/googleSheetsBdd.ts`, `/api/bdd*` | 7-field editable allowlist, per-field inline commit (no card save button). Plate-only search, which bypasses the chips. Four multi-select chip axes (Flotte/Emplacement/Prestataire/Flag), OR within an axis and AND across, each with a data-derived option list + "Non renseigné" blank chip. PDF + Excel export of the filtered view; AI comment reformulation. Read-only RDV/CONVOYEUR/Intervention via XLOOKUP. |
+| BDD / Suivi RL | `app/suivi-rl/page.tsx`, `lib/googleSheetsBdd.ts`, `/api/bdd*` | 7-field editable allowlist, per-field inline commit (no card save button). Plate-only search, which bypasses the chips. Four multi-select chip axes (Flotte/Emplacement/Prestataire/Flag), OR within an axis and AND across, each with a data-derived option list + "Non renseigné" blank chip. PDF + Excel export of the filtered view; AI comment reformulation. Read-only RDV/CONVOYEUR/Intervention via XLOOKUP. Full detail: [`docs/suivi-rl.md`](./docs/suivi-rl.md). |
 | Parking | `app/parking/page.tsx`, `lib/googleSheetsParking.ts`, `/api/parking/*` | GAS port. Delete = real row deletion, not cell-clear; add always appends. |
 | Atelier | `app/atelier/page.tsx`, `lib/googleSheetsAtelier.ts`, `/api/atelier/*` | GAS port, reuses Parking's `resolveIMM`/`getIMMList`. No ACTION field; editable surface is COMMENTAIRE/CATÉGORIE/TECHNICIEN/BESOIN PIÈCE only. |
 | Depot | `app/depot/page.tsx`, `lib/googleSheetsDepot.ts`, `/api/depot/*` | Structural clone of Parking; only ACTION editable. |
@@ -234,6 +234,7 @@ a stale snapshot.
 
 ## 8. Where to find more detail
 
+- **[`ARCHITECTURE.md`](./ARCHITECTURE.md)** — index to [`docs/`](./docs), the per-feature current-state reference: what each feature does, **why** it was built that way, what it explicitly is *not* meant to do, and its known limitations. Deepest coverage of Suivi RL's filters, the BDD PDF/Excel exports, the two Gemini routes, config-driven options, and the `~/import` proxy. Also carries the running list of decisions-that-look-like-bugs and open defects.
 - **[`AGENTS.md`](./AGENTS.md)** — mandatory cross-assistant rules, imported at the top of this file.
 - **[`GEMINI.md`](./GEMINI.md)** — the equivalent entry point for Gemini CLI / Antigravity sessions.
 - **[`PROJECT_HISTORY.md`](./PROJECT_HISTORY.md)** — full commit-by-commit feature timeline and reasoning.

@@ -21,6 +21,10 @@ the dev server — the app won't start without them.
 
 ## Everything else
 
+Start with [`ARCHITECTURE.md`](./ARCHITECTURE.md) — the index to the
+per-feature reference documentation in [`docs/`](./docs), covering what each
+feature does, why it was built that way, and its known limitations.
+
 This repo documents itself for two AI assistants side by side: see
 [`CLAUDE.md`](./CLAUDE.md) for the Claude Code entry point — stack,
 environment variables, theming system, authentication/security
