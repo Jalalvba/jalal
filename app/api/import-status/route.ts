@@ -4,7 +4,11 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/rateLimit";
 import { toErrorResponse } from "@/lib/apiError";
-import type { ImportPipelineResult, ImportStatusResponse } from "@/lib/types";
+import type {
+  ImportPipelineResult,
+  ImportPipelineRunStatus,
+  ImportStatusResponse,
+} from "@/lib/types";
 
 // Read-only lookup of a past run's full step history — for re-viewing a
 // prior run's detail, not for polling during a trigger (the trigger route
@@ -25,6 +29,31 @@ type RawStatusDoc = {
 };
 
 const KNOWN_STEP_STATUSES = new Set(["started", "success", "failed", "skipped"]);
+
+// Deliberately NOT the same set as KNOWN_STEP_STATUSES above: a pipeline
+// *run*'s status has its own vocabulary (lib/types.ts's
+// ImportPipelineRunStatus), and the two are not interchangeable. Validating a
+// run status against the step set is exactly the bug 9fe833d fixed in
+// app/api/trigger-import/route.ts — since neither "skipped_absent" nor
+// "skipped_unchanged" is a step status, both silently coerced to "failed",
+// reporting a legitimately skipped run as a failed one. The fix was never
+// applied here at the time; this is it.
+const KNOWN_RUN_STATUSES = new Set<string>([
+  "success",
+  "failed",
+  "skipped_absent",
+  "skipped_unchanged",
+  // Only /api/status can report this — a run still in progress when polled
+  // (PipelineLogger.status starts "running" until finish() is called). The
+  // trigger route never returns it.
+  "running",
+]);
+
+function normalizeRunStatus(raw: unknown): ImportPipelineRunStatus {
+  return typeof raw === "string" && KNOWN_RUN_STATUSES.has(raw)
+    ? (raw as ImportPipelineRunStatus)
+    : "failed";
+}
 
 function normalizeTimestamp(raw: unknown): string | null {
   if (typeof raw !== "string" || !raw) return null;
@@ -72,7 +101,7 @@ export async function GET(req: Request) {
       filename: "",
       pipeline: doc.pipeline ?? "",
       run_id: runId,
-      status: (KNOWN_STEP_STATUSES.has(doc.status ?? "") ? doc.status : doc.status === "running" ? "running" : "failed") as ImportPipelineResult["status"],
+      status: normalizeRunStatus(doc.status),
       started_at: normalizeTimestamp(doc.started_at),
       finished_at: normalizeTimestamp(doc.finished_at),
       steps: Array.isArray(doc.steps)

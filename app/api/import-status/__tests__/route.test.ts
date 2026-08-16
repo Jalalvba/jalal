@@ -64,6 +64,47 @@ describe("GET /api/import-status", () => {
     expect(body.run.steps).toHaveLength(1);
   });
 
+  // Regression guard for the bug 9fe833d fixed in /api/trigger-import but
+  // never applied here: the run status was validated against the *step*
+  // status set, so both real skip outcomes silently became "failed". These
+  // are the exact status strings ~/import's run.py emits.
+  it.each([
+    ["skipped_absent"],
+    ["skipped_unchanged"],
+    ["success"],
+    ["failed"],
+    ["running"],
+  ])("passes a real run status through unchanged: %s", async (status) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({ pipeline: "parc", started_at: null, finished_at: null, status, steps: [] })
+      )
+    );
+
+    const res = await GET(req(`run-${status}`));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.run.status).toBe(status);
+  });
+
+  it("coerces an unrecognized run status to failed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        // A bare "skipped" is never a real run status (see lib/types.ts's
+        // ImportPipelineRunStatus) — treated as unrecognized, not as a skip.
+        jsonResponse({ pipeline: "ds", started_at: null, finished_at: null, status: "skipped", steps: [] })
+      )
+    );
+
+    const res = await GET(req("run-bogus"));
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).run.status).toBe("failed");
+  });
+
   it("forwards a 404 from the backend as 404, not a generic 502", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not found", { status: 404 })));
 
