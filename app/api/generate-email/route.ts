@@ -15,6 +15,7 @@
 
 import { NextResponse } from "next/server";
 import { checkRateLimit, clientIp } from "@/lib/rateLimit";
+import { callGeminiWithTracking, GeminiCallError } from "@/lib/gemini-cost-tracker";
 import type { GenerateEmailRequest, GenerateEmailResponse } from "@/lib/types";
 
 const RATE_LIMIT = 30;
@@ -26,6 +27,16 @@ const MAX_OUTPUT_TOKENS = 400;
 const TEMPERATURE = 0.25;
 const SYSTEM_INSTRUCTION =
   "You draft short, professional business emails. Output only the email body — no preamble, no commentary.";
+
+// Client-facing messages per failure kind. The wrapper logs the raw upstream
+// detail server-side; none of it is echoed to the client.
+const ERROR_MESSAGES: Record<GeminiCallError["kind"], string> = {
+  unconfigured: "Email generation is not configured",
+  "rate-limited": "Email generation is rate-limited upstream. Try again shortly.",
+  upstream: "Email generation failed",
+  timeout: "Email generation timed out. Try again.",
+  "bad-response": "Email generation failed",
+};
 
 export async function POST(request: Request): Promise<NextResponse<GenerateEmailResponse>> {
   const { allowed, retryAfterSeconds } = await checkRateLimit(
@@ -60,90 +71,34 @@ export async function POST(request: Request): Promise<NextResponse<GenerateEmail
   }
 
   // Model is never a secret and stays client-overridable per the route's
-  // contract — only the API key is locked to the server-side env var below.
+  // contract — only the API key is locked to the server-side env var. Note a
+  // client-supplied model with no PRICING entry costs out at 0 (logged loudly
+  // by computeCallCost) rather than failing the request.
   const model = body.model?.trim() || DEFAULT_MODEL;
   const tone = body.tone?.trim();
   const fullPrompt = tone ? `Tone: ${tone}\n\n${prompt}` : prompt;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.error("[generate-email] GEMINI_API_KEY is not set");
-    return NextResponse.json(
-      { ok: false, error: "Email generation is not configured" },
-      { status: 500 }
-    );
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
   try {
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: fullPrompt }] }],
-          systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-          generationConfig: {
-            maxOutputTokens: MAX_OUTPUT_TOKENS,
-            temperature: TEMPERATURE,
-          },
-        }),
-        signal: controller.signal,
-      }
-    );
+    // All Gemini access goes through callGeminiWithTracking — never fetch the
+    // API directly from a route, or the call escapes cost tracking entirely.
+    const { result, costInfo } = await callGeminiWithTracking({
+      action: "generate-email",
+      model,
+      prompt: fullPrompt,
+      systemInstruction: SYSTEM_INSTRUCTION,
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      temperature: TEMPERATURE,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+    });
 
-    if (!geminiResponse.ok) {
-      // Logged server-side only for diagnosis — never returned to the
-      // client, which only ever sees the sanitized messages below. Gemini
-      // error bodies don't carry our key (it's a request header, not
-      // response content), but the raw text may carry other detail we
-      // don't want to promise as a stable client-facing contract.
-      const rawText = await geminiResponse.text().catch(() => "");
-      console.error(`[generate-email] Gemini API returned ${geminiResponse.status}: ${rawText}`);
-
-      if (geminiResponse.status === 429) {
-        return NextResponse.json(
-          { ok: false, error: "Email generation is rate-limited upstream. Try again shortly." },
-          { status: 429 }
-        );
-      }
-      if (geminiResponse.status >= 500) {
-        return NextResponse.json(
-          { ok: false, error: "Email generation service is temporarily unavailable." },
-          { status: 502 }
-        );
-      }
-      return NextResponse.json({ ok: false, error: "Email generation failed" }, { status: 500 });
-    }
-
-    const data = await geminiResponse.json();
-    const email = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (typeof email !== "string" || !email) {
-      console.error("[generate-email] Unexpected Gemini response shape:", JSON.stringify(data));
-      return NextResponse.json(
-        { ok: false, error: "Email generation failed" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ ok: true, email });
+    // costInfo is passed straight through so the client gets the cost in the
+    // same round trip as the email.
+    return NextResponse.json({ ok: true, email: result, costInfo });
   } catch (e) {
-    if (e instanceof Error && e.name === "AbortError") {
-      console.error(`[generate-email] Gemini request timed out after ${REQUEST_TIMEOUT_MS}ms`);
-      return NextResponse.json(
-        { ok: false, error: "Email generation timed out. Try again." },
-        { status: 504 }
-      );
+    if (e instanceof GeminiCallError) {
+      return NextResponse.json({ ok: false, error: ERROR_MESSAGES[e.kind] }, { status: e.status });
     }
-    console.error("[generate-email] Gemini request failed:", e);
+    console.error("[generate-email] Unexpected failure:", e);
     return NextResponse.json({ ok: false, error: "Email generation failed" }, { status: 500 });
-  } finally {
-    clearTimeout(timeout);
   }
 }

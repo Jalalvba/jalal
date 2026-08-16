@@ -16,6 +16,7 @@ import {
   etatBadgeClass,
   type BddRow,
   type ReformulateCommentContext,
+  type CostInfo,
 } from "@/lib/types";
 import { ZONE_COLORS } from "@/lib/constants/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
@@ -43,6 +44,7 @@ import {
 import { AddBddPlateDialog } from "@/components/fleet/AddBddPlateDialog";
 import { useVehicleZone } from "@/hooks/useVehicleZone";
 import { ZoneBadges } from "@/components/fleet/ZoneBadges";
+import { CostBadge } from "@/components/fleet/CostBadge";
 import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
 import { Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -417,6 +419,7 @@ function ReformulateCommentButton({
   const reformulateMutation = useReformulateComment();
   const [open, setOpen] = useState(false);
   const [suggestion, setSuggestion] = useState("");
+  const [costInfo, setCostInfo] = useState<CostInfo | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -429,10 +432,12 @@ function ReformulateCommentButton({
     }
     setError("");
     setSuggestion("");
+    setCostInfo(null);
     setOpen(true);
     try {
       const res = await reformulateMutation.mutateAsync({ comment, context });
       setSuggestion(res.reformulated);
+      setCostInfo(res.costInfo);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Échec de la reformulation");
     }
@@ -489,12 +494,22 @@ function ReformulateCommentButton({
                 {reformulateMutation.isPending ? (
                   <div className="mt-1 text-xs text-muted-foreground">Génération…</div>
                 ) : (
-                  <textarea
-                    value={suggestion}
-                    onChange={(e) => setSuggestion(e.target.value)}
-                    rows={3}
-                    className="mt-1 w-full resize-none rounded-lg border border-amber-500/60 bg-muted px-2.5 py-2 text-xs leading-snug text-foreground outline-none"
-                  />
+                  <>
+                    <textarea
+                      value={suggestion}
+                      onChange={(e) => setSuggestion(e.target.value)}
+                      rows={3}
+                      className="mt-1 w-full resize-none rounded-lg border border-amber-500/60 bg-muted px-2.5 py-2 text-xs leading-snug text-foreground outline-none"
+                    />
+                    {/* Cost of the call that produced this suggestion, returned
+                        inline by /api/bdd/reformulate-comment in the same
+                        response — nothing extra is fetched here. */}
+                    {costInfo && (
+                      <div className="mt-2">
+                        <CostBadge costInfo={costInfo} />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

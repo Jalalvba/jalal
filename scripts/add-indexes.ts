@@ -116,6 +116,13 @@ async function main() {
     // means each document expires exactly at its own `expiresAt` value, so old
     // rate-limit windows clean themselves up with no manual maintenance.
     { col: "rate_limits", key: { expiresAt: 1 }, name: "expires_at_ttl", expireAfterSeconds: 0 },
+    // Same self-expiring pattern for lib/gemini-cost-tracker.ts's per-model,
+    // per-Pacific-day free-tier counters.
+    { col: "gemini_quota", key: { expiresAt: 1 }, name: "expires_at_ttl", expireAfterSeconds: 0 },
+    // Audit log — no TTL, this is the history we want to keep. Indexed for the
+    // usual "what did we spend recently / on this action" queries.
+    { col: "gemini_usage", key: { timestamp: -1 }, name: "timestamp_desc" },
+    { col: "gemini_usage", key: { action: 1, timestamp: -1 }, name: "action_timestamp" },
   ];
 
   for (const spec of specs) {
@@ -127,7 +134,7 @@ async function main() {
   }
 
   console.log("\n=== Verifying via .indexes() ===");
-  for (const col of ["ds", "bc", "parc", "cp", "rate_limits"]) {
+  for (const col of ["ds", "bc", "parc", "cp", "rate_limits", "gemini_quota", "gemini_usage"]) {
     const idx = await db.collection(col).indexes();
     console.log(`  ${col}:`);
     idx.forEach((i) => console.log(`    ${JSON.stringify(i.key)} (${i.name})${i.expireAfterSeconds != null ? ` TTL=${i.expireAfterSeconds}s` : ""}`));
