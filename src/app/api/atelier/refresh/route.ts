@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { invalidateAtelierRowsCache } from "@/lib/googleSheetsAtelier";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { invalidateAtelierRowsCache } from "@/lib/sheets/googleSheetsAtelier";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 // User-triggered hard refresh (ListPageHeader's "Actualiser" button) — busts
 // the 15s server-side rows cache so the client's subsequent refetch is

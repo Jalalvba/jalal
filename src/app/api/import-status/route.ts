@@ -2,13 +2,13 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 import type {
   ImportPipelineResult,
   ImportPipelineRunStatus,
   ImportStatusResponse,
-} from "@/lib/types";
+} from "@/types";
 
 // Read-only lookup of a past run's full step history — for re-viewing a
 // prior run's detail, not for polling during a trigger (the trigger route

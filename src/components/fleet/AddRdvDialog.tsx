@@ -2,8 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
-import type { RdvAddInput } from "@/lib/types";
-import { RDV_MATRICULE_REGEX } from "@/lib/types";
+import type { RdvAddInput } from "@/types";
+import { RDV_MATRICULE_REGEX } from "@/types";
 import { useAddRdvRow } from "@/hooks/useRdvRows";
 import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";

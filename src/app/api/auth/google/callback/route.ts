@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getIronSession } from "iron-session";
-import { sessionOptions, SessionData } from "@/lib/session";
-import { getOAuthClient, getRedirectUri, AUTHORIZED_EMAIL } from "@/lib/googleOAuth";
-import { rateLimitOrNull } from "@/lib/rateLimit";
+import { sessionOptions, SessionData } from "@/lib/auth/session";
+import { getOAuthClient, getRedirectUri, AUTHORIZED_EMAIL } from "@/lib/auth/googleOAuth";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
 
 // Validates the CSRF state, exchanges the code, verifies the ID token
 // (cryptographically, via Google's own public keys — not just trusting an

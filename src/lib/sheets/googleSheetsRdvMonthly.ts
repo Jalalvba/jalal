@@ -1,9 +1,9 @@
 import { type sheets_v4 } from "googleapis";
-import type { RdvAddInput, MonthlyWriteResult, RdvEditableField } from "@/lib/types";
-import { RDV_EDITABLE_FIELDS } from "@/lib/types";
-import { getSheetsClient, isoDateToSerial, columnIndexToLetter } from "@/lib/googleSheetsClient";
-import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY, RdvIdentityError } from "@/lib/rdvIdentity";
-import { getAllSheetFieldOptions } from "@/lib/sheetFieldOptions";
+import type { RdvAddInput, MonthlyWriteResult, RdvEditableField } from "@/types";
+import { RDV_EDITABLE_FIELDS } from "@/types";
+import { getSheetsClient, isoDateToSerial, columnIndexToLetter } from "@/lib/sheets/googleSheetsClient";
+import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY, RdvIdentityError } from "@/lib/sheets/rdvIdentity";
+import { getAllSheetFieldOptions } from "@/lib/mongo/sheetFieldOptions";
 
 // Writes appointments into the monthly appointment-calendar tabs (e.g.
 // "Juillet 2026") — the DURABLE source of truth, generated and periodically

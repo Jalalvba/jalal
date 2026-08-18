@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { clearRdvRow } from "@/lib/googleSheetsRdv";
-import type { RdvAddInput } from "@/lib/types";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { clearRdvRow } from "@/lib/sheets/googleSheetsRdv";
+import type { RdvAddInput } from "@/types";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 // Renamed from /api/rdv/delete — "delete" was always a misnomer here (this
 // clears cell values, it never removes a row) and doubly so now that the

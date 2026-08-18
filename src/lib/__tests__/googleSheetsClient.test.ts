@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { sheets_v4 } from "googleapis";
-import { verifyRowIdentity, RowIdentityError } from "@/lib/googleSheetsClient";
+import { verifyRowIdentity, RowIdentityError } from "@/lib/sheets/googleSheetsClient";
 
 /** Minimal fake of the one Sheets client method verifyRowIdentity calls. */
 function fakeSheets(cellValue: unknown): sheets_v4.Sheets {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { sealData } from "iron-session";
 import { proxy } from "@/proxy";
-import { sessionOptions } from "@/lib/session";
+import { sessionOptions } from "@/lib/auth/session";
 
 // The highest-value gap Opus's audit found in the pre-existing test suite:
 // the entire auth model (this file — every request funnels through it) had

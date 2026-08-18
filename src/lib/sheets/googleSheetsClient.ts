@@ -1,6 +1,6 @@
 import { google, type sheets_v4 } from "googleapis";
 import { unstable_cache, revalidateTag } from "next/cache";
-import { ApiError } from "@/lib/apiError";
+import { ApiError } from "@/lib/http/apiError";
 
 const keyB64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_B64;
 if (!keyB64) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_KEY_B64 in .env.local");

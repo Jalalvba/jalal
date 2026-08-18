@@ -2,8 +2,8 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Mocked before importing the module under test (vitest hoists vi.mock()
 // above imports) — same pattern as lib/__tests__/sheetFieldOptions.test.ts.
-vi.mock("@/lib/googleSheetsClient", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/googleSheetsClient")>("@/lib/googleSheetsClient");
+vi.mock("@/lib/sheets/googleSheetsClient", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/sheets/googleSheetsClient")>("@/lib/sheets/googleSheetsClient");
   return {
     ...actual,
     getSheetsClient: vi.fn(),
@@ -13,8 +13,8 @@ vi.mock("@/lib/googleSheetsClient", async () => {
   };
 });
 
-import { getSheetsClient, verifyRowIdentity } from "@/lib/googleSheetsClient";
-import { updateSheetRow, deleteBddRow } from "@/lib/googleSheetsBdd";
+import { getSheetsClient, verifyRowIdentity } from "@/lib/sheets/googleSheetsClient";
+import { updateSheetRow, deleteBddRow } from "@/lib/sheets/googleSheetsBdd";
 
 const mockedGetSheetsClient = vi.mocked(getSheetsClient);
 const mockedVerifyRowIdentity = vi.mocked(verifyRowIdentity);

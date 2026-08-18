@@ -1,4 +1,4 @@
-import type { RdvAddInput, RdvEditableField } from "@/lib/types";
+import type { RdvAddInput, RdvEditableField } from "@/types";
 
 /**
  * Shared by both lib/googleSheetsRdv.ts (flat tab) and

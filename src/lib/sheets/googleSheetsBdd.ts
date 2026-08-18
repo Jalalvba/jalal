@@ -4,9 +4,9 @@ import {
   type BddRow,
   type BddUpdateResult,
   type ParkingAddResponse,
-} from "@/lib/types";
+} from "@/types";
 import { buildPlateVariants } from "@/lib/utils/plateVariants";
-import { getIMMListSafe, resolveIMM } from "@/lib/googleSheetsParking";
+import { getIMMListSafe, resolveIMM } from "@/lib/sheets/googleSheetsParking";
 import {
   getSheetsClient,
   serialToUTCDate,
@@ -15,7 +15,7 @@ import {
   invalidateCache,
   verifyRowIdentity,
   columnIndexToLetter,
-} from "@/lib/googleSheetsClient";
+} from "@/lib/sheets/googleSheetsClient";
 
 const ROWS_CACHE_KEY = "rows:BDD";
 const HEADERS_CACHE_KEY = "headers:BDD";

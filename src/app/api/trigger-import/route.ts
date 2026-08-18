@@ -3,15 +3,15 @@ export const runtime = "nodejs";
 export const maxDuration = 180;
 
 import { NextResponse } from "next/server";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
-import { invalidateIMMListCache } from "@/lib/googleSheetsParking";
-import { invalidateVehicleSuggestionListCache } from "@/lib/vehicleSuggestions";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
+import { invalidateIMMListCache } from "@/lib/sheets/googleSheetsParking";
+import { invalidateVehicleSuggestionListCache } from "@/lib/mongo/vehicleSuggestions";
 import type {
   ImportPipelineResult,
   ImportPipelineStep,
   TriggerImportResponse,
-} from "@/lib/types";
+} from "@/types";
 
 // Separate Vercel project (~/import), not part of this repo. GET /api
 // blocks synchronously until all four pipelines (ds/cp/parc/bc) finish —

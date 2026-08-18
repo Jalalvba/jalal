@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 // Mocked before importing the module under test (vitest hoists vi.mock()
 // above imports) — same pattern as rateLimit.test.ts.
-vi.mock("@/lib/mongo", () => ({
+vi.mock("@/lib/mongo/client", () => ({
   getCollection: vi.fn(),
 }));
 
@@ -13,7 +13,7 @@ import {
   detectAliasDrift,
   PRICING,
   FREE_TIER_LIMITS,
-} from "@/lib/gemini-cost-tracker";
+} from "@/lib/gemini/costTracker";
 
 const ORIGINAL_ENV = { ...process.env };
 

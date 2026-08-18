@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures";
-import type { BddRow } from "@/lib/types";
+import type { BddRow } from "@/types";
 
 // Turns the ad-hoc "apply Emplacement filter, read the count badge, compare
 // to the API" verification done manually (and thrown away) earlier this

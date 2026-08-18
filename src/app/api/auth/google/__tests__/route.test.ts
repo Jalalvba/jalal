@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mockRateLimitOrNull = vi.fn();
-vi.mock("@/lib/rateLimit", () => ({ rateLimitOrNull: (...args: unknown[]) => mockRateLimitOrNull(...args) }));
+vi.mock("@/lib/http/rateLimit", () => ({ rateLimitOrNull: (...args: unknown[]) => mockRateLimitOrNull(...args) }));
 
 import { GET } from "@/app/api/auth/google/route";
 

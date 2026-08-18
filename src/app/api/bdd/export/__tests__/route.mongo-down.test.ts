@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 // export 500s, root-caused via Vercel's runtime-error logs to an uncaught
 // MongoNetworkError from the rate-limiter) stays fixed at the exact route
 // where it was reported — not just at lib/rateLimit.ts's own unit level.
-vi.mock("@/lib/mongo", () => ({
+vi.mock("@/lib/mongo/client", () => ({
   getCollection: vi.fn().mockRejectedValue(new Error("MongoServerSelectionError: Server selection timed out")),
 }));
 

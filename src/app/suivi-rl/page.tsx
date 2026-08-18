@@ -17,7 +17,7 @@ import {
   type BddRow,
   type ReformulateCommentContext,
   type CostInfo,
-} from "@/lib/types";
+} from "@/types";
 import { ZONE_COLORS } from "@/config/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";

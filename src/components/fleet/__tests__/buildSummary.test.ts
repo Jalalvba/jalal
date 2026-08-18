@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSummary } from "@/components/fleet/ImportTrigger";
-import type { ImportPipelineResult, ImportPipelineRunStatus } from "@/lib/types";
+import type { ImportPipelineResult, ImportPipelineRunStatus } from "@/types";
 
 // Minimal fixture builder — only the fields buildSummary actually reads
 // (status, pipeline, steps) need real values; the rest are filler.

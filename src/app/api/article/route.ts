@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getCollection } from "@/lib/mongo";
+import { getCollection } from "@/lib/mongo/client";
 import { escapeRegex } from "@/lib/utils/regex";
-import { checkRateLimit, clientIp } from "@/lib/rateLimit";
+import { checkRateLimit, clientIp } from "@/lib/http/rateLimit";
 import type { Document } from "mongodb";
 
 const RATE_LIMIT = 20;

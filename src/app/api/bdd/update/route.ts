@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { updateSheetRow } from "@/lib/googleSheetsBdd";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { updateSheetRow } from "@/lib/sheets/googleSheetsBdd";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 export async function POST(req: Request) {
   const limited = await rateLimitOrNull(req, "bdd-update", 30, 60_000);

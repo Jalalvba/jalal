@@ -1,5 +1,5 @@
 import { buildPlateVariants } from "@/lib/utils/plateVariants";
-import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, withCache, invalidateCache } from "@/lib/googleSheetsClient";
+import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, withCache, invalidateCache } from "@/lib/sheets/googleSheetsClient";
 
 // Reads the "RL" tab (véhicule de remplacement / replacement-vehicle data)
 // via the authenticated service-account Sheets API — replacing the

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AllSheetFieldOptions, ColoredOption, OptionKey } from "@/lib/types";
+import type { AllSheetFieldOptions, ColoredOption, OptionKey } from "@/types";
 import {
   EMPLACEMENT_OPTIONS_FALLBACK,
   ETAT_OPTIONS_FALLBACK,
@@ -10,7 +10,7 @@ import {
   TECHNICIEN_OPTIONS_FALLBACK,
   PRESTATAIRE_OPTIONS_FALLBACK,
   RDV_CONVOYEURS_FALLBACK,
-} from "@/lib/types";
+} from "@/types";
 
 // Client-side counterpart to lib/sheetFieldOptions.ts's server-side fallback
 // — same *_FALLBACK constants, shown immediately on first render (and if the
@@ -58,7 +58,7 @@ async function fetchOptions(): Promise<FetchOptionsResult> {
 }
 
 /**
- * Replaces every page's old direct `import { X_OPTIONS } from "@/lib/types"`
+ * Replaces every page's old direct `import { X_OPTIONS } from "@/types"`
  * — options are Mongo-backed now, so reading them is an async fetch instead
  * of a static import. Backed by TanStack Query's own cache, so calling this
  * from several components on the same page (a list page's chip row AND its

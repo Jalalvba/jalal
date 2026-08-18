@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult } from "@/lib/types";
+import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult } from "@/types";
 
 // Same pattern as hooks/useAtelierRows.ts. No clear-all mutation — RDV is an
 // append-only appointment log, so unlike Atelier/Parking there's no bulk-wipe

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/rateLimit", () => ({ rateLimitOrNull: vi.fn().mockResolvedValue(null) }));
+vi.mock("@/lib/http/rateLimit", () => ({ rateLimitOrNull: vi.fn().mockResolvedValue(null) }));
 
 const mockUpdateSheetRow = vi.fn();
-vi.mock("@/lib/googleSheetsBdd", () => ({
+vi.mock("@/lib/sheets/googleSheetsBdd", () => ({
   updateSheetRow: (...args: unknown[]) => mockUpdateSheetRow(...args),
 }));
 

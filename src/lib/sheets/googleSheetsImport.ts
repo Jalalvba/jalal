@@ -1,5 +1,5 @@
 import { buildPlateVariants } from "@/lib/utils/plateVariants";
-import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, fmtDateTime } from "@/lib/googleSheetsClient";
+import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, fmtDateTime } from "@/lib/sheets/googleSheetsClient";
 
 // Reads the "Import" tab (Assistance import events) via the authenticated
 // service-account Sheets API. Tab name, column layout, and the fact that

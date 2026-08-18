@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
-import { getOAuthClient, getRedirectUri } from "@/lib/googleOAuth";
-import { rateLimitOrNull } from "@/lib/rateLimit";
+import { getOAuthClient, getRedirectUri } from "@/lib/auth/googleOAuth";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
 
 // Starts the OAuth flow: generates a CSRF state token, stores it in a
 // short-lived cookie, and redirects to Google's consent screen.

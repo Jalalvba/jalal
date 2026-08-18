@@ -7,7 +7,7 @@ import type {
   ParkingAddResponse,
   ReformulateCommentContext,
   ReformulateCommentResponse,
-} from "@/lib/types";
+} from "@/types";
 
 // Same pattern as hooks/useParkingRows.ts / useAtelierRows.ts, against the
 // existing /api/bdd and /api/bdd/update endpoints (unchanged).

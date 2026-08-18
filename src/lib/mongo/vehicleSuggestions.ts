@@ -1,5 +1,5 @@
-import { getCollection } from "@/lib/mongo";
-import { withCache, invalidateCache } from "@/lib/googleSheetsClient";
+import { getCollection } from "@/lib/mongo/client";
+import { withCache, invalidateCache } from "@/lib/sheets/googleSheetsClient";
 
 const VEHICLE_SUGGEST_CACHE_KEY = "vehicle-suggest-list:parc+cp";
 

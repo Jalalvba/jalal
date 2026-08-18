@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { invalidateBddRowsCache } from "@/lib/googleSheetsBdd";
-import { invalidateRlReunionRowsCache } from "@/lib/googleSheetsRl";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { invalidateBddRowsCache } from "@/lib/sheets/googleSheetsBdd";
+import { invalidateRlReunionRowsCache } from "@/lib/sheets/googleSheetsRl";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 // Shared by Suivi RL's "Actualiser" button and DS History's search/
 // re-search — both read the BDD tab, and DS History additionally reads

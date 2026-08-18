@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures";
-import type { AtelierRow } from "@/lib/types";
+import type { AtelierRow } from "@/types";
 
 // Permanent version of this session's manual verification: click a named
 // Technicien chip and the new "Non assigné" chip, cross-check each against

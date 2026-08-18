@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { DepotRow, ParkingAddResultItem } from "@/lib/types";
+import type { DepotRow, ParkingAddResultItem } from "@/types";
 import { ZONE_COLORS } from "@/config/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";

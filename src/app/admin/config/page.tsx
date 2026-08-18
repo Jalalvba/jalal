@@ -11,7 +11,7 @@ import {
   type OptionKey,
   type ColoredOption,
   type PaletteColor,
-} from "@/lib/types";
+} from "@/types";
 import { useSheetFieldOptions, useUpdateSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { Input } from "@/components/ui/input";

@@ -3,8 +3,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 import { NextResponse } from "next/server";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 // Same rate-limit bucket sizing as app/api/bdd/export's PDF export — this is
 // also a read-only report generator, not a Sheets mutation.

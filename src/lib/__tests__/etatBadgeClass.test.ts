@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { etatBadgeClass, ETAT_OPTIONS_FALLBACK } from "@/lib/types";
+import { etatBadgeClass, ETAT_OPTIONS_FALLBACK } from "@/types";
 
 describe("etatBadgeClass — shared ETAT color mapping (M4)", () => {
   it("every real ETAT_OPTIONS_FALLBACK value returns a non-empty class string", () => {

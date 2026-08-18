@@ -763,10 +763,10 @@ export type GenerateEmailRequest = {
 
 // Re-exported so client components can type costInfo without importing
 // lib/gemini-cost-tracker.ts, which pulls in the Mongo driver.
-export type { CostInfo } from "@/lib/gemini-cost-tracker";
+export type { CostInfo } from "@/lib/gemini/costTracker";
 
 export type GenerateEmailResponse =
-  | { ok: true; email: string; costInfo: import("@/lib/gemini-cost-tracker").CostInfo }
+  | { ok: true; email: string; costInfo: import("@/lib/gemini/costTracker").CostInfo }
   | { ok: false; error: string };
 
 export type ReformulateCommentContext = {
@@ -784,5 +784,5 @@ export type ReformulateCommentRequest = {
 };
 
 export type ReformulateCommentResponse =
-  | { ok: true; reformulated: string; costInfo: import("@/lib/gemini-cost-tracker").CostInfo }
+  | { ok: true; reformulated: string; costInfo: import("@/lib/gemini/costTracker").CostInfo }
   | { ok: false; error: string };

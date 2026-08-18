@@ -7,7 +7,7 @@
 // title tooltip. See the header comment in lib/gemini-cost-tracker.ts.
 
 import { Badge } from "@/components/ui/badge";
-import type { CostInfo } from "@/lib/types";
+import type { CostInfo } from "@/types";
 
 // 3 decimals: a single Flash-Lite call lands around 0.001–0.05 MAD, so 2 would
 // round most calls to "0.00 MAD".

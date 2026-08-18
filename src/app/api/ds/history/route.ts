@@ -1,7 +1,7 @@
 // app/api/ds/history/route.ts
 import { NextResponse } from "next/server";
-import { getCollection } from "@/lib/mongo";
-import { toErrorResponse } from "@/lib/apiError";
+import { getCollection } from "@/lib/mongo/client";
+import { toErrorResponse } from "@/lib/http/apiError";
 import type { Document } from "mongodb";
 
 function parseYear(yearStr: string | null): { start?: Date; end?: Date } {

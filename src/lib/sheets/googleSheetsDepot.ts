@@ -1,45 +1,48 @@
 import { type sheets_v4 } from "googleapis";
-import { getIMMListSafe, resolveIMM } from "@/lib/googleSheetsParking";
-import type {
-  AtelierRow,
-  AtelierEditableField,
-  ParkingAddResponse,
-  ParkingAddResultItem,
-} from "@/lib/types";
-import { ATELIER_EDITABLE_FIELDS } from "@/lib/types";
+import { getIMMListSafe, resolveIMM } from "@/lib/sheets/googleSheetsParking";
+import type { DepotRow, ParkingAddResponse, ParkingAddResultItem } from "@/types";
 import {
   getSheetsClient,
   serialToUTCDate,
   nowToSerial,
-  fmtDateTime,
   fmtDateOnlyDash,
+  fmtDateTime,
   withCache,
   invalidateCache,
   verifyRowIdentity,
   columnIndexToLetter,
-} from "@/lib/googleSheetsClient";
+} from "@/lib/sheets/googleSheetsClient";
 
-const ROWS_CACHE_KEY = "rows:ATELIER";
-const HEADERS_CACHE_KEY = "headers:ATELIER";
+const ROWS_CACHE_KEY = "rows:DEPOT";
+const HEADERS_CACHE_KEY = "headers:DEPOT";
 
-// Ported from the AVIS Maroc GAS "Atelier" system (code.gs + RebuildAtelier.gs).
-// Same spreadsheet as PARKING/BDD (TARGET_SHEET_ID in the source matches this
-// app's GOOGLE_SHEETS_ID — confirmed, not a guess). Tab name and the fact that
-// its live column *order* drifts from the reference source are both confirmed
-// by a live spreadsheets.values.get() read.
+// Tab name, gid (1365327220), column layout and XLOOKUP formulas confirmed
+// by a live spreadsheets.get()/values.get()/FORMULA-render read — not a
+// guess, and not just inferred from resemblance to PARKING: this tab is a
+// byte-for-byte structural clone (same 15 columns, same 12 XLOOKUP formulas
+// verbatim, same manual/read-only split — only ACTION is editable). See
+// lib/types.ts's DepotRow comment for the full column list.
+//
+// This file originally had only a getDepotPlates() existence-check for the
+// zone-badge feature, before this tab got its own full page. That function
+// has been superseded by getDepotRows() below (which reads the same IMM
+// column plus everything else) — useVehicleZone.ts now checks DEPOT via the
+// full rows query, same as it already does for Parking/Atelier/RDV, rather
+// than keeping two separate reads of the same tab.
 
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 
-const ATELIER_TAB = "ATELIER";
+const DEPOT_TAB = "DEPOT";
 const DATA_START_ROW = 2;
-const HEADER_RANGE_WIDTH = "S"; // 18 real columns, generous margin
+const HEADER_RANGE_WIDTH = "O"; // 15 real columns, confirmed live
 
+/** Live header row → column-name lookup, never hardcoded indices. */
 async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
   return withCache(HEADERS_CACHE_KEY, 5 * 60_000, async () => {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId!,
-      range: `'${ATELIER_TAB}'!A1:${HEADER_RANGE_WIDTH}1`,
+      range: `'${DEPOT_TAB}'!A1:${HEADER_RANGE_WIDTH}1`,
       valueRenderOption: "UNFORMATTED_VALUE",
     });
     const row = res.data.values?.[0] ?? [];
@@ -55,50 +58,40 @@ function buildColMap(headers: string[]): Record<string, number> {
   return map;
 }
 
-async function getAtelierSheetProps(
-  sheets: sheets_v4.Sheets
-): Promise<{ sheetId: number; rowCount: number }> {
+async function getDepotSheetProps(sheets: sheets_v4.Sheets): Promise<{ sheetId: number; rowCount: number }> {
   const res = await sheets.spreadsheets.get({
     spreadsheetId: spreadsheetId!,
     fields: "sheets.properties",
   });
-  const props = res.data.sheets?.find((s) => s.properties?.title === ATELIER_TAB)?.properties;
+  const props = res.data.sheets?.find((s) => s.properties?.title === DEPOT_TAB)?.properties;
   if (!props || props.sheetId == null) {
-    throw new Error(`Sheet tab '${ATELIER_TAB}' not found`);
+    throw new Error(`Sheet tab '${DEPOT_TAB}' not found`);
   }
   return { sheetId: props.sheetId, rowCount: props.gridProperties?.rowCount ?? 0 };
 }
 
-
-// ─── getParkingList (ported as getAtelierRows) ────────────────────────────
+// ─── getDepotRows ──────────────────────────────────────────────────────────
 
 /**
- * Named fields, same live column-map pattern as getParkingRows() — including
- * the 9 read-only XLOOKUP columns (DS, BDD, RL_REUNION, MOTIF, ETAT VÉHICULE,
- * DATE_DS, PARTS, TECHNICEIN_DS, FOUNISSEUR), which this originally left out
- * entirely (the source GAS getParkingList() read them into its row array but
- * never returned them, and its own UI never displayed them — now surfaced
- * here to match what Parking's card shows). DATE_DS is the only one that's
- * ever a Sheets date serial.
- *
- * Also drops the original's `suivi` field: it reads from colMap['SUIVI'],
- * but no "SUIVI" column exists anywhere in CFG_PARKING_SHEET.COLUMNS or the
- * live header row, so it's always ''. Dead code in the source, not ported.
+ * Reads every non-empty row (IMM non-blank) from the DEPOT tab, sorted
+ * ascending by timestamp (oldest first) — same convention as
+ * getParkingRows(), which this is a straight port of given the confirmed
+ * identical schema.
  */
-export async function getAtelierRows(): Promise<AtelierRow[]> {
-  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchAtelierRows());
+export async function getDepotRows(): Promise<DepotRow[]> {
+  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchDepotRows());
 }
 
-/** Called by app/api/atelier/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
-export function invalidateAtelierRowsCache(): void {
+/** Called by app/api/depot/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+export function invalidateDepotRowsCache(): void {
   invalidateCache(ROWS_CACHE_KEY);
 }
 
-async function fetchAtelierRows(): Promise<AtelierRow[]> {
+async function fetchDepotRows(): Promise<DepotRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
-    range: `'${ATELIER_TAB}'!A1:${HEADER_RANGE_WIDTH}`,
+    range: `'${DEPOT_TAB}'!A1:${HEADER_RANGE_WIDTH}`,
     valueRenderOption: "UNFORMATTED_VALUE",
   });
 
@@ -108,14 +101,11 @@ async function fetchAtelierRows(): Promise<AtelierRow[]> {
   const headers = values[0].map((h) => String(h ?? "").trim().toUpperCase());
   const colMap = buildColMap(headers);
   const immCol = colMap["IMM"] ?? 1;
-  const marqueCol = colMap["MARQUE"];
-  const modelCol = colMap["MODEL"];
-  const clientCol = colMap["CLIENT"];
-  const commentaireCol = colMap["COMMENTAIRE"];
-  const categorieCol = colMap["CATÉGORIE"];
-  const technicienCol = colMap["TECHNICIEN"];
-  const besoinPieceCol = colMap["BESOIN PIÈCE"];
-  const tsCol = colMap["TIMESTAMP"];
+  const actionCol = colMap["ACTION"] ?? 2;
+  const marqueCol = colMap["MARQUE"] ?? 3;
+  const modelCol = colMap["MODEL"] ?? 4;
+  const clientCol = colMap["CLIENT"] ?? 5;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
   const rlReunionCol = colMap["RL_REUNION"];
   const motifCol = colMap["MOTIF"];
   const etatVehiculeCol = colMap["ETAT VÉHICULE"];
@@ -123,23 +113,10 @@ async function fetchAtelierRows(): Promise<AtelierRow[]> {
   const dateDsCol = colMap["DATE_DS"];
   const dsCol = colMap["DS"];
   const partsCol = colMap["PARTS"];
-  const techniceinDsCol = colMap["TECHNICEIN_DS"];
+  const techniceinCol = colMap["TECHNICEIN"];
   const founisseurCol = colMap["FOUNISSEUR"];
 
-  const strOrEmpty = (row: unknown[], col: number | undefined) => {
-    if (!col) return "";
-    const v = row[col - 1];
-    return v != null ? String(v).trim() : "";
-  };
-
-  const dateOrEmpty = (row: unknown[], col: number | undefined) => {
-    if (!col) return "";
-    const v = row[col - 1];
-    if (v == null || v === "") return "";
-    return typeof v === "number" ? fmtDateOnlyDash(serialToUTCDate(v)) : String(v).trim();
-  };
-
-  const rows: AtelierRow[] = [];
+  const rows: DepotRow[] = [];
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
@@ -147,7 +124,7 @@ async function fetchAtelierRows(): Promise<AtelierRow[]> {
     const imm = immRaw != null ? String(immRaw).trim().toUpperCase() : "";
     if (!imm) continue;
 
-    const tsRaw = tsCol ? row[tsCol - 1] : undefined;
+    const tsRaw = row[tsCol - 1];
     let timestamp = "";
     let rawDate = 0;
     if (typeof tsRaw === "number") {
@@ -156,27 +133,37 @@ async function fetchAtelierRows(): Promise<AtelierRow[]> {
       rawDate = d.getTime();
     }
 
+    const strOrEmpty = (col: number | undefined) => {
+      if (!col) return "";
+      const v = row[col - 1];
+      return v != null ? String(v).trim() : "";
+    };
+
+    const dateOrEmpty = (col: number | undefined) => {
+      if (!col) return "";
+      const v = row[col - 1];
+      if (v == null || v === "") return "";
+      return typeof v === "number" ? fmtDateOnlyDash(serialToUTCDate(v)) : String(v).trim();
+    };
+
     rows.push({
       rowIndex: i + 1,
       imm,
       timestamp,
       rawDate,
-      marque: strOrEmpty(row, marqueCol),
-      model: strOrEmpty(row, modelCol),
-      client: strOrEmpty(row, clientCol),
-      commentaire: strOrEmpty(row, commentaireCol),
-      categorie: strOrEmpty(row, categorieCol),
-      technicien: strOrEmpty(row, technicienCol),
-      besoinPiece: strOrEmpty(row, besoinPieceCol),
-      rlReunion: strOrEmpty(row, rlReunionCol),
-      motif: strOrEmpty(row, motifCol),
-      etatVehicule: strOrEmpty(row, etatVehiculeCol),
-      bdd: strOrEmpty(row, bddCol),
-      dateDs: dateOrEmpty(row, dateDsCol),
-      ds: strOrEmpty(row, dsCol),
-      parts: strOrEmpty(row, partsCol),
-      techniceinDs: strOrEmpty(row, techniceinDsCol),
-      founisseur: strOrEmpty(row, founisseurCol),
+      action: strOrEmpty(actionCol),
+      marque: strOrEmpty(marqueCol),
+      model: strOrEmpty(modelCol),
+      client: strOrEmpty(clientCol),
+      rlReunion: strOrEmpty(rlReunionCol),
+      motif: strOrEmpty(motifCol),
+      etatVehicule: strOrEmpty(etatVehiculeCol),
+      bdd: strOrEmpty(bddCol),
+      dateDs: dateOrEmpty(dateDsCol),
+      ds: strOrEmpty(dsCol),
+      parts: strOrEmpty(partsCol),
+      technicein: strOrEmpty(techniceinCol),
+      founisseur: strOrEmpty(founisseurCol),
     });
   }
 
@@ -184,13 +171,10 @@ async function fetchAtelierRows(): Promise<AtelierRow[]> {
   return rows;
 }
 
-// ─── addIMMsFromWeb (ported as addAtelierPlates) ──────────────────────────
+// ─── addDepotPlates ────────────────────────────────────────────────────────
 
-// XLOOKUP formulas, verbatim from the Atelier CFG_PARKING_SHEET.FORMULAS —
-// semicolon argument separators are this spreadsheet's locale, not a typo.
-// Only difference from Parking's set: TECHNICEIN_DS instead of TECHNICEIN
-// (the manual TECHNICIEN field here is a different column entirely — the
-// assigned atelier technician, not the DS record's technician).
+// XLOOKUP formulas, verbatim from a live FORMULA-render read of DEPOT —
+// identical to Parking's CFG_PARKING_SHEET.FORMULAS, confirmed not assumed.
 const FORMULAS: Record<string, string> = {
   MARQUE: '=XLOOKUP(A{ROW};parc!F:F;parc!D:D;"";0;1)',
   MODEL: '=XLOOKUP(A{ROW};parc!F:F;parc!E:E;"";0;1)',
@@ -202,7 +186,7 @@ const FORMULAS: Record<string, string> = {
   DATE_DS: '=XLOOKUP(A{ROW};ds!D:D;ds!A:A;"";0;-1)',
   DS: '=XLOOKUP(A{ROW};ds!D:D;ds!C:C;"";0;-1)',
   PARTS: '=XLOOKUP(A{ROW};ds!D:D;ds!G:G;"";0;-1)',
-  TECHNICEIN_DS: '=XLOOKUP(A{ROW};ds!D:D;ds!E:E;"";0;-1)',
+  TECHNICEIN: '=XLOOKUP(A{ROW};ds!D:D;ds!E:E;"";0;-1)',
   FOUNISSEUR: '=XLOOKUP(A{ROW};ds!D:D;ds!F:F;"";0;-1)',
 };
 
@@ -210,12 +194,12 @@ const FORMULAS: Record<string, string> = {
  * Exact same shape/behavior as Parking's addPlates(): resolveIMM() against
  * the Mongo parc plate list, duplicate → bump TIMESTAMP only, new → appended
  * right after the last existing data row (growing the sheet if needed) —
- * empty rows are never reused, since deleteAtelierRow() now removes rows
+ * empty rows are never reused, since deleteDepotRow() now removes rows
  * outright instead of clearing them, so none exist to reuse. Seeds the new
  * row's formula columns so it isn't blank until some other process
  * re-touches it.
  */
-export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResponse> {
+export async function addDepotPlates(rawInput: string): Promise<ParkingAddResponse> {
   const tokens = (rawInput ?? "")
     .split(",")
     .map((t) => t.trim())
@@ -229,12 +213,11 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
   const immCol = colMap["IMM"] ?? 1;
-  const tsCol = colMap["TIMESTAMP"];
-  if (!tsCol) throw new Error(`Column 'TIMESTAMP' not found in the live '${ATELIER_TAB}' header row`);
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
 
   const dataRes = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
-    range: `'${ATELIER_TAB}'!A2:${HEADER_RANGE_WIDTH}`,
+    range: `'${DEPOT_TAB}'!A2:${HEADER_RANGE_WIDTH}`,
     valueRenderOption: "UNFORMATTED_VALUE",
   });
   const dataRows = dataRes.data.values ?? [];
@@ -260,7 +243,7 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
   const needed = tokens.length;
   const nextRows: number[] = [];
   const startNewRow = DATA_START_ROW + dataRows.length;
-  const props = await getAtelierSheetProps(sheets);
+  const props = await getDepotSheetProps(sheets);
   const gridShortfall = startNewRow + needed - 1 - props.rowCount;
   if (gridShortfall > 0) {
     await sheets.spreadsheets.batchUpdate({
@@ -285,7 +268,7 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
     if (duplicate) {
       const targetRow = plateToRow.get(resolved)!;
       writes.push({
-        range: `'${ATELIER_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
+        range: `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
         values: [[nowSerial]],
       });
       results.push({ imm: resolved, status: "updated", inParc });
@@ -296,11 +279,11 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
     if (targetRow == null) break; // shouldn't happen given the expansion above
 
     writes.push({
-      range: `'${ATELIER_TAB}'!${columnIndexToLetter(immCol)}${targetRow}`,
+      range: `'${DEPOT_TAB}'!${columnIndexToLetter(immCol)}${targetRow}`,
       values: [[resolved]],
     });
     writes.push({
-      range: `'${ATELIER_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
+      range: `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
       values: [[nowSerial]],
     });
 
@@ -308,7 +291,7 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
       const col = colMap[field];
       if (!col) continue;
       writes.push({
-        range: `'${ATELIER_TAB}'!${columnIndexToLetter(col)}${targetRow}`,
+        range: `'${DEPOT_TAB}'!${columnIndexToLetter(col)}${targetRow}`,
         values: [[template.replace(/\{ROW\}/g, String(targetRow))]],
       });
     }
@@ -329,36 +312,20 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
   return { ok: true, results };
 }
 
-// ─── updateCellFromWeb (ported as updateAtelierField) ─────────────────────
+// ─── updateDepotAction ─────────────────────────────────────────────────────
 
-/**
- * Unlike the original (which accepts any column name, including the
- * read-only XLOOKUP columns), this only accepts ATELIER_EDITABLE_FIELDS —
- * see the allowlist note in lib/types.ts.
- */
-export async function updateAtelierField(
-  rowIndex: number,
-  field: AtelierEditableField,
-  value: string,
-  expectedImm: string
-): Promise<void> {
-  if (!ATELIER_EDITABLE_FIELDS.includes(field)) {
-    throw new Error(`Field not editable: ${field}. Editable fields are: ${ATELIER_EDITABLE_FIELDS.join(", ")}.`);
-  }
-
+export async function updateDepotAction(rowIndex: number, action: string, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
   const immCol = colMap["IMM"] ?? 1;
-  const fieldCol = colMap[field];
-  const tsCol = colMap["TIMESTAMP"];
-  if (!fieldCol) throw new Error(`Column '${field}' not found in the live '${ATELIER_TAB}' header row`);
-  if (!tsCol) throw new Error(`Column 'TIMESTAMP' not found in the live '${ATELIER_TAB}' header row`);
+  const actionCol = colMap["ACTION"] ?? 2;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
 
   await verifyRowIdentity(
     sheets,
     spreadsheetId!,
-    `'${ATELIER_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    `'${DEPOT_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
     expectedImm
   );
 
@@ -367,22 +334,22 @@ export async function updateAtelierField(
     requestBody: {
       valueInputOption: "USER_ENTERED",
       data: [
-        { range: `'${ATELIER_TAB}'!${columnIndexToLetter(fieldCol)}${rowIndex}`, values: [[value.trim()]] },
-        { range: `'${ATELIER_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`, values: [[nowToSerial()]] },
+        { range: `'${DEPOT_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`, values: [[action.trim()]] },
+        { range: `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`, values: [[nowToSerial()]] },
       ],
     },
   });
   invalidateCache(ROWS_CACHE_KEY);
 }
 
-// ─── deleteIMMFromWeb ──────────────────────────────────────────────────────
+// ─── deleteDepotRow ────────────────────────────────────────────────────────
 
 /** Genuinely deletes the row (Sheets "delete row" — DeleteDimensionRequest),
  *  shifting every row below it up by one. Replaces the original's
  *  clear-cells behavior: empty rows are no longer reused by
- *  addAtelierPlates(), so there's no reason to leave a hollowed-out row in
+ *  addDepotPlates(), so there's no reason to leave a hollowed-out row in
  *  place. */
-export async function deleteAtelierRow(rowIndex: number, expectedImm: string): Promise<void> {
+export async function deleteDepotRow(rowIndex: number, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
@@ -391,11 +358,11 @@ export async function deleteAtelierRow(rowIndex: number, expectedImm: string): P
   await verifyRowIdentity(
     sheets,
     spreadsheetId!,
-    `'${ATELIER_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    `'${DEPOT_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
     expectedImm
   );
 
-  const { sheetId } = await getAtelierSheetProps(sheets);
+  const { sheetId } = await getDepotSheetProps(sheets);
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: spreadsheetId!,
@@ -412,32 +379,26 @@ export async function deleteAtelierRow(rowIndex: number, expectedImm: string): P
   invalidateCache(ROWS_CACHE_KEY);
 }
 
-// ─── clearParkingFromWeb (ported as clearAtelierAll) ──────────────────────
+// ─── clearDepotAll ─────────────────────────────────────────────────────────
 
-export async function clearAtelierAll(): Promise<void> {
+export async function clearDepotAll(): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
   const immCol = colMap["IMM"] ?? 1;
-  const tsCol = colMap["TIMESTAMP"];
+  const actionCol = colMap["ACTION"] ?? 2;
+  const tsCol = colMap["TIMESTAMP"] ?? 15;
 
-  const props = await getAtelierSheetProps(sheets);
+  const props = await getDepotSheetProps(sheets);
   const lastRow = props.rowCount;
   if (lastRow < DATA_START_ROW) return;
 
   const colRange = (col: number) =>
-    `'${ATELIER_TAB}'!${columnIndexToLetter(col)}${DATA_START_ROW}:${columnIndexToLetter(col)}${lastRow}`;
-
-  const ranges = [colRange(immCol)];
-  if (tsCol) ranges.push(colRange(tsCol));
-  for (const field of ATELIER_EDITABLE_FIELDS) {
-    const col = colMap[field];
-    if (col) ranges.push(colRange(col));
-  }
+    `'${DEPOT_TAB}'!${columnIndexToLetter(col)}${DATA_START_ROW}:${columnIndexToLetter(col)}${lastRow}`;
 
   await sheets.spreadsheets.values.batchClear({
     spreadsheetId: spreadsheetId!,
-    requestBody: { ranges },
+    requestBody: { ranges: [colRange(immCol), colRange(tsCol), colRange(actionCol)] },
   });
   invalidateCache(ROWS_CACHE_KEY);
 }

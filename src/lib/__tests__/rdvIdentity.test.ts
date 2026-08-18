@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { resolveUniqueMatch, RdvIdentityError } from "@/lib/rdvIdentity";
-import type { RdvAddInput } from "@/lib/types";
+import { resolveUniqueMatch, RdvIdentityError } from "@/lib/sheets/rdvIdentity";
+import type { RdvAddInput } from "@/types";
 
 // Row layout matches lib/rdvIdentity.ts's COL_INDEX: [date, heure, clients,
 // vehicule, matricule, intervention, contact, convoyeur]. Index 0 (date) is

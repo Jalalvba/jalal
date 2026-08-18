@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { getIronSession } from "iron-session";
-import { sessionOptions, SessionData } from "@/lib/session";
+import { sessionOptions, SessionData } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 
 export async function logout() {

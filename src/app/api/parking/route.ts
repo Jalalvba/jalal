@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getParkingRows } from "@/lib/googleSheetsParking";
-import { toErrorResponse } from "@/lib/apiError";
+import { getParkingRows } from "@/lib/sheets/googleSheetsParking";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 export async function GET() {
   try {

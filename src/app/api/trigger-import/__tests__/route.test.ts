@@ -1,15 +1,15 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("@/lib/rateLimit", () => ({
+vi.mock("@/lib/http/rateLimit", () => ({
   rateLimitOrNull: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("@/lib/googleSheetsParking", () => ({
+vi.mock("@/lib/sheets/googleSheetsParking", () => ({
   invalidateIMMListCache: vi.fn(),
 }));
 
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { invalidateIMMListCache } from "@/lib/googleSheetsParking";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { invalidateIMMListCache } from "@/lib/sheets/googleSheetsParking";
 import { POST } from "@/app/api/trigger-import/route";
 
 const mockedRateLimit = vi.mocked(rateLimitOrNull);

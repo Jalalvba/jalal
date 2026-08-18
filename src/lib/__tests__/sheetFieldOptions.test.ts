@@ -5,10 +5,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // verified by code review in the session that wrote it, specifically
 // because testing it against real production Mongo felt too risky; these
 // mocks close that gap without touching a real database.
-vi.mock("@/lib/mongo", () => ({
+vi.mock("@/lib/mongo/client", () => ({
   getCollection: vi.fn(),
 }));
-vi.mock("@/lib/googleSheetsClient", () => ({
+vi.mock("@/lib/sheets/googleSheetsClient", () => ({
   // Passthrough — isolates this test from whether Next's unstable_cache
   // behaves outside a real request context, which isn't what's under test
   // here (that's withCache's own concern, not getAllSheetFieldOptions's).
@@ -16,8 +16,8 @@ vi.mock("@/lib/googleSheetsClient", () => ({
   invalidateCache: vi.fn(),
 }));
 
-import { getCollection } from "@/lib/mongo";
-import { invalidateCache } from "@/lib/googleSheetsClient";
+import { getCollection } from "@/lib/mongo/client";
+import { invalidateCache } from "@/lib/sheets/googleSheetsClient";
 import {
   getAllSheetFieldOptions,
   getAllSheetFieldOptionsWithStatus,
@@ -25,12 +25,12 @@ import {
   updateFieldOptions,
   OptionsValidationError,
   OptionsConflictError,
-} from "@/lib/sheetFieldOptions";
+} from "@/lib/mongo/sheetFieldOptions";
 import {
   EMPLACEMENT_OPTIONS_FALLBACK,
   TECHNICIEN_OPTIONS_FALLBACK,
   FLAG_OPTIONS_FALLBACK,
-} from "@/lib/types";
+} from "@/types";
 
 const mockedGetCollection = vi.mocked(getCollection);
 

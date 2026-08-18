@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AtelierRow, AtelierEditableField, ParkingAddResponse } from "@/lib/types";
+import type { AtelierRow, AtelierEditableField, ParkingAddResponse } from "@/types";
 
 // Same pattern/refetch-behavior mapping as hooks/useParkingRows.ts. The
 // plate-suggestion list itself is shared app-wide — see

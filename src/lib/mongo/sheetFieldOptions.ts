@@ -1,5 +1,5 @@
-import { getCollection } from "@/lib/mongo";
-import { withCache, invalidateCache } from "@/lib/googleSheetsClient";
+import { getCollection } from "@/lib/mongo/client";
+import { withCache, invalidateCache } from "@/lib/sheets/googleSheetsClient";
 import {
   OPTION_KEYS,
   COLORED_OPTION_KEYS,
@@ -15,7 +15,7 @@ import {
   type OptionKey,
   type ColoredOption,
   type AllSheetFieldOptions,
-} from "@/lib/types";
+} from "@/types";
 
 // Stage 1 of the config-driven sheet-structure proposal (config-proposal
 // artifact, 2026-08-06): only dropdown OPTION VALUES move here. Headers,

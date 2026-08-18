@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { DepotRow, ParkingAddResponse } from "@/lib/types";
+import type { DepotRow, ParkingAddResponse } from "@/types";
 
 // Same pattern/shape as hooks/useParkingRows.ts. The plate-suggestion list
 // itself is shared app-wide — see hooks/useVehicleSuggestionList.ts, one

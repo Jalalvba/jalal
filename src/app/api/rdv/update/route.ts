@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { updateRdvField } from "@/lib/googleSheetsRdv";
-import { RDV_EDITABLE_FIELDS, type RdvEditableField, type RdvAddInput } from "@/lib/types";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { updateRdvField } from "@/lib/sheets/googleSheetsRdv";
+import { RDV_EDITABLE_FIELDS, type RdvEditableField, type RdvAddInput } from "@/types";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 const REQUIRED_IDENTITY_FIELDS: (keyof RdvAddInput)[] = [
   "date",

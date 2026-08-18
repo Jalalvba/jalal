@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ParkingRow, ParkingAddResponse } from "@/lib/types";
+import type { ParkingRow, ParkingAddResponse } from "@/types";
 
 // Route logic is untouched — these are thin client-side wrappers around the
 // exact same /api/parking* endpoints app/parking/page.tsx already called by

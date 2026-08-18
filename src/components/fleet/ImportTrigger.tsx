@@ -13,7 +13,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import type { ImportPipelineResult, ImportPipelineRunStatus, ImportPipelineStep } from "@/lib/types";
+import type { ImportPipelineResult, ImportPipelineRunStatus, ImportPipelineStep } from "@/types";
 
 const LAST_RUN_STORAGE_KEY = "jalal:last-import";
 

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useVehicleSuggestionList } from "@/hooks/useVehicleSuggestionList";
-import type { VehicleSuggestion } from "@/lib/vehicleSuggestions";
+import type { VehicleSuggestion } from "@/lib/mongo/vehicleSuggestions";
 
 const DISPLAY_CAP = 15;
 

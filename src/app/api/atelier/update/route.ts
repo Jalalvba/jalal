@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { updateAtelierField } from "@/lib/googleSheetsAtelier";
-import { ATELIER_EDITABLE_FIELDS, type AtelierEditableField } from "@/lib/types";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { updateAtelierField } from "@/lib/sheets/googleSheetsAtelier";
+import { ATELIER_EDITABLE_FIELDS, type AtelierEditableField } from "@/types";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 function isEditableField(v: unknown): v is AtelierEditableField {
   return typeof v === "string" && (ATELIER_EDITABLE_FIELDS as readonly string[]).includes(v);

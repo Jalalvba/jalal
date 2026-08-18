@@ -1,6 +1,6 @@
 import { type sheets_v4 } from "googleapis";
-import { getIMMListSafe, resolveIMM } from "@/lib/googleSheetsParking";
-import type { DepotRow, ParkingAddResponse, ParkingAddResultItem } from "@/lib/types";
+import { getCollection } from "@/lib/mongo/client";
+import type { ParkingRow, ParkingAddResponse, ParkingAddResultItem } from "@/types";
 import {
   getSheetsClient,
   serialToUTCDate,
@@ -11,38 +11,28 @@ import {
   invalidateCache,
   verifyRowIdentity,
   columnIndexToLetter,
-} from "@/lib/googleSheetsClient";
+} from "@/lib/sheets/googleSheetsClient";
 
-const ROWS_CACHE_KEY = "rows:DEPOT";
-const HEADERS_CACHE_KEY = "headers:DEPOT";
+const ROWS_CACHE_KEY = "rows:PARKING";
+const HEADERS_CACHE_KEY = "headers:PARKING";
+const IMM_LIST_CACHE_KEY = "imm-list:parc";
 
-// Tab name, gid (1365327220), column layout and XLOOKUP formulas confirmed
-// by a live spreadsheets.get()/values.get()/FORMULA-render read — not a
-// guess, and not just inferred from resemblance to PARKING: this tab is a
-// byte-for-byte structural clone (same 15 columns, same 12 XLOOKUP formulas
-// verbatim, same manual/read-only split — only ACTION is editable). See
-// lib/types.ts's DepotRow comment for the full column list.
-//
-// This file originally had only a getDepotPlates() existence-check for the
-// zone-badge feature, before this tab got its own full page. That function
-// has been superseded by getDepotRows() below (which reads the same IMM
-// column plus everything else) — useVehicleZone.ts now checks DEPOT via the
-// full rows query, same as it already does for Parking/Atelier/RDV, rather
-// than keeping two separate reads of the same tab.
+// Ported from the AVIS Maroc GAS "Parking" system (code.gs + Parking.gs).
+// Tab name, column layout and XLOOKUP formulas confirmed by a live read of
+// the real spreadsheet (gid=1215781154) — not a guess.
 
 const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 
-const DEPOT_TAB = "DEPOT";
+const PARKING_TAB = "PARKING";
 const DATA_START_ROW = 2;
-const HEADER_RANGE_WIDTH = "O"; // 15 real columns, confirmed live
 
-/** Live header row → column-name lookup, never hardcoded indices. */
+/** Live header row → column-name lookup, never hardcoded indices. Cached 5min — headers essentially never change. */
 async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
   return withCache(HEADERS_CACHE_KEY, 5 * 60_000, async () => {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId!,
-      range: `'${DEPOT_TAB}'!A1:${HEADER_RANGE_WIDTH}1`,
+      range: `'${PARKING_TAB}'!A1:O1`,
       valueRenderOption: "UNFORMATTED_VALUE",
     });
     const row = res.data.values?.[0] ?? [];
@@ -58,40 +48,48 @@ function buildColMap(headers: string[]): Record<string, number> {
   return map;
 }
 
-async function getDepotSheetProps(sheets: sheets_v4.Sheets): Promise<{ sheetId: number; rowCount: number }> {
+async function getParkingSheetProps(
+  sheets: sheets_v4.Sheets
+): Promise<{ sheetId: number; rowCount: number }> {
   const res = await sheets.spreadsheets.get({
     spreadsheetId: spreadsheetId!,
     fields: "sheets.properties",
   });
-  const props = res.data.sheets?.find((s) => s.properties?.title === DEPOT_TAB)?.properties;
+  const props = res.data.sheets?.find((s) => s.properties?.title === PARKING_TAB)?.properties;
   if (!props || props.sheetId == null) {
-    throw new Error(`Sheet tab '${DEPOT_TAB}' not found`);
+    throw new Error(`Sheet tab '${PARKING_TAB}' not found`);
   }
   return { sheetId: props.sheetId, rowCount: props.gridProperties?.rowCount ?? 0 };
 }
 
-// ─── getDepotRows ──────────────────────────────────────────────────────────
+
+// ─── getParkingList ────────────────────────────────────────────────────────
 
 /**
- * Reads every non-empty row (IMM non-blank) from the DEPOT tab, sorted
- * ascending by timestamp (oldest first) — same convention as
- * getParkingRows(), which this is a straight port of given the confirmed
- * identical schema.
+ * Reads every non-empty row (IMM non-blank) from the PARKING tab, sorted
+ * ascending by timestamp (oldest first, newest at the bottom) — matches the
+ * original getParkingList()'s sort direction exactly.
+ *
+ * The 9 read-only XLOOKUP columns (RL_REUNION, MOTIF, ETAT VÉHICULE, BDD,
+ * DATE_DS, DS, PARTS, TECHNICEIN, FOUNISSEUR) are extracted as their own
+ * named fields — same live column-map pattern getAtelierRows() uses — rather
+ * than being collapsed into one opaque joined string. DATE_DS is the only one
+ * that's ever a Sheets date serial; the rest are plain XLOOKUP text/numbers.
  */
-export async function getDepotRows(): Promise<DepotRow[]> {
-  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchDepotRows());
+export async function getParkingRows(): Promise<ParkingRow[]> {
+  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchParkingRows());
 }
 
-/** Called by app/api/depot/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
-export function invalidateDepotRowsCache(): void {
+/** Called by app/api/parking/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+export function invalidateParkingRowsCache(): void {
   invalidateCache(ROWS_CACHE_KEY);
 }
 
-async function fetchDepotRows(): Promise<DepotRow[]> {
+async function fetchParkingRows(): Promise<ParkingRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
-    range: `'${DEPOT_TAB}'!A1:${HEADER_RANGE_WIDTH}`,
+    range: `'${PARKING_TAB}'!A1:O`,
     valueRenderOption: "UNFORMATTED_VALUE",
   });
 
@@ -116,7 +114,7 @@ async function fetchDepotRows(): Promise<DepotRow[]> {
   const techniceinCol = colMap["TECHNICEIN"];
   const founisseurCol = colMap["FOUNISSEUR"];
 
-  const rows: DepotRow[] = [];
+  const rows: ParkingRow[] = [];
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
@@ -171,10 +169,95 @@ async function fetchDepotRows(): Promise<DepotRow[]> {
   return rows;
 }
 
-// ─── addDepotPlates ────────────────────────────────────────────────────────
+// ─── getIMMList ────────────────────────────────────────────────────────────
 
-// XLOOKUP formulas, verbatim from a live FORMULA-render read of DEPOT —
-// identical to Parking's CFG_PARKING_SHEET.FORMULAS, confirmed not assumed.
+/**
+ * The original GAS system keeps a Sheets "IMM" tab that's just a mirror of
+ * the Sheets "parc" tab's Immatriculation column (see syncIMMTab() in the
+ * source code.gs — it literally copies parc → IMM). This app already has
+ * "parc" migrated to MongoDB (the same collection /api/parc and DS History's
+ * autocomplete already query), so this reads that directly instead of
+ * maintaining a redundant Sheets mirror this app has no other use for.
+ *
+ * TTL is a full week (2026-08-09): confirmed with the person that parc only
+ * actually changes on a roughly weekly cadence in practice — cross-checked
+ * against `pipeline_runs`, whose parc entries show real "success" runs
+ * ~5 days apart (2026-08-03, 2026-08-08) with everything between them
+ * "skipped" (unchanged). A week-long default would otherwise risk serving
+ * stale plates for up to 7 days after a genuine change, so
+ * app/api/trigger-import/route.ts calls invalidateIMMListCache() the moment
+ * it sees the parc pipeline report "success" (not "skipped_unchanged" /
+ * "skipped_absent" / "failed"), so a real update is reflected immediately
+ * instead of waiting out the TTL.
+ */
+export async function getIMMList(): Promise<string[]> {
+  return withCache(IMM_LIST_CACHE_KEY, 7 * 24 * 60 * 60_000, async () => {
+    const col = await getCollection("parc");
+    // Real field is lowercase "immatriculation" (field_registry.json) — a
+    // prior "Immatriculation" typo here always matched zero documents, so
+    // this list silently returned [] since the day it was written. Index-
+    // backed distinct() also skips the ~7.8k-doc full projection scan the
+    // old find({}).toArray() did every cache miss.
+    const values = await col.distinct("immatriculation");
+
+    const set = new Set<string>();
+    for (const v of values) {
+      const s = String(v ?? "").trim().toUpperCase();
+      if (s) set.add(s);
+    }
+    return [...set];
+  });
+}
+
+/** Called by app/api/trigger-import/route.ts right after a successful parc pipeline run. */
+export function invalidateIMMListCache(): void {
+  invalidateCache(IMM_LIST_CACHE_KEY);
+}
+
+/**
+ * Fail-soft wrapper: getIMMList() is a nice-to-have (typo-correction against
+ * the known fleet list, plus the `inParc` flag), not a hard requirement for
+ * writing a plate string into a Sheets cell. A MongoDB outage/timeout used
+ * to throw uncaught out of addPlates()/addAtelierPlates()/addDepotPlates(),
+ * blocking Sheets writes entirely over an unrelated system being down — and
+ * risked leaving orphaned blank rows if the sheet's grid had already been
+ * grown by the time it threw. This degrades to verbatim plate resolution
+ * instead: resolveIMM() with an empty list just uppercases the token as-is.
+ */
+export async function getIMMListSafe(): Promise<string[]> {
+  try {
+    return await getIMMList();
+  } catch (e) {
+    console.error("[getIMMList] Mongo lookup failed, degrading to verbatim plate resolution:", e);
+    return [];
+  }
+}
+
+// ─── resolveIMM_ ───────────────────────────────────────────────────────────
+
+/**
+ * Exact port of resolveIMM_(): exact match first; otherwise strip
+ * non-alphanumeric characters from both the token and every known plate and
+ * auto-resolve only if the stripped token is a prefix of EXACTLY ONE
+ * stripped known plate. Any other outcome (zero or multiple matches) leaves
+ * the token as typed (uppercased).
+ */
+export function resolveIMM(token: string, immList: string[]): string {
+  const t = (token ?? "").trim().toUpperCase();
+  if (!t) return "";
+  if (immList.includes(t)) return t;
+
+  const stripped = t.replace(/[^A-Z0-9]/g, "");
+  if (!stripped) return t;
+
+  const matches = immList.filter((imm) => imm.replace(/[^A-Z0-9]/g, "").startsWith(stripped));
+  return matches.length === 1 ? matches[0] : t;
+}
+
+// ─── addIMMsFromWeb ────────────────────────────────────────────────────────
+
+// XLOOKUP formulas, verbatim from Parking.gs's CFG_PARKING_SHEET.FORMULAS —
+// semicolon argument separators are this spreadsheet's locale, not a typo.
 const FORMULAS: Record<string, string> = {
   MARQUE: '=XLOOKUP(A{ROW};parc!F:F;parc!D:D;"";0;1)',
   MODEL: '=XLOOKUP(A{ROW};parc!F:F;parc!E:E;"";0;1)',
@@ -191,15 +274,20 @@ const FORMULAS: Record<string, string> = {
 };
 
 /**
- * Exact same shape/behavior as Parking's addPlates(): resolveIMM() against
- * the Mongo parc plate list, duplicate → bump TIMESTAMP only, new → appended
- * right after the last existing data row (growing the sheet if needed) —
- * empty rows are never reused, since deleteDepotRow() now removes rows
- * outright instead of clearing them, so none exist to reuse. Seeds the new
- * row's formula columns so it isn't blank until some other process
- * re-touches it.
+ * Comma-separated tokens, each resolved via resolveIMM(). A plate already
+ * present in PARKING just gets its TIMESTAMP bumped to now (moves it to the
+ * bottom of the sorted list) instead of inserting a new row. A genuinely new
+ * plate is appended right after the last existing data row — empty rows are
+ * never reused, since deletePlate() now removes rows outright instead of
+ * clearing them, so none exist to reuse. The sheet is grown by exactly as
+ * many rows as still needed (via appendDimension) if appending would run
+ * past the grid's current row count.
+ *
+ * New rows also get the 12 XLOOKUP formulas seeded into their formula
+ * columns, since a brand-new row created by growing the sheet has never had
+ * a formula written into it.
  */
-export async function addDepotPlates(rawInput: string): Promise<ParkingAddResponse> {
+export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
   const tokens = (rawInput ?? "")
     .split(",")
     .map((t) => t.trim())
@@ -217,7 +305,7 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
 
   const dataRes = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
-    range: `'${DEPOT_TAB}'!A2:${HEADER_RANGE_WIDTH}`,
+    range: `'${PARKING_TAB}'!A2:O`,
     valueRenderOption: "UNFORMATTED_VALUE",
   });
   const dataRows = dataRes.data.values ?? [];
@@ -243,7 +331,7 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
   const needed = tokens.length;
   const nextRows: number[] = [];
   const startNewRow = DATA_START_ROW + dataRows.length;
-  const props = await getDepotSheetProps(sheets);
+  const props = await getParkingSheetProps(sheets);
   const gridShortfall = startNewRow + needed - 1 - props.rowCount;
   if (gridShortfall > 0) {
     await sheets.spreadsheets.batchUpdate({
@@ -268,7 +356,7 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
     if (duplicate) {
       const targetRow = plateToRow.get(resolved)!;
       writes.push({
-        range: `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
+        range: `'${PARKING_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
         values: [[nowSerial]],
       });
       results.push({ imm: resolved, status: "updated", inParc });
@@ -279,11 +367,11 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
     if (targetRow == null) break; // shouldn't happen given the expansion above
 
     writes.push({
-      range: `'${DEPOT_TAB}'!${columnIndexToLetter(immCol)}${targetRow}`,
+      range: `'${PARKING_TAB}'!${columnIndexToLetter(immCol)}${targetRow}`,
       values: [[resolved]],
     });
     writes.push({
-      range: `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
+      range: `'${PARKING_TAB}'!${columnIndexToLetter(tsCol)}${targetRow}`,
       values: [[nowSerial]],
     });
 
@@ -291,7 +379,7 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
       const col = colMap[field];
       if (!col) continue;
       writes.push({
-        range: `'${DEPOT_TAB}'!${columnIndexToLetter(col)}${targetRow}`,
+        range: `'${PARKING_TAB}'!${columnIndexToLetter(col)}${targetRow}`,
         values: [[template.replace(/\{ROW\}/g, String(targetRow))]],
       });
     }
@@ -312,9 +400,9 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
   return { ok: true, results };
 }
 
-// ─── updateDepotAction ─────────────────────────────────────────────────────
+// ─── updateActionFromWeb ───────────────────────────────────────────────────
 
-export async function updateDepotAction(rowIndex: number, action: string, expectedImm: string): Promise<void> {
+export async function updateAction(rowIndex: number, action: string, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
@@ -325,7 +413,7 @@ export async function updateDepotAction(rowIndex: number, action: string, expect
   await verifyRowIdentity(
     sheets,
     spreadsheetId!,
-    `'${DEPOT_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    `'${PARKING_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
     expectedImm
   );
 
@@ -334,22 +422,21 @@ export async function updateDepotAction(rowIndex: number, action: string, expect
     requestBody: {
       valueInputOption: "USER_ENTERED",
       data: [
-        { range: `'${DEPOT_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`, values: [[action.trim()]] },
-        { range: `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`, values: [[nowToSerial()]] },
+        { range: `'${PARKING_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`, values: [[action.trim()]] },
+        { range: `'${PARKING_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`, values: [[nowToSerial()]] },
       ],
     },
   });
   invalidateCache(ROWS_CACHE_KEY);
 }
 
-// ─── deleteDepotRow ────────────────────────────────────────────────────────
+// ─── deleteIMMFromWeb ──────────────────────────────────────────────────────
 
 /** Genuinely deletes the row (Sheets "delete row" — DeleteDimensionRequest),
  *  shifting every row below it up by one. Replaces the original's
- *  clear-cells behavior: empty rows are no longer reused by
- *  addDepotPlates(), so there's no reason to leave a hollowed-out row in
- *  place. */
-export async function deleteDepotRow(rowIndex: number, expectedImm: string): Promise<void> {
+ *  clear-cells behavior: empty rows are no longer reused by addPlates(), so
+ *  there's no reason to leave a hollowed-out row in place. */
+export async function deletePlate(rowIndex: number, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
@@ -358,11 +445,11 @@ export async function deleteDepotRow(rowIndex: number, expectedImm: string): Pro
   await verifyRowIdentity(
     sheets,
     spreadsheetId!,
-    `'${DEPOT_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    `'${PARKING_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
     expectedImm
   );
 
-  const { sheetId } = await getDepotSheetProps(sheets);
+  const { sheetId } = await getParkingSheetProps(sheets);
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: spreadsheetId!,
@@ -379,9 +466,9 @@ export async function deleteDepotRow(rowIndex: number, expectedImm: string): Pro
   invalidateCache(ROWS_CACHE_KEY);
 }
 
-// ─── clearDepotAll ─────────────────────────────────────────────────────────
+// ─── clearParkingFromWeb ───────────────────────────────────────────────────
 
-export async function clearDepotAll(): Promise<void> {
+export async function clearAll(): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
@@ -389,12 +476,12 @@ export async function clearDepotAll(): Promise<void> {
   const actionCol = colMap["ACTION"] ?? 2;
   const tsCol = colMap["TIMESTAMP"] ?? 15;
 
-  const props = await getDepotSheetProps(sheets);
+  const props = await getParkingSheetProps(sheets);
   const lastRow = props.rowCount;
   if (lastRow < DATA_START_ROW) return;
 
   const colRange = (col: number) =>
-    `'${DEPOT_TAB}'!${columnIndexToLetter(col)}${DATA_START_ROW}:${columnIndexToLetter(col)}${lastRow}`;
+    `'${PARKING_TAB}'!${columnIndexToLetter(col)}${DATA_START_ROW}:${columnIndexToLetter(col)}${lastRow}`;
 
   await sheets.spreadsheets.values.batchClear({
     spreadsheetId: spreadsheetId!,

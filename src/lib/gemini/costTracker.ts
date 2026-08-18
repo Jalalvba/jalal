@@ -21,7 +21,7 @@
 // the one store every invocation reaches identically, and lib/rateLimit.ts
 // already establishes the atomic-$inc pattern used below.
 
-import { getCollection } from "@/lib/mongo";
+import { getCollection } from "@/lib/mongo/client";
 
 // ── Pricing ────────────────────────────────────────────────────────────────
 // USD per 1M tokens, paid tier, text in/out. Verified 2026-08-16 against

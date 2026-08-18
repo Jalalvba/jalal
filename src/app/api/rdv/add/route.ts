@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { addRdvRow } from "@/lib/googleSheetsRdv";
-import type { RdvAddInput } from "@/lib/types";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { addRdvRow } from "@/lib/sheets/googleSheetsRdv";
+import type { RdvAddInput } from "@/types";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 const REQUIRED_STRING_FIELDS: (keyof RdvAddInput)[] = [
   "date",

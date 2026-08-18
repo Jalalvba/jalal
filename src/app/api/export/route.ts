@@ -3,10 +3,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import type { Line, DsHistoryItem, ParcItem, CpItem } from "@/lib/types";
+import type { Line, DsHistoryItem, ParcItem, CpItem } from "@/types";
 import { fmtDate, fmtNum } from "@/lib/utils/format";
-import { checkRateLimit, clientIp } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { checkRateLimit, clientIp } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes

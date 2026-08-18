@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
-import type { ParkingAddResultItem } from "@/lib/types";
+import type { ParkingAddResultItem } from "@/types";
 import { useAddBddRow } from "@/hooks/useBddRows";
 import { useVehicleSuggestionList } from "@/hooks/useVehicleSuggestionList";
 import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";

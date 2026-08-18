@@ -1,7 +1,7 @@
 // app/api/cp/route.ts
 import { NextResponse } from "next/server";
-import { getCollection } from "@/lib/mongo";
-import { toErrorResponse } from "@/lib/apiError";
+import { getCollection } from "@/lib/mongo/client";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-vi.mock("@/lib/rateLimit", () => ({ rateLimitOrNull: vi.fn().mockResolvedValue(null) }));
+vi.mock("@/lib/http/rateLimit", () => ({ rateLimitOrNull: vi.fn().mockResolvedValue(null) }));
 
 const mockGetAllSheetFieldOptionsWithStatus = vi.fn();
 const mockUpdateFieldOptions = vi.fn();
 
-vi.mock("@/lib/sheetFieldOptions", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/sheetFieldOptions")>("@/lib/sheetFieldOptions");
+vi.mock("@/lib/mongo/sheetFieldOptions", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/mongo/sheetFieldOptions")>("@/lib/mongo/sheetFieldOptions");
   return {
     ...actual,
     getAllSheetFieldOptionsWithStatus: (...args: unknown[]) => mockGetAllSheetFieldOptionsWithStatus(...args),
@@ -15,7 +15,7 @@ vi.mock("@/lib/sheetFieldOptions", async () => {
 });
 
 import { GET, POST } from "@/app/api/config/options/route";
-import { OptionsConflictError, OptionsValidationError } from "@/lib/sheetFieldOptions";
+import { OptionsConflictError, OptionsValidationError } from "@/lib/mongo/sheetFieldOptions";
 
 function req(body: unknown): Request {
   return new Request("http://localhost/api/config/options", {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RDV_HEADERS } from "@/lib/types";
+import { RDV_HEADERS } from "@/types";
 import { EXPORT_COLUMNS } from "@/app/rdv/page";
 
 describe("RDV export table columns — derived from RDV_HEADERS, not hand-copied (M2)", () => {

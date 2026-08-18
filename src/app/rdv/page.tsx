@@ -2,8 +2,8 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Trash2, ImageDown, Search, Check } from "lucide-react";
-import type { RdvRow, RdvEditableField } from "@/lib/types";
-import { RDV_MATRICULE_REGEX, RDV_HEADERS } from "@/lib/types";
+import type { RdvRow, RdvEditableField } from "@/types";
+import { RDV_MATRICULE_REGEX, RDV_HEADERS } from "@/types";
 import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { ZONE_COLORS } from "@/config/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";

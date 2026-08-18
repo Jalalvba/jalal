@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { VehicleSuggestion } from "@/lib/vehicleSuggestions";
+import type { VehicleSuggestion } from "@/lib/mongo/vehicleSuggestions";
 
 const VEHICLE_SUGGESTIONS_KEY = ["vehicle-suggestions"] as const;
 

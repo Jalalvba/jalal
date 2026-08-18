@@ -14,9 +14,9 @@
 // project in Google AI Studio.
 
 import { NextResponse } from "next/server";
-import { checkRateLimit, clientIp } from "@/lib/rateLimit";
-import { callGeminiWithTracking, GeminiCallError } from "@/lib/gemini-cost-tracker";
-import type { GenerateEmailRequest, GenerateEmailResponse } from "@/lib/types";
+import { checkRateLimit, clientIp } from "@/lib/http/rateLimit";
+import { callGeminiWithTracking, GeminiCallError } from "@/lib/gemini/costTracker";
+import type { GenerateEmailRequest, GenerateEmailResponse } from "@/types";
 
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60 * 1000; // 1 minute

@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import type { ParkingAddResultItem } from "@/lib/types";
+import type { ParkingAddResultItem } from "@/types";
 
 export function AddResultsList({ results }: { results: ParkingAddResultItem[] }) {
   if (results.length === 0) return null;

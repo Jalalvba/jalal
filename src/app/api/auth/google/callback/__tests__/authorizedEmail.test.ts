@@ -5,7 +5,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // (replacing the AUTHORIZED_EMAIL check with `if (false)` left all 76
 // pre-existing tests green) — this closes that gap.
 
-vi.mock("@/lib/rateLimit", () => ({ rateLimitOrNull: vi.fn().mockResolvedValue(null) }));
+vi.mock("@/lib/http/rateLimit", () => ({ rateLimitOrNull: vi.fn().mockResolvedValue(null) }));
 
 // vi.mock() factories are hoisted above imports/top-level code — anything
 // they reference must itself be declared via vi.hoisted() so it exists by
@@ -29,7 +29,7 @@ vi.mock("iron-session", () => ({
   getIronSession: vi.fn().mockImplementation(async () => fakeSession),
 }));
 
-vi.mock("@/lib/googleOAuth", () => ({
+vi.mock("@/lib/auth/googleOAuth", () => ({
   getOAuthClient: vi.fn().mockReturnValue({
     getToken: (...args: unknown[]) => mockGetToken(...args),
     verifyIdToken: (...args: unknown[]) => mockVerifyIdToken(...args),

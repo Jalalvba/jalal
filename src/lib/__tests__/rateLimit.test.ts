@@ -2,12 +2,12 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Mocked before importing the module under test (vitest hoists vi.mock()
 // above imports).
-vi.mock("@/lib/mongo", () => ({
+vi.mock("@/lib/mongo/client", () => ({
   getCollection: vi.fn(),
 }));
 
-import { getCollection } from "@/lib/mongo";
-import { checkRateLimit, rateLimitOrNull, clientIp } from "@/lib/rateLimit";
+import { getCollection } from "@/lib/mongo/client";
+import { checkRateLimit, rateLimitOrNull, clientIp } from "@/lib/http/rateLimit";
 
 const mockedGetCollection = vi.mocked(getCollection);
 

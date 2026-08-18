@@ -5,11 +5,11 @@ import {
   OptionsValidationError,
   OptionsConflictError,
   type UpdateOptionsInput,
-} from "@/lib/sheetFieldOptions";
-import { OPTION_KEYS, COLORED_OPTION_KEYS, type OptionKey } from "@/lib/types";
-import { AUTHORIZED_EMAIL } from "@/lib/googleOAuth";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+} from "@/lib/mongo/sheetFieldOptions";
+import { OPTION_KEYS, COLORED_OPTION_KEYS, type OptionKey } from "@/types";
+import { AUTHORIZED_EMAIL } from "@/lib/auth/googleOAuth";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 // Gated by proxy.ts's session check like every other route under app/api —
 // no separate re-auth here, same convention the 17 Sheets mutation routes

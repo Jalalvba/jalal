@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getIronSession } from "iron-session";
-import { sessionOptions, SessionData } from "@/lib/session";
+import { sessionOptions, SessionData } from "@/lib/auth/session";
 
 /**
  * Per-request nonce-based CSP. Built once per request and stamped on every

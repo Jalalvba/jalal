@@ -3,10 +3,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { getCollection } from "@/lib/mongo";
+import { getCollection } from "@/lib/mongo/client";
 import { escapeRegex } from "@/lib/utils/regex";
-import { toErrorResponse } from "@/lib/apiError";
-import type { ParcDoc } from "@/lib/types";
+import { toErrorResponse } from "@/lib/http/apiError";
+import type { ParcDoc } from "@/types";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);

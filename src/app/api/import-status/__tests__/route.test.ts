@@ -1,10 +1,10 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("@/lib/rateLimit", () => ({
+vi.mock("@/lib/http/rateLimit", () => ({
   rateLimitOrNull: vi.fn().mockResolvedValue(null),
 }));
 
-import { rateLimitOrNull } from "@/lib/rateLimit";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
 import { GET } from "@/app/api/import-status/route";
 
 const mockedRateLimit = vi.mocked(rateLimitOrNull);

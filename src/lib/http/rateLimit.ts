@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCollection } from "@/lib/mongo";
+import { getCollection } from "@/lib/mongo/client";
 
 // Fixed-window rate limiter backed by MongoDB — Vercel's serverless model
 // (even under Fluid Compute, which reuses warm instances but gives no

@@ -18,7 +18,7 @@
  * Reads MONGODB_URI / MONGODB_DB from .env.local (same manual parsing as
  * scripts/add-indexes.ts — lib/mongo.ts throws at import time if those
  * env vars aren't already in process.env, which they aren't yet when tsx
- * starts, so this can't just `import { getCollection } from "@/lib/mongo"`).
+ * starts, so this can't just `import { getCollection } from "@/lib/mongo/client"`).
  *
  * Idempotent via upsert: safe to re-run, but re-running after an admin has
  * already edited a value via /admin/config would overwrite their edit back
@@ -55,7 +55,7 @@ import {
   PRESTATAIRE_OPTIONS_FALLBACK,
   RDV_CONVOYEURS_FALLBACK,
   type OptionKey,
-} from "../src/lib/types";
+} from "../src/types";
 
 function loadEnvLocal(): Record<string, string> {
   const path = resolve(process.cwd(), ".env.local");

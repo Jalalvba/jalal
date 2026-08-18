@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCombinedVehicleSuggestionList } from "@/lib/vehicleSuggestions";
+import { getCombinedVehicleSuggestionList } from "@/lib/mongo/vehicleSuggestions";
 
 export async function GET() {
   try {

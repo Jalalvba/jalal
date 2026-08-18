@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/rateLimit", () => ({
+vi.mock("@/lib/http/rateLimit", () => ({
   rateLimitOrNull: vi.fn().mockResolvedValue(null),
 }));
 

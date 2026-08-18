@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { addAtelierPlates } from "@/lib/googleSheetsAtelier";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { addAtelierPlates } from "@/lib/sheets/googleSheetsAtelier";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 export async function POST(req: Request) {
   const limited = await rateLimitOrNull(req, "atelier-add", 30, 60_000);

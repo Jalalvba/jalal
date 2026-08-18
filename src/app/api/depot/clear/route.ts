@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { clearDepotAll } from "@/lib/googleSheetsDepot";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { toErrorResponse } from "@/lib/apiError";
+import { clearDepotAll } from "@/lib/sheets/googleSheetsDepot";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 export async function POST(req: Request) {
   const limited = await rateLimitOrNull(req, "depot-clear", 30, 60_000);

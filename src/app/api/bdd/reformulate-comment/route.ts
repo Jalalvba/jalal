@@ -7,9 +7,9 @@
 // /api/bdd/update path (same as any other manual Commentaire edit).
 
 import { NextResponse } from "next/server";
-import { rateLimitOrNull } from "@/lib/rateLimit";
-import { callGeminiWithTracking, GeminiCallError } from "@/lib/gemini-cost-tracker";
-import type { ReformulateCommentRequest } from "@/lib/types";
+import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { callGeminiWithTracking, GeminiCallError } from "@/lib/gemini/costTracker";
+import type { ReformulateCommentRequest } from "@/types";
 
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60 * 1000; // 1 minute

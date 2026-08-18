@@ -19,7 +19,7 @@ import type {
   CpItem,
   CpApiResponse,
   BddRow,
-} from "@/lib/types";
+} from "@/types";
 import {
   getFlagStyle,
   getPrestataireDotClass,
@@ -27,7 +27,7 @@ import {
   BDD_EDITABLE_FIELDS,
   EMPLACEMENT_INTROUVABLE,
   etatBadgeClass,
-} from "@/lib/types";
+} from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { InlineEditSelect } from "@/components/fleet/InlineEditSelect";
@@ -40,8 +40,8 @@ import { useVehicleZone } from "@/hooks/useVehicleZone";
 import { ZoneBadges } from "@/components/fleet/ZoneBadges";
 import { ZONE_COLORS } from "@/config/zones";
 import { buildPlateVariants } from "@/lib/utils/plateVariants";
-import type { RlRow, RlReunionRow } from "@/lib/googleSheetsRl";
-import type { ImportRow } from "@/lib/googleSheetsImport";
+import type { RlRow, RlReunionRow } from "@/lib/sheets/googleSheetsRl";
+import type { ImportRow } from "@/lib/sheets/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/utils/format";
 import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
 import { useImmSuggestions } from "@/hooks/useImmSuggestions";

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getDepotRows } from "@/lib/googleSheetsDepot";
-import { toErrorResponse } from "@/lib/apiError";
+import { getDepotRows } from "@/lib/sheets/googleSheetsDepot";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 export async function GET() {
   try {

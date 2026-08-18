@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OPTION_KEYS, COLORED_OPTION_KEYS, type OptionKey } from "@/lib/types";
+import { OPTION_KEYS, COLORED_OPTION_KEYS, type OptionKey } from "@/types";
 import { PLAIN_KEYS, COLORED_KEYS } from "@/app/admin/config/page";
 
 describe("admin/config PLAIN_KEYS/COLORED_KEYS — derived, not hand-copied (I4)", () => {

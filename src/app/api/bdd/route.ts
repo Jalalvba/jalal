@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSheetRows } from "@/lib/googleSheetsBdd";
-import { toErrorResponse } from "@/lib/apiError";
+import { getSheetRows } from "@/lib/sheets/googleSheetsBdd";
+import { toErrorResponse } from "@/lib/http/apiError";
 
 export async function GET() {
   try {

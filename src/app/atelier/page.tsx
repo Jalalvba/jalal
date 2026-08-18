@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { AtelierRow, ParkingAddResultItem, AtelierEditableField } from "@/lib/types";
+import type { AtelierRow, ParkingAddResultItem, AtelierEditableField } from "@/types";
 import { ZONE_COLORS } from "@/config/zones";
 import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";

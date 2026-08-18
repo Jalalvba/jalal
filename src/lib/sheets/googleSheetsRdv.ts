@@ -1,6 +1,6 @@
 import { type sheets_v4 } from "googleapis";
-import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult } from "@/lib/types";
-import { RDV_EDITABLE_FIELDS } from "@/lib/types";
+import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult } from "@/types";
+import { RDV_EDITABLE_FIELDS } from "@/types";
 import {
   getSheetsClient,
   serialToUTCDate,
@@ -9,9 +9,9 @@ import {
   withCache,
   invalidateCache,
   columnIndexToLetter,
-} from "@/lib/googleSheetsClient";
-import { addAppointmentToMonthlyTab, updateAppointmentInMonthlyTab, clearAppointmentInMonthlyTab } from "@/lib/googleSheetsRdvMonthly";
-import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY, RdvIdentityError } from "@/lib/rdvIdentity";
+} from "@/lib/sheets/googleSheetsClient";
+import { addAppointmentToMonthlyTab, updateAppointmentInMonthlyTab, clearAppointmentInMonthlyTab } from "@/lib/sheets/googleSheetsRdvMonthly";
+import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY, RdvIdentityError } from "@/lib/sheets/rdvIdentity";
 
 const ROWS_CACHE_KEY = "rows:RDV";
 const HEADERS_CACHE_KEY = "headers:RDV";

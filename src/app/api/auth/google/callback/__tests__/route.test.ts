@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mockRateLimitOrNull = vi.fn();
-vi.mock("@/lib/rateLimit", () => ({ rateLimitOrNull: (...args: unknown[]) => mockRateLimitOrNull(...args) }));
+vi.mock("@/lib/http/rateLimit", () => ({ rateLimitOrNull: (...args: unknown[]) => mockRateLimitOrNull(...args) }));
 
 // next/headers' cookies() needs a real Next.js request-scoped context that
 // calling a route handler directly (outside an actual request) doesn't
