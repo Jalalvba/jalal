@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo";
-import { escapeRegex } from "@/lib/regex";
+import { escapeRegex } from "@/lib/utils/regex";
 import { checkRateLimit, clientIp } from "@/lib/rateLimit";
 import type { Document } from "mongodb";
 

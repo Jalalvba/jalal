@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Command as CommandPrimitive } from "cmdk";
-import { cn } from "@/components/ui/utils";
+import { cn } from "@/lib/utils/cn";
 
 /**
  * A text input with a suggestion dropdown underneath it, keyboard-navigable

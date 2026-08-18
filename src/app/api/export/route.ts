@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import type { Line, DsHistoryItem, ParcItem, CpItem } from "@/lib/types";
-import { fmtDate, fmtNum } from "@/lib/format";
+import { fmtDate, fmtNum } from "@/lib/utils/format";
 import { checkRateLimit, clientIp } from "@/lib/rateLimit";
 import { toErrorResponse } from "@/lib/apiError";
 

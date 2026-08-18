@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { AppQueryProvider } from "@/hooks/queryClient";
-import { LIGHT_START_HOUR, LIGHT_END_HOUR } from "@/lib/themeDefault";
+import { LIGHT_START_HOUR, LIGHT_END_HOUR } from "@/lib/utils/themeDefault";
 import "./globals.css";
 
 // Geist Sans/Mono (next/font/google) used to be loaded here but were never

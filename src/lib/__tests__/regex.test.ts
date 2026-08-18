@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { escapeRegex } from "@/lib/regex";
+import { escapeRegex } from "@/lib/utils/regex";
 
 describe("escapeRegex", () => {
   it("escapes every regex metacharacter it targets", () => {

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "@/components/ui/utils";
+import { cn } from "@/lib/utils/cn";
 
 // Sizes default to >=44px (h-11) for touch targets — the audit found the
 // app's secondary icon buttons (refresh/delete/logout) undersized at

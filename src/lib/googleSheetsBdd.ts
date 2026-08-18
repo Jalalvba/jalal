@@ -5,7 +5,7 @@ import {
   type BddUpdateResult,
   type ParkingAddResponse,
 } from "@/lib/types";
-import { buildPlateVariants } from "@/lib/plateVariants";
+import { buildPlateVariants } from "@/lib/utils/plateVariants";
 import { getIMMListSafe, resolveIMM } from "@/lib/googleSheetsParking";
 import {
   getSheetsClient,

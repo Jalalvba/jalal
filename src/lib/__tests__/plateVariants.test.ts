@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPlateVariants } from "@/lib/plateVariants";
+import { buildPlateVariants } from "@/lib/utils/plateVariants";
 
 // The zone-detection pipeline (hooks/useVehicleZone.ts) and BDD/RL search
 // both key exclusively off this function's output — a wrong variant list

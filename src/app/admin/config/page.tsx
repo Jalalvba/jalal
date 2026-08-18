@@ -17,7 +17,7 @@ import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { cn } from "@/components/ui/utils";
+import { cn } from "@/lib/utils/cn";
 
 // ─── /admin/config — Stage 1 of the config-driven sheet-structure proposal
 // (config-proposal artifact, 2026-08-06). Edits the 7 Mongo-backed

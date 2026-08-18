@@ -1,4 +1,4 @@
-import { buildPlateVariants } from "@/lib/plateVariants";
+import { buildPlateVariants } from "@/lib/utils/plateVariants";
 import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, fmtDateTime } from "@/lib/googleSheetsClient";
 
 // Reads the "Import" tab (Assistance import events) via the authenticated

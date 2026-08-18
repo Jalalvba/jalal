@@ -5,7 +5,7 @@ import { Trash2, ImageDown, Search, Check } from "lucide-react";
 import type { RdvRow, RdvEditableField } from "@/lib/types";
 import { RDV_MATRICULE_REGEX, RDV_HEADERS } from "@/lib/types";
 import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
-import { ZONE_COLORS } from "@/lib/constants/zones";
+import { ZONE_COLORS } from "@/config/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";
 import { AddRdvDialog } from "@/components/fleet/AddRdvDialog";
@@ -14,7 +14,7 @@ import { InlineEditSelect, type InlineEditTriggerState } from "@/components/flee
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { cn } from "@/components/ui/utils";
+import { cn } from "@/lib/utils/cn";
 import {
   AlertDialog,
   AlertDialogTrigger,

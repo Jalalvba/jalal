@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { fmtDate, fmtNum } from "@/lib/format"
+import { fmtDate, fmtNum } from "@/lib/utils/format"
 import { ThemeToggle } from "@/components/fleet/ThemeToggle"
 import { Alert } from "@/components/ui/alert"
 

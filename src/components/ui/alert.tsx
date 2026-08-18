@@ -1,5 +1,5 @@
 import * as React from "react";
-import { cn } from "@/components/ui/utils";
+import { cn } from "@/lib/utils/cn";
 
 /**
  * Shared inline error banner. Replaces 7 near-identical inline blocks

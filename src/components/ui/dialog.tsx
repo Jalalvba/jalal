@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { cn } from "@/components/ui/utils";
+import { cn } from "@/lib/utils/cn";
 
 // General-purpose form dialog — @radix-ui/react-dialog was already a
 // dependency but had no reusable wrapper (only alert-dialog.tsx's

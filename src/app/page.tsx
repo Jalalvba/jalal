@@ -4,10 +4,10 @@
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { logout } from "@/app/login/actions";
-import { clearPersistedAppState } from "@/lib/clearClientState";
+import { clearPersistedAppState } from "@/lib/utils/clearClientState";
 import { ThemeToggle } from "@/components/fleet/ThemeToggle";
 import { ImportTrigger, LastImportCard } from "@/components/fleet/ImportTrigger";
-import { ZONE_COLORS } from "@/lib/constants/zones";
+import { ZONE_COLORS } from "@/config/zones";
 
 function HomeIcon({ children }: { children: React.ReactNode }) {
   return (

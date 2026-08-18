@@ -2,7 +2,7 @@
 
 import { useEditableState } from "@/hooks/useEditableState";
 import { useInlineFieldCommit } from "@/hooks/useInlineFieldCommit";
-import { cn } from "@/components/ui/utils";
+import { cn } from "@/lib/utils/cn";
 
 /**
  * Always-editable free text (Commentaire) — no tap-to-reveal step, no save

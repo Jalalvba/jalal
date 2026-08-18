@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import type { VehicleZone } from "@/hooks/useVehicleZone";
-import { ZONE_COLORS } from "@/lib/constants/zones";
+import { ZONE_COLORS } from "@/config/zones";
 
 // Colors come from lib/constants/zones.ts, the single source of truth shared
 // with each zone's own page accent and Home's NavCard. Deliberately distinct

@@ -5,7 +5,7 @@ import { useParkingRows } from "@/hooks/useParkingRows";
 import { useAtelierRows } from "@/hooks/useAtelierRows";
 import { useRdvRows } from "@/hooks/useRdvRows";
 import { useDepotRows } from "@/hooks/useDepotRows";
-import { buildPlateVariants } from "@/lib/plateVariants";
+import { buildPlateVariants } from "@/lib/utils/plateVariants";
 
 export type VehicleZone = { inParking: boolean; inAtelier: boolean; inRdv: boolean; inDepot: boolean };
 

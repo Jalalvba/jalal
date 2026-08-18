@@ -4,9 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, RotateCw, Trash2, Power } from "lucide-react";
-import { cn } from "@/components/ui/utils";
+import { cn } from "@/lib/utils/cn";
 import { logout } from "@/app/login/actions";
-import { clearPersistedAppState } from "@/lib/clearClientState";
+import { clearPersistedAppState } from "@/lib/utils/clearClientState";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/fleet/ThemeToggle";
 import {

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "@/components/ui/utils";
+import { cn } from "@/lib/utils/cn";
 
 // Covers the common cases (add-result outcome tags, generic pill labels).
 // Pages with per-value hardcoded colors (DS History's ETAT badges, Suivi

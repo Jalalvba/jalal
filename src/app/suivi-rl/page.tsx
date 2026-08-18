@@ -18,7 +18,7 @@ import {
   type ReformulateCommentContext,
   type CostInfo,
 } from "@/lib/types";
-import { ZONE_COLORS } from "@/lib/constants/zones";
+import { ZONE_COLORS } from "@/config/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";
 import { RecordCard } from "@/components/fleet/RecordCard";
@@ -32,7 +32,7 @@ import { InlineEditSelect, type InlineEditTriggerState } from "@/components/flee
 import { InlineEditText } from "@/components/fleet/InlineEditText";
 import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
 import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
-import { cn } from "@/components/ui/utils";
+import { cn } from "@/lib/utils/cn";
 import {
   useBddRows,
   useUpdateBddRow,

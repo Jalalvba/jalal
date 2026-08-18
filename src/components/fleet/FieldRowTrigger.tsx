@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil } from "lucide-react";
-import { cn } from "@/components/ui/utils";
+import { cn } from "@/lib/utils/cn";
 
 // Shared trigger look for the "labeled row" editable fields (Catégorie,
 // Technicien, Prestataire) — a faint background + pencil affordance marks

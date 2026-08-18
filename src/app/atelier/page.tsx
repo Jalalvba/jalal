@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { AtelierRow, ParkingAddResultItem, AtelierEditableField } from "@/lib/types";
-import { ZONE_COLORS } from "@/lib/constants/zones";
+import { ZONE_COLORS } from "@/config/zones";
 import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";
