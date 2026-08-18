@@ -17,9 +17,9 @@ testing it**.
 ```
                           Browser (Next 16 App Router, React 19)
                                         │
-                              src/proxy.ts  │  iron-session gate on every request
+                          src/proxy.ts  │  iron-session gate on every request
                                         ▼
-   ┌────────────────────────────── src/app/api/* ──────────────────────────────┐
+   ┌──────────────────────────── src/app/api/* ─────────────────────────────┐
    │                                                                        │
    │  Sheets side (system of record)          Mongo side (read-mostly)      │
    │  ────────────────────────────            ───────────────────────       │
@@ -29,7 +29,7 @@ testing it**.
    │  /api/depot/*      → DEPOT               /api/article      → ds, bc    │
    │  /api/rdv/*        → RDV + monthly       /api/config/options           │
    │  /api/sheet        → RL / import           → sheetFieldOptions         │
-   │                                          src/lib/rateLimit    → rateLimits │
+   │                                          src/lib/rateLimit → rateLimits│
    │  Report generators          External providers                         │
    │  ─────────────────          ──────────────────                         │
    │  /api/bdd/export        → PDF        /api/generate-email      → Gemini │
