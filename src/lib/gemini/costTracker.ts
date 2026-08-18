@@ -18,7 +18,7 @@
 // Vercel: the filesystem is read-only apart from /tmp, and every invocation may
 // land on a different instance, so a JSON counter or an appended log file would
 // be lost and could not do a safe read-modify-write under concurrency. Mongo is
-// the one store every invocation reaches identically, and lib/rateLimit.ts
+// the one store every invocation reaches identically, and src/lib/http/rateLimit.ts
 // already establishes the atomic-$inc pattern used below.
 
 import { getCollection } from "@/lib/mongo/client";
@@ -37,7 +37,7 @@ export const PRICING: Record<string, { inputPer1M: number; outputPer1M: number }
 };
 
 // Rolling "-latest" aliases have no pricing entry of their own and Google can
-// swap what they point at without notice (see app/api/generate-email/route.ts's
+// swap what they point at without notice (see src/app/api/generate-email/route.ts's
 // header comment on why this app deliberately uses an alias). We resolve an
 // alias to a concrete priced model for costing purposes only — the alias string
 // is still what gets sent to the API, and is what's logged.
@@ -125,7 +125,7 @@ export function computeCallCost(
 // there rather than trusting a docs page or this comment.
 //
 // Only RPD is enforced here. RPM is enforced upstream by Google (a burst gets a
-// 429, which the caller already handles) and this app's own lib/rateLimit.ts
+// 429, which the caller already handles) and this app's own src/lib/http/rateLimit.ts
 // caps each route well under it. TPM is recorded for visibility but not used to
 // gate the tier, since token count isn't known until after the call returns.
 export const FREE_TIER_LIMITS: Record<
@@ -435,7 +435,7 @@ export async function callGeminiWithTracking(
       console.error(
         `[gemini-cost] ALIAS DRIFT: "${model}" was priced as "${assumedKey}" but was served by ` +
           `"${servedKey}". Costs for this model are wrong until MODEL_ALIASES (and PRICING, if ` +
-          `"${servedKey}" is new) are updated in lib/gemini-cost-tracker.ts.`
+          `"${servedKey}" is new) are updated in src/lib/gemini/costTracker.ts.`
       );
     }
 

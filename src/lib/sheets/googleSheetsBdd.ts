@@ -24,7 +24,7 @@ const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 
 // Confirmed by a live spreadsheets.get() call against gid=868042157 — not a guess.
-// DELIBERATE (2026-08-09): the "Suivi RL" page (app/suivi-rl/page.tsx) reads/writes
+// DELIBERATE (2026-08-09): the "Suivi RL" page (src/app/suivi-rl/page.tsx) reads/writes
 // this BDD tab, not a separate "RL" tab — no such tab exists. "RL" is a business/UI
 // name for a filtered view over BDD's RL-related columns, not a distinct data source.
 // Reconsider only if the sheet owner ever splits RL data into its own tab.
@@ -75,7 +75,7 @@ function buildColMap(headers: string[]): Record<string, number> {
 
 /**
  * A Sheets serial-date number (UNFORMATTED_VALUE render) converted to
- * dd/mm/yyyy — deliberately NOT lib/format.ts's fmtDate, which produces
+ * dd/mm/yyyy — deliberately NOT src/lib/utils/format.ts's fmtDate, which produces
  * yyyy-mm-dd for the rest of the app; this feature's spec calls for the same
  * dd/mm/yyyy shape the old GAS Date-formatting logic produced. Only applied to
  * columns known to hold dates — mois_restant is also numeric but is a count,
@@ -83,7 +83,7 @@ function buildColMap(headers: string[]): Record<string, number> {
  * looks like a date."
  */
 // "date_ds" restored (the sheet owner fixed its mislabeled header back —
-// see BDD_HEADERS comment in lib/types.ts); "RDV" added — its XLOOKUP
+// see BDD_HEADERS comment in src/types/index.ts); "RDV" added — its XLOOKUP
 // formula returns RDV!A:A (the RDV tab's Date column), confirmed live to
 // be a date serial too.
 const DATE_LIKE_HEADERS = new Set(["date", "date_fin_contrat", "date_ds", "RDV"]);
@@ -104,8 +104,8 @@ function formatCellValue(header: string, raw: unknown): string | number {
  *
  * `immFilter`, when given, restricts the result to rows whose IMM column
  * matches any WW-prefix/suffix variant of the given value (see
- * lib/plateVariants.ts) — pushed down here so callers that only need one
- * plate's rows (e.g. app/api/sheet's bdd branch) don't fetch the whole tab
+ * src/lib/utils/plateVariants.ts) — pushed down here so callers that only need one
+ * plate's rows (e.g. src/app/api/sheet's bdd branch) don't fetch the whole tab
  * and filter redundantly on top.
  */
 export async function getSheetRows(immFilter?: string): Promise<BddRow[]> {
@@ -116,7 +116,7 @@ export async function getSheetRows(immFilter?: string): Promise<BddRow[]> {
   return rows.filter((r) => variants.has(String(r.IMM ?? "").trim().toUpperCase()));
 }
 
-/** Called by app/api/bdd/refresh/route.ts — Suivi RL's and DS History's user-triggered "Actualiser"/re-search hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+/** Called by src/app/api/bdd/refresh/route.ts — Suivi RL's and DS History's user-triggered "Actualiser"/re-search hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
 export function invalidateBddRowsCache(): void {
   invalidateCache(ROWS_CACHE_KEY);
 }
@@ -200,7 +200,7 @@ const BDD_FORMULAS: Record<string, string> = {
 
 /**
  * Adds one genuinely new plate to BDD -- IMM + ETAT (both required; ETAT is
- * required because app/suivi-rl/page.tsx's default Flotte filter only shows
+ * required because src/app/suivi-rl/page.tsx's default Flotte filter only shows
  * rows where ETAT is INTERNE or EXTERNE, so a blank-ETAT row would be
  * invisible even under "TOUS"), everything else left blank for later via the
  * existing inline-edit UI. All 20 XLOOKUP/DATEDIF formula columns are seeded

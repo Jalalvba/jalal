@@ -21,7 +21,7 @@ const HEADERS_CACHE_KEY = "headers:DEPOT";
 // guess, and not just inferred from resemblance to PARKING: this tab is a
 // byte-for-byte structural clone (same 15 columns, same 12 XLOOKUP formulas
 // verbatim, same manual/read-only split — only ACTION is editable). See
-// lib/types.ts's DepotRow comment for the full column list.
+// src/types/index.ts's DepotRow comment for the full column list.
 //
 // This file originally had only a getDepotPlates() existence-check for the
 // zone-badge feature, before this tab got its own full page. That function
@@ -82,7 +82,7 @@ export async function getDepotRows(): Promise<DepotRow[]> {
   return withCache(ROWS_CACHE_KEY, 15_000, () => fetchDepotRows());
 }
 
-/** Called by app/api/depot/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+/** Called by src/app/api/depot/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
 export function invalidateDepotRowsCache(): void {
   invalidateCache(ROWS_CACHE_KEY);
 }

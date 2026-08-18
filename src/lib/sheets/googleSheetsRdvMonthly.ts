@@ -11,10 +11,10 @@ import { getAllSheetFieldOptions } from "@/lib/mongo/sheetFieldOptions";
 // the same file as GOOGLE_SHEETS_ID). That script's "Synchroniser"/"Mettre
 // à jour" menu actions scrape ONLY these monthly tabs to wholesale rewrite
 // the flat "RDV" mirror tab in the main AVIS spreadsheet — so anything
-// written only to the flat tab (lib/googleSheetsRdv.ts) would be silently
+// written only to the flat tab (src/lib/sheets/googleSheetsRdv.ts) would be silently
 // destroyed on the next sync. This module is always called BEFORE that
 // flat-tab write, never instead of it (see addRdvRow() in
-// lib/googleSheetsRdv.ts for the two-write orchestration).
+// src/lib/sheets/googleSheetsRdv.ts for the two-write orchestration).
 //
 // Row geometry, header text, and the CONVOYEUR/Matricule validation rules
 // were all confirmed live against the real "Juillet 2026" tab (not just
@@ -311,7 +311,7 @@ export async function addAppointmentToMonthlyTab(input: RdvAddInput): Promise<Mo
 // Never trust a row number captured from an earlier read — the fallback
 // path above can insertDimension and shift every row below it in this tab
 // at any time. Every edit/clear re-reads the block fresh and re-resolves
-// its target row by content match (lib/rdvIdentity.ts), failing loudly on
+// its target row by content match (src/lib/sheets/rdvIdentity.ts), failing loudly on
 // zero or multiple matches rather than guessing.
 
 /** Re-resolves the current row for `snapshot` within its day's block, scoped to this tab only. */
@@ -361,7 +361,7 @@ async function findRowByIdentity(
  * different row count crossing a weekday/Saturday boundary, possibly a
  * different monthly tab entirely) — materially more than a same-row field
  * write. Deliberately out of scope: reject rather than silently doing the
- * wrong thing. Date stays in RDV_EDITABLE_FIELDS (lib/types.ts) because
+ * wrong thing. Date stays in RDV_EDITABLE_FIELDS (src/types/index.ts) because
  * that array also drives the flat tab's full-8-column clear — removing it
  * there would change already-working clear behavior.
  */

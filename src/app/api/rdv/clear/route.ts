@@ -7,7 +7,7 @@ import { toErrorResponse } from "@/lib/http/apiError";
 // Renamed from /api/rdv/delete — "delete" was always a misnomer here (this
 // clears cell values, it never removes a row) and doubly so now that the
 // monthly tab gets the same clear-not-delete treatment (see
-// lib/googleSheetsRdv.ts's clearRdvRow()). Body IS the full identity
+// src/lib/sheets/googleSheetsRdv.ts's clearRdvRow()). Body IS the full identity
 // snapshot (no separate rowIndex) — every clear re-resolves its target row
 // fresh, in both tabs, rather than trusting a row number from an earlier read.
 

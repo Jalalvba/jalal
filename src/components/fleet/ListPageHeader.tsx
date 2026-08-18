@@ -71,7 +71,7 @@ export function ListPageHeader({
 
   // Plain onClick instead of <form action={logout}> — the full BDD dataset
   // (plates, client names, technician assignments, free-text comments) is
-  // persisted to localStorage by hooks/queryClient.tsx, and logout() (a
+  // persisted to localStorage by src/hooks/queryClient.tsx, and logout() (a
   // server action) has no way to reach into this browser's localStorage.
   // Clearing it here, before the server action runs, is what actually
   // removes it — logout() alone only destroys the session cookie.

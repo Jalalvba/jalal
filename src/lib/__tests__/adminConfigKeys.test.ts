@@ -11,7 +11,7 @@ describe("admin/config PLAIN_KEYS/COLORED_KEYS — derived, not hand-copied (I4)
     expect(covered.size).toBe(OPTION_KEYS.length); // no duplicates, no extras
   });
 
-  it("COLORED_KEYS matches lib/types.ts's COLORED_OPTION_KEYS exactly", () => {
+  it("COLORED_KEYS matches src/types/index.ts's COLORED_OPTION_KEYS exactly", () => {
     expect(new Set(COLORED_KEYS)).toEqual(new Set(COLORED_OPTION_KEYS));
   });
 
@@ -19,7 +19,7 @@ describe("admin/config PLAIN_KEYS/COLORED_KEYS — derived, not hand-copied (I4)
   // array (typed as the same non-exhaustive OptionKey[] the old code used)
   // compiles fine and silently drops a newly-added key — the mechanism this
   // fix closes by deriving instead. This doesn't touch the real
-  // lib/types.ts; it simulates "a key gets added later" against a
+  // src/types/index.ts; it simulates "a key gets added later" against a
   // structurally identical hand-copied list to show the old code's failure
   // mode is real, not hypothetical.
   it("a hand-copied key list (the old pattern) would silently miss a newly-added OPTION_KEYS entry — this is exactly the bug being fixed", () => {
@@ -33,7 +33,7 @@ describe("admin/config PLAIN_KEYS/COLORED_KEYS — derived, not hand-copied (I4)
 
     // The derived approach (what PLAIN_KEYS/COLORED_KEYS now actually are)
     // doesn't have this gap: re-deriving PLAIN_KEYS the same way
-    // app/admin/config/page.tsx does, against the hypothetical expanded
+    // src/app/admin/config/page.tsx does, against the hypothetical expanded
     // key list, naturally includes the new key.
     const rederivedPlainKeys = OPTION_KEYS_AFTER_A_FUTURE_ADD.filter(
       (k) => !(COLORED_OPTION_KEYS as readonly string[]).includes(k)

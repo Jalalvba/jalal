@@ -1,8 +1,8 @@
 import type { RdvAddInput, RdvEditableField } from "@/types";
 
 /**
- * Shared by both lib/googleSheetsRdv.ts (flat tab) and
- * lib/googleSheetsRdvMonthly.ts (monthly tab) — every edit/clear operation
+ * Shared by both src/lib/sheets/googleSheetsRdv.ts (flat tab) and
+ * src/lib/sheets/googleSheetsRdvMonthly.ts (monthly tab) — every edit/clear operation
  * re-resolves its target row fresh, by content match, never by trusting a
  * row number captured from an earlier read. The monthly tab's fallback
  * insertDimension path can shift rows at any time; a cached row number for
@@ -61,7 +61,7 @@ export const EDITABLE_TO_INPUT_KEY: Record<RdvEditableField, keyof RdvAddInput> 
 /**
  * Collapses tabs/newlines/repeated spaces to one space and trims — makes
  * the flat tab's existing read-time cleanup (strOrEmpty() in
- * lib/googleSheetsRdv.ts) and the monthly tab's raw, uncleaned cell content
+ * src/lib/sheets/googleSheetsRdv.ts) and the monthly tab's raw, uncleaned cell content
  * comparable regardless of which one produced a given snapshot value.
  */
 function normalizeText(v: unknown): string {

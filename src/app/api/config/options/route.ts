@@ -11,7 +11,7 @@ import { AUTHORIZED_EMAIL } from "@/lib/auth/googleOAuth";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
 import { toErrorResponse } from "@/lib/http/apiError";
 
-// Gated by proxy.ts's session check like every other route under app/api —
+// Gated by src/proxy.ts's session check like every other route under src/app/api —
 // no separate re-auth here, same convention the 17 Sheets mutation routes
 // already follow.
 

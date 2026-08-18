@@ -55,7 +55,7 @@ export async function getCombinedVehicleSuggestionList(): Promise<VehicleSuggest
   });
 }
 
-/** Called by app/api/trigger-import/route.ts after a successful parc OR cp pipeline run. */
+/** Called by src/app/api/trigger-import/route.ts after a successful parc OR cp pipeline run. */
 export function invalidateVehicleSuggestionListCache(): void {
   invalidateCache(VEHICLE_SUGGEST_CACHE_KEY);
 }

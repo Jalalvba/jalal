@@ -14,10 +14,10 @@ import { cn } from "@/lib/utils/cn";
  * bare icon button matching ListPageHeader's existing refresh/vider/logout
  * icons) — same underlying toggle logic either way.
  *
- * Setting theme-explicit is what tells app/layout.tsx's no-flash script
+ * Setting theme-explicit is what tells src/app/layout.tsx's no-flash script
  * this was a deliberate user choice, not the time-of-day default — from
  * this point on, every future visit honors it instead of recomputing from
- * the current hour (see lib/themeDefault.ts).
+ * the current hour (see src/lib/utils/themeDefault.ts).
  */
 export function ThemeToggle({
   variant = "pill",
@@ -29,7 +29,7 @@ export function ThemeToggle({
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount flag to avoid a hydration mismatch (server can't know the resolved theme), same pattern as hooks/useEditableState.ts
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time mount flag to avoid a hydration mismatch (server can't know the resolved theme), same pattern as src/hooks/useEditableState.ts
   useEffect(() => setMounted(true), []);
 
   function toggle() {

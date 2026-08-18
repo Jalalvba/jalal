@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils/cn";
 // Shared trigger look for the "labeled row" editable fields (Catégorie,
 // Technicien, Prestataire) — a faint background + pencil affordance marks
 // these as tappable, distinct from the plain read-only rows around them.
-// Used by both app/suivi-rl/page.tsx and app/ds-history/page.tsx, which edit
+// Used by both src/app/suivi-rl/page.tsx and src/app/ds-history/page.tsx, which edit
 // the same BDD sheet fields in two different card layouts.
 
 export function FieldRowTrigger({

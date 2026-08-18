@@ -3,8 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DepotRow, ParkingAddResponse } from "@/types";
 
-// Same pattern/shape as hooks/useParkingRows.ts. The plate-suggestion list
-// itself is shared app-wide — see hooks/useVehicleSuggestionList.ts, one
+// Same pattern/shape as src/hooks/useParkingRows.ts. The plate-suggestion list
+// itself is shared app-wide — see src/hooks/useVehicleSuggestionList.ts, one
 // fetch across all four plate-input pages — so it isn't duplicated here.
 
 const ROWS_KEY = ["depot", "rows"] as const;
@@ -78,7 +78,7 @@ export function useClearDepotAll() {
   });
 }
 
-/** Genuine hard refresh for ListPageHeader's "Actualiser" button — see useRefreshParkingRows() in hooks/useParkingRows.ts for the full reasoning. */
+/** Genuine hard refresh for ListPageHeader's "Actualiser" button — see useRefreshParkingRows() in src/hooks/useParkingRows.ts for the full reasoning. */
 export function useRefreshDepotRows() {
   const queryClient = useQueryClient();
   return useMutation({

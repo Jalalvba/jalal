@@ -1,6 +1,6 @@
 /**
  * Time-of-day default theme, used only when no explicit user preference has
- * ever been stored (see the inline no-flash script in app/layout.tsx, which
+ * ever been stored (see the inline no-flash script in src/app/layout.tsx, which
  * is the actual runtime consumer of this — this file exists so the cutoff
  * hours have one source of truth instead of being duplicated as magic
  * numbers inside a template-literal script string).

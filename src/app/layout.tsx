@@ -7,7 +7,7 @@ import { LIGHT_START_HOUR, LIGHT_END_HOUR } from "@/lib/utils/themeDefault";
 import "./globals.css";
 
 // Geist Sans/Mono (next/font/google) used to be loaded here but were never
-// actually rendered — app/globals.css separately imports and applies DM
+// actually rendered — src/app/globals.css separately imports and applies DM
 // Sans/Playfair Display/JetBrains Mono directly on body/h1-h4, which is
 // what every page has always visually shown. Removed the dead Geist load
 // rather than keep paying for an unused font fetch.
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 // on first paint, not applied a frame late.
 //
 // Distinguishes "explicit user choice" (localStorage['theme-explicit'] ===
-// 'true', set by components/fleet/ThemeToggle.tsx when the user actually
+// 'true', set by src/components/fleet/ThemeToggle.tsx when the user actually
 // clicks the toggle) from "no explicit choice yet". Only in the latter
 // case does it compute the time-of-day default and write it into
 // next-themes' own 'theme' key — so next-themes' hydration reads a value
@@ -50,7 +50,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Set by proxy.ts on every request as the `x-nonce` request header, so the
+  // Set by src/proxy.ts on every request as the `x-nonce` request header, so the
   // inline script below carries the same nonce the CSP response header
   // allows — without it, a nonce-based script-src would block this script
   // entirely.

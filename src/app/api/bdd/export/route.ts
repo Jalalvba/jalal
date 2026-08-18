@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
 import { toErrorResponse } from "@/lib/http/apiError";
 
-// Same rate-limit bucket shape as app/api/export/route.ts's DS-history
+// Same rate-limit bucket shape as src/app/api/export/route.ts's DS-history
 // export (20 req / 5min) — this is a read-only report generator, not a
 // Sheets mutation, so it doesn't belong in the 17-route 30/min bucket.
 const RATE_LIMIT = 20;
@@ -52,7 +52,7 @@ const MAX_COMMENTAIRE_LENGTH = 2000;
 // all, so their exclusion is unaffected by any of the above.
 //
 // Same field/source as the Excel export's Emplacement column
-// (app/api/bdd/export-excel/route.ts's BddExcelExportRow).
+// (src/app/api/bdd/export-excel/route.ts's BddExcelExportRow).
 type BddExportRow = {
   IMM: string;
   client: string;
@@ -124,7 +124,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
 }
 
-// ─── PDF builder (pdf-lib — same tool/visual language as app/api/export's
+// ─── PDF builder (pdf-lib — same tool/visual language as src/app/api/export's
 // DS-history PDF branch: navy header bars, zebra-striped rows, footer page
 // numbers) ───────────────────────────────────────────────────────────────
 

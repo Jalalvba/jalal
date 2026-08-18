@@ -89,7 +89,7 @@ export async function getAtelierRows(): Promise<AtelierRow[]> {
   return withCache(ROWS_CACHE_KEY, 15_000, () => fetchAtelierRows());
 }
 
-/** Called by app/api/atelier/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+/** Called by src/app/api/atelier/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
 export function invalidateAtelierRowsCache(): void {
   invalidateCache(ROWS_CACHE_KEY);
 }
@@ -334,7 +334,7 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
 /**
  * Unlike the original (which accepts any column name, including the
  * read-only XLOOKUP columns), this only accepts ATELIER_EDITABLE_FIELDS —
- * see the allowlist note in lib/types.ts.
+ * see the allowlist note in src/types/index.ts.
  */
 export async function updateAtelierField(
   rowIndex: number,

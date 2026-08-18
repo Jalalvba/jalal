@@ -1,4 +1,4 @@
-// app/page.tsx
+// src/app/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -59,7 +59,7 @@ export default function Home() {
   const queryClient = useQueryClient();
 
   // Plain onClick instead of <form action={logout}> — see
-  // lib/clearClientState.ts's comment: the persisted BDD dataset in
+  // src/lib/utils/clearClientState.ts's comment: the persisted BDD dataset in
   // localStorage must be cleared client-side before the server action
   // (which only destroys the session cookie) runs.
   async function handleLogout() {

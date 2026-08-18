@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ParkingRow, ParkingAddResponse } from "@/types";
 
 // Route logic is untouched — these are thin client-side wrappers around the
-// exact same /api/parking* endpoints app/parking/page.tsx already called by
+// exact same /api/parking* endpoints src/app/parking/page.tsx already called by
 // hand. Refetch-on-settle vs refetch-on-success-only per mutation matches
 // the original fetchRows() call sites exactly: add() only refetched inside
 // its `if (json.ok)` branch, while action/delete/clear all refetched in a

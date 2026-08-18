@@ -88,7 +88,7 @@ export function clientIp(req: Request): string {
  * One-line rate-limit guard for route handlers: returns a ready-to-return
  * 429 NextResponse if the caller is over budget, or null if they're clear
  * to proceed. Collapses the checkRateLimit()-then-429-JSON boilerplate
- * app/api/article and app/api/export already had inline into something the
+ * src/app/api/article and src/app/api/export already had inline into something the
  * 17 Sheets mutation routes (parking/atelier/depot/rdv/bdd) can each apply
  * in one line, so a runaway script loop or accidental double-submit can't
  * exhaust the Sheets API's 60 req/min quota unchecked.

@@ -20,12 +20,12 @@ import {
 // Stage 1 of the config-driven sheet-structure proposal (config-proposal
 // artifact, 2026-08-06): only dropdown OPTION VALUES move here. Headers,
 // BddRow's TypeScript shape, and BDD_EDITABLE_FIELDS are untouched — still
-// hardcoded in lib/types.ts, deliberately out of scope for this stage.
+// hardcoded in src/types/index.ts, deliberately out of scope for this stage.
 
 const COLLECTION = "sheetFieldOptions";
 const CACHE_KEY = "sheetFieldOptions:all";
 // Options change on the order of "once every few weeks", same reasoning
-// lib/googleSheetsBdd.ts's 5min header cache already uses — this mirrors
+// src/lib/sheets/googleSheetsBdd.ts's 5min header cache already uses — this mirrors
 // that TTL rather than inventing a different one.
 const CACHE_TTL_MS = 5 * 60_000;
 
@@ -92,7 +92,7 @@ export type SheetFieldOptionsResult = {
 
 /**
  * Reads every option-set from Mongo in one query, cached via the same
- * withCache/invalidateCache primitive lib/googleSheetsClient.ts already
+ * withCache/invalidateCache primitive src/lib/sheets/googleSheetsClient.ts already
  * exports for Sheets header caching — it's a generic Next unstable_cache
  * wrapper keyed by a caller-chosen string, not actually Sheets-specific,
  * so this reuses it directly rather than duplicating the same 15 lines
@@ -105,7 +105,7 @@ export type SheetFieldOptionsResult = {
  * that can't render. `degraded`/`meta` let a caller (the admin UI
  * specifically) tell that degraded state apart from a normal healthy read,
  * rather than silently treating fallback data as if it were live Mongo
- * state — see app/admin/config/page.tsx.
+ * state — see src/app/admin/config/page.tsx.
  */
 export async function getAllSheetFieldOptionsWithStatus(): Promise<SheetFieldOptionsResult> {
   try {
@@ -140,7 +140,7 @@ export async function getAllSheetFieldOptionsWithStatus(): Promise<SheetFieldOpt
   }
 }
 
-/** Convenience wrapper for callers (lib/googleSheetsRdvMonthly.ts) that only need the option values, not the degraded/meta status. */
+/** Convenience wrapper for callers (src/lib/sheets/googleSheetsRdvMonthly.ts) that only need the option values, not the degraded/meta status. */
 export async function getAllSheetFieldOptions(): Promise<AllSheetFieldOptions> {
   return (await getAllSheetFieldOptionsWithStatus()).options;
 }
@@ -194,7 +194,7 @@ const MONGO_DUPLICATE_KEY_CODE = 11000;
  * the caller last read for this key via getAllSheetFieldOptionsWithStatus()
  * — is optional for backward compatibility (existing callers/tests that
  * don't pass it get the old unconditional-overwrite behavior), but
- * app/api/config/options/route.ts always supplies it. When present, the
+ * src/app/api/config/options/route.ts always supplies it. When present, the
  * write is conditioned on the document still having that exact updatedAt;
  * if another write landed in between, the condition doesn't match and
  * OptionsConflictError is thrown instead of silently overwriting.

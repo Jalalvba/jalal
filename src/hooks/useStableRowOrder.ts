@@ -5,7 +5,7 @@ import { useMemo, useRef } from "react";
 /**
  * Stabilizes the rendered order of a server-sorted row list across
  * background refetches. Atelier/Parking/Depot's row list is sorted
- * server-side by TIMESTAMP (see lib/googleSheets{Atelier,Parking,Depot}.ts's
+ * server-side by TIMESTAMP (see src/lib/sheets/googleSheets{Atelier,Parking,Depot}.ts's
  * `rows.sort((a, b) => a.rawDate - b.rawDate)`) — a field edit bumps that
  * same row's TIMESTAMP, so the refetch it triggers relocates the row the
  * user is actively working on to the opposite end of the list.

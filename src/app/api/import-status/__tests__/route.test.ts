@@ -93,7 +93,7 @@ describe("GET /api/import-status", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        // A bare "skipped" is never a real run status (see lib/types.ts's
+        // A bare "skipped" is never a real run status (see src/types/index.ts's
         // ImportPipelineRunStatus) — treated as unrecognized, not as a skip.
         jsonResponse({ pipeline: "ds", started_at: null, finished_at: null, status: "skipped", steps: [] })
       )

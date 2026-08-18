@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult } from "@/types";
 
-// Same pattern as hooks/useAtelierRows.ts. No clear-all mutation — RDV is an
+// Same pattern as src/hooks/useAtelierRows.ts. No clear-all mutation — RDV is an
 // append-only appointment log, so unlike Atelier/Parking there's no bulk-wipe
 // action here.
 
@@ -27,7 +27,7 @@ export function useRdvRows() {
   });
 }
 
-/** Genuine hard refresh for ListPageHeader's "Actualiser" button — see useRefreshParkingRows() in hooks/useParkingRows.ts for the full reasoning. */
+/** Genuine hard refresh for ListPageHeader's "Actualiser" button — see useRefreshParkingRows() in src/hooks/useParkingRows.ts for the full reasoning. */
 export function useRefreshRdvRows() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -58,7 +58,7 @@ export function useAddRdvRow() {
  * the frontend last read it as, except `field` itself) — the backend
  * re-resolves the live row from this by content match, in both tabs
  * independently, rather than trusting any row number. See
- * lib/googleSheetsRdv.ts's updateRdvField() for the full reasoning.
+ * src/lib/sheets/googleSheetsRdv.ts's updateRdvField() for the full reasoning.
  */
 export function useUpdateRdvField() {
   const queryClient = useQueryClient();

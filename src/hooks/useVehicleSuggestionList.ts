@@ -14,7 +14,7 @@ async function fetchJson<T extends { ok: boolean }>(url: string): Promise<T> {
  * The ONE shared fetch of the full combined parc+cp plate universe, used by
  * all four plate-input pages (Parking, Atelier, Depot, DS History) — a
  * single TanStack Query cache entry (persisted to localStorage, see
- * hooks/queryClient.tsx) means only the very first page visited in a
+ * src/hooks/queryClient.tsx) means only the very first page visited in a
  * browser session ever calls the network for this; every other page reads
  * the same in-memory + localStorage-backed cache with zero requests.
  */

@@ -3,9 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AtelierRow, AtelierEditableField, ParkingAddResponse } from "@/types";
 
-// Same pattern/refetch-behavior mapping as hooks/useParkingRows.ts. The
+// Same pattern/refetch-behavior mapping as src/hooks/useParkingRows.ts. The
 // plate-suggestion list itself is shared app-wide — see
-// hooks/useVehicleSuggestionList.ts, one fetch across all four plate-input
+// src/hooks/useVehicleSuggestionList.ts, one fetch across all four plate-input
 // pages — so it isn't duplicated here.
 
 const ROWS_KEY = ["atelier", "rows"] as const;
@@ -89,7 +89,7 @@ export function useClearAtelierAll() {
   });
 }
 
-/** Genuine hard refresh for ListPageHeader's "Actualiser" button — see useRefreshParkingRows() in hooks/useParkingRows.ts for the full reasoning. */
+/** Genuine hard refresh for ListPageHeader's "Actualiser" button — see useRefreshParkingRows() in src/hooks/useParkingRows.ts for the full reasoning. */
 export function useRefreshAtelierRows() {
   const queryClient = useQueryClient();
   return useMutation({

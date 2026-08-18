@@ -1,4 +1,4 @@
-// app/api/query/route.ts
+// src/app/api/query/route.ts
 // Resolves partial IMM/WW (plate/WW only, no VIN) → returns
 // { mode:"suggest", suggestions[] } or { mode:"data", imm, ww }
 export const runtime = "nodejs";

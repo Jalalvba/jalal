@@ -11,7 +11,7 @@ import { rateLimitOrNull } from "@/lib/http/rateLimit";
 // account you're signing in with matters.
 //
 // Rate-limited (M8 in the audit this responds to): this and its callback
-// are the only two routes proxy.ts lets through unauthenticated — every
+// are the only two routes src/proxy.ts lets through unauthenticated — every
 // other route already sits behind rateLimitOrNull indirectly via the
 // session gate. A generous limit (not the 30/min Sheets-mutation bucket):
 // this only redirects to Google and sets a cookie, no external API spend

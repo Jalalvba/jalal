@@ -1,7 +1,7 @@
 // Canonical response shapes for the app's own APIs.
 //
 // Each type here is derived directly from the corresponding route's actual
-// $project stage (see app/api/ds/history, app/api/parc, app/api/cp), not from
+// $project stage (see src/app/api/ds/history, src/app/api/parc, src/app/api/cp), not from
 // what a consumer *wishes* the API returned. Keeping this as the single
 // source of truth is what prevents API and consumer types from drifting
 // apart silently (see git history around 2026-07 for what that drift cost).
@@ -92,7 +92,7 @@ export type CpApiResponse = {
 //
 // Confirmed by a live read of the real header row. This is NOT a guess: it's
 // the actual row-1 content of the sheet as of the discovery pass.
-// lib/googleSheetsBdd.ts still builds rows dynamically from a fresh live
+// src/lib/sheets/googleSheetsBdd.ts still builds rows dynamically from a fresh live
 // header read at runtime — this list exists for the UI layer (labels, field
 // order, search) and the editable-fields allowlist below, not as a
 // substitute for that live read.
@@ -118,7 +118,7 @@ export type CpApiResponse = {
 // BDD_EDITABLE_FIELDS. "ATELIER"/"DEPOT"/"PARKING" are read-only sheet-side
 // XLOOKUP presence flags (value = the vehicle's own IMM if found as a live
 // row in that zone's tab, else blank) — the sheet-side equivalent of what
-// hooks/useVehicleZone.ts already computes client-side. The two can
+// src/hooks/useVehicleZone.ts already computes client-side. The two can
 // legitimately disagree (stale manual entry, or a failed automated match)
 // — that disagreement is itself useful, not a bug to reconcile away.
 
@@ -188,7 +188,7 @@ export type BddRow = {
 // Business-rule allowlist (not derived from the sheet — a deliberate policy:
 // only these 7 of the 28 real columns in BDD_HEADERS above are writable from
 // this app; Emplacement joined the list in 3d9bd87). Shared
-// between the server-side check in lib/googleSheetsBdd.ts and the UI's edit
+// between the server-side check in src/lib/sheets/googleSheetsBdd.ts and the UI's edit
 // form so both agree on the same set without duplicating the literal list.
 export const BDD_EDITABLE_FIELDS = [
   "ETAT",
@@ -201,7 +201,7 @@ export const BDD_EDITABLE_FIELDS = [
 ] as const;
 
 // The three read-only, sheet-side XLOOKUP presence flags — kept as their own
-// list so both app/suivi-rl/page.tsx and app/ds-history/page.tsx can render
+// list so both src/app/suivi-rl/page.tsx and src/app/ds-history/page.tsx can render
 // them as a clearly separate "automated zone detection" section rather than
 // folding them into the generic readonly field list.
 export const BDD_ZONE_DETECTION_HEADERS = ["ATELIER", "DEPOT", "PARKING"] as const;
@@ -210,12 +210,12 @@ export const BDD_ZONE_DETECTION_HEADERS = ["ATELIER", "DEPOT", "PARKING"] as con
 //
 // EMPLACEMENT/ETAT/FLAG/CATEGORIE/TECHNICIEN/PRESTATAIRE/RDV_CONVOYEURS
 // option *values* now live in the Mongo "sheetFieldOptions" collection
-// (lib/sheetFieldOptions.ts), admin-editable at /admin/config — not
+// (src/lib/mongo/sheetFieldOptions.ts), admin-editable at /admin/config — not
 // hardcoded arrays baked into a deploy anymore. Headers/field structure
 // (BDD_HEADERS, BddRow, BDD_EDITABLE_FIELDS above) are explicitly OUT of
 // scope for this stage and stay exactly as they were.
 //
-// The six *_FALLBACK constants below are NOT dead code: lib/sheetFieldOptions.ts's
+// The six *_FALLBACK constants below are NOT dead code: src/lib/mongo/sheetFieldOptions.ts's
 // getAllSheetFieldOptions() falls back to these if the Mongo collection is
 // empty or unreachable, so a Mongo outage degrades to "options frozen at
 // their last-known-good hardcoded value" rather than an app that can't
@@ -283,7 +283,7 @@ export type OptionKey = (typeof OPTION_KEYS)[number];
 /** Which OPTION_KEYS are {value,color} pairs vs plain strings — the admin UI and the Mongo document schema both branch on this. */
 export const COLORED_OPTION_KEYS: readonly OptionKey[] = ["FLAG_OPTIONS", "PRESTATAIRE_OPTIONS"];
 
-/** Human-readable label per OPTION_KEYS entry, for the /admin/config UI. Pure data (no env/Mongo dependency) so scripts/seed-sheet-field-options.ts can import it without pulling in lib/mongo.ts's module-scope env check. */
+/** Human-readable label per OPTION_KEYS entry, for the /admin/config UI. Pure data (no env/Mongo dependency) so scripts/seed-sheet-field-options.ts can import it without pulling in src/lib/mongo/client.ts's module-scope env check. */
 export const OPTION_LABELS: Record<OptionKey, string> = {
   EMPLACEMENT_OPTIONS: "Emplacement",
   ETAT_OPTIONS: "État",
@@ -311,7 +311,7 @@ export type AllSheetFieldOptions = {
 export const EMPLACEMENT_OPTIONS_FALLBACK = ["ATELIER", "PARKING", "INTROUVABLE", "DEPOT", "EXTERNE"];
 
 // Named handle for the one EMPLACEMENT_OPTIONS_FALLBACK value that
-// app/suivi-rl/page.tsx and app/ds-history/page.tsx treat specially (red
+// src/app/suivi-rl/page.tsx and src/app/ds-history/page.tsx treat specially (red
 // "⚠ Introuvable" alert styling on the whole card/row). Referencing this
 // constant instead of a raw "INTROUVABLE" literal at each comparison site
 // doesn't remove the underlying fragility — Emplacement is admin-editable
@@ -341,7 +341,7 @@ export const FLAG_OPTIONS_FALLBACK: ColoredOption[] = [
 export const ETAT_OPTIONS_FALLBACK = ["INTERNE", "EXTERNE", "DISPONIBLE", "ANNULE", "ANNULEE"];
 
 // Named handles for the three ETAT_OPTIONS_FALLBACK values that code actually
-// compares against: app/suivi-rl/page.tsx's INTERNE/EXTERNE Flotte default
+// compares against: src/app/suivi-rl/page.tsx's INTERNE/EXTERNE Flotte default
 // scope, and etatBadgeClass() below (which ds-history aliases as etatStyle).
 // Same caveat as EMPLACEMENT_INTROUVABLE above: ETAT is admin-editable at
 // /admin/config, and these are still plain string comparisons, not derived
@@ -363,8 +363,8 @@ export const ETAT_DISPONIBLE = "DISPONIBLE";
  * ETAT's badge color mapping — a deliberate literal-color exception (see
  * CLAUDE.md §3's "ÉTAT badges" entry, same convention FLAG_STYLE/ZoneBadges
  * use), but previously duplicated and drifted independently in two places:
- * app/ds-history/page.tsx's etatStyle() covered ANNULEE but not ANNULE
- * (despite ETAT_OPTIONS_FALLBACK including both), and app/suivi-rl/page.tsx
+ * src/app/ds-history/page.tsx's etatStyle() covered ANNULEE but not ANNULE
+ * (despite ETAT_OPTIONS_FALLBACK including both), and src/app/suivi-rl/page.tsx
  * had its own, simpler two-branch (EXTERNE vs everything-else) ternary that
  * didn't distinguish DISPONIBLE/ANNULE/ANNULEE at all. Centralized here so
  * the same ETAT value renders identically on both pages.
@@ -372,7 +372,7 @@ export const ETAT_DISPONIBLE = "DISPONIBLE";
  * ANNULE/ANNULEE have no branch of their own: they are real
  * ETAT_OPTIONS_FALLBACK values that deliberately fall through to the single
  * `return` at the bottom and render muted. That is the intended treatment,
- * not an oversight — lib/__tests__/etatBadgeClass.test.ts pins
+ * not an oversight — src/lib/__tests__/etatBadgeClass.test.ts pins
  * etatBadgeClass("ANNULE") === etatBadgeClass("ANNULEE") so it stays true.
  *
  * That fallback uses the semantic muted/border tokens rather than a literal
@@ -603,7 +603,7 @@ export type RdvAddInput = {
 // live ONE_OF_LIST data validation rule on the monthly appointment-calendar
 // tabs (source: CONFIG.CONVOYEURS in the generating Apps Script). Fallback
 // only now — see the "Config-driven dropdown options" note above; the real
-// source is lib/sheetFieldOptions.ts's Mongo-backed loader.
+// source is src/lib/mongo/sheetFieldOptions.ts's Mongo-backed loader.
 export const RDV_CONVOYEURS_FALLBACK = [
   "KHACHI Taha",
   "DRIOUICH Mohamad",
@@ -630,7 +630,7 @@ export const RDV_CONVOYEURS_FALLBACK = [
 export const RDV_MATRICULE_REGEX = /^([0-9]{6}[A-Za-z]{2}|[0-9]{4,5}-[A-Za-z]-[0-9])$/;
 
 // Outcome of writing into the monthly appointment-calendar tab (the durable
-// source — see lib/googleSheetsRdvMonthly.ts). `written: false` carries a
+// source — see src/lib/sheets/googleSheetsRdvMonthly.ts). `written: false` carries a
 // human-readable reason (out-of-range date, tab not generated yet, etc.).
 export type MonthlyWriteResult = { written: true; tab: string; row: number } | { written: false; error: string };
 
@@ -664,7 +664,7 @@ export type RdvClearResult =
 // formulas verbatim (checked via a FORMULA-render read, not inferred from
 // resemblance alone). Only ACTION is editable — IMM/TIMESTAMP are the
 // add-mechanism fields, the rest is read-only XLOOKUP output, exactly like
-// Parking. Reuses ParkingAddResponse/ParkingAddResultItem (lib/googleSheetsAtelier.ts
+// Parking. Reuses ParkingAddResponse/ParkingAddResultItem (src/lib/sheets/googleSheetsAtelier.ts
 // already sets this precedent) since the add-result shape is identical.
 
 export type DepotRow = {
@@ -690,17 +690,17 @@ export type DepotRow = {
 // ─── Fleet Data Import (external pipeline, ~/import → import-red.vercel.app) ──
 //
 // This app never talks to Mongo/Drive for the import itself — it proxies
-// two endpoints on a separate Vercel project (see app/api/trigger-import
-// and app/api/import-status). Shapes below are normalized server-side from
+// two endpoints on a separate Vercel project (see src/app/api/trigger-import
+// and src/app/api/import-status). Shapes below are normalized server-side from
 // that project's own response shapes (run.py's run_all() for the trigger
-// call, lib/pipeline_log.py's PipelineLogger.to_document() for the
+// call, src/lib/pipeline_log.py's PipelineLogger.to_document() for the
 // per-run status document) — confirmed by reading that project's source
 // directly, not guessed from its HTTP docs.
 //
 // One important asymmetry: the trigger call's own response only carries a
 // compact "step:status" string per step (no timestamp, no detail text) —
 // full step detail only exists in the per-run status document. So
-// app/api/trigger-import/route.ts calls /api/status for each run_id
+// src/app/api/trigger-import/route.ts calls /api/status for each run_id
 // *after* the trigger call resolves (every run has already finished by
 // then) to backfill real timestamps/detail before handing the combined
 // result to the browser.
@@ -738,7 +738,7 @@ export type ImportPipelineResult = {
   steps: ImportPipelineStep[];
   /**
    * Set when /api/status couldn't be fetched for this run (e.g. it isn't
-   * deployed on the backend yet — see app/api/trigger-import/route.ts's
+   * deployed on the backend yet — see src/app/api/trigger-import/route.ts's
    * comment) — `steps` above is then reconstructed from the trigger
    * response's compact "step:status" strings only, with no real detail/
    * timestamp. Surfaced in the UI rather than left implicit, so degraded
@@ -762,7 +762,7 @@ export type GenerateEmailRequest = {
 };
 
 // Re-exported so client components can type costInfo without importing
-// lib/gemini-cost-tracker.ts, which pulls in the Mongo driver.
+// src/lib/gemini/costTracker.ts, which pulls in the Mongo driver.
 export type { CostInfo } from "@/lib/gemini/costTracker";
 
 export type GenerateEmailResponse =

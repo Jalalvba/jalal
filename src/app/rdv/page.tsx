@@ -28,7 +28,7 @@ import {
 import { useRdvRows, useUpdateRdvField, useClearRdvRow, useRefreshRdvRows, rdvRowToIdentity } from "@/hooks/useRdvRows";
 
 // Read-only Date column intentionally not offered here — see
-// lib/googleSheetsRdvMonthly.ts's updateAppointmentInMonthlyTab(): editing
+// src/lib/sheets/googleSheetsRdvMonthly.ts's updateAppointmentInMonthlyTab(): editing
 // Date in place would be a move to a different day-block (and possibly a
 // different monthly tab), materially more than a same-row field write.
 // Clear + re-add via AddRdvDialog is the workaround for moving a date.
@@ -93,7 +93,7 @@ const COLUMNS: { label: string; className?: string }[] = [
 // narrow screens. This one is rendered off-screen at its natural width
 // instead — see ExportTable/handleExportImage below.
 //
-// Derived from lib/types.ts's RDV_HEADERS rather than hand-copied — the
+// Derived from src/types/index.ts's RDV_HEADERS rather than hand-copied — the
 // hand-copied version had already drifted ("Convoyeur" vs the sheet's real
 // header text "CONVOYEUR") with no error anywhere. The <td>s below are
 // still positional/hand-written (row.heure, row.clients, ... in that
@@ -101,7 +101,7 @@ const COLUMNS: { label: string; className?: string }[] = [
 // *order* ever changes, the headers and cells would silently misalign.
 // Full field-driven rendering (mapping each header to its RdvRow accessor)
 // is a bigger structural change than this pass — flagged here, not fixed.
-// Exported so lib/__tests__/rdvExportColumns.test.ts can lock in that this
+// Exported so src/lib/__tests__/rdvExportColumns.test.ts can lock in that this
 // stays derived (and stays byte-identical to the real sheet header text)
 // rather than drifting back into a hand-copied literal.
 export const EXPORT_COLUMNS = RDV_HEADERS.filter((h) => h !== "Date");
@@ -350,7 +350,7 @@ export default function RdvPage() {
   }
 
   // useUpdateRdvField/useClearRdvRow's fetchJson() already throws on an
-  // { ok: false } response (see hooks/useRdvRows.ts) — mutateAsync only
+  // { ok: false } response (see src/hooks/useRdvRows.ts) — mutateAsync only
   // ever resolves with the `ok: true` variant, so there's no separate
   // "ok: false" branch to handle here beyond the warning field.
 

@@ -7,7 +7,7 @@ if (!keyB64) throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_KEY_B64 in .env.loc
 
 declare global {
   // Needed to prevent creating a new client on every hot-reload in dev.
-  // Shared by every lib/googleSheets*.ts file — same global slot, same
+  // Shared by every src/lib/sheets/googleSheets*.ts file — same global slot, same
   // singleton, so they all reuse one authenticated client instead of each
   // opening their own.
   var _sheetsClient: sheets_v4.Sheets | undefined;
@@ -79,7 +79,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 4, baseDelayMs = 
 
 /**
  * Wraps the finite, known set of Sheets methods this codebase actually calls
- * (confirmed via grep across lib/googleSheets*.ts — nothing else is used)
+ * (confirmed via grep across src/lib/sheets/googleSheets*.ts — nothing else is used)
  * with withRetry, once, here — so every existing call site in the 5 helper
  * files gets retry behavior for free, with zero changes to those files.
  *
@@ -112,7 +112,7 @@ function wrapWithRetry(sheets: sheets_v4.Sheets): sheets_v4.Sheets {
 
 /**
  * Thrown by verifyRowIdentity() below. Extends ApiError (status 409) rather
- * than plain Error so route handlers using lib/apiError.ts's
+ * than plain Error so route handlers using src/lib/http/apiError.ts's
  * toErrorResponse() automatically show its message and 409 status with no
  * per-route special-casing — previously every route calling
  * verifyRowIdentity()'s callers had their own `instanceof RowIdentityError`
@@ -159,7 +159,7 @@ export async function verifyRowIdentity(
 }
 
 /**
- * Extracted from 5 near-identical copies (lib/googleSheetsBdd.ts,
+ * Extracted from 5 near-identical copies (src/lib/sheets/googleSheetsBdd.ts,
  * googleSheetsParking.ts, googleSheetsAtelier.ts, googleSheetsRl.ts,
  * googleSheetsImport.ts) — confirmed byte-identical before merging, not a
  * guess.
@@ -230,8 +230,8 @@ export function isoDateToSerial(iso: string): number | null {
 
 /**
  * 1-based column index to spreadsheet column letter(s), e.g. 1 → "A",
- * 27 → "AA". Moved here from lib/googleSheetsRdv.ts once
- * lib/googleSheetsRdvMonthly.ts needed the same conversion.
+ * 27 → "AA". Moved here from src/lib/sheets/googleSheetsRdv.ts once
+ * src/lib/sheets/googleSheetsRdvMonthly.ts needed the same conversion.
  */
 export function columnIndexToLetter(oneBasedIndex: number): string {
   let n = oneBasedIndex;

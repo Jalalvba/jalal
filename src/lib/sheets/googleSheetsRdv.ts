@@ -86,7 +86,7 @@ export async function getRdvRows(): Promise<RdvRow[]> {
   return withCache(ROWS_CACHE_KEY, 15_000, () => fetchRdvRows());
 }
 
-/** Called by app/api/rdv/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+/** Called by src/app/api/rdv/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
 export function invalidateRdvRowsCache(): void {
   invalidateCache(ROWS_CACHE_KEY);
 }
@@ -156,7 +156,7 @@ async function fetchRdvRows(): Promise<RdvRow[]> {
  *     GOOGLE_RDV_SHEETS_ID) — the durable source. An external Apps Script
  *     periodically rebuilds this flat "RDV" tab FROM those monthly tabs, so
  *     anything written only here would be silently destroyed on the next
- *     sync (see lib/googleSheetsRdvMonthly.ts's file header for the full
+ *     sync (see src/lib/sheets/googleSheetsRdvMonthly.ts's file header for the full
  *     risk writeup).
  *  2. This flat "RDV" tab — a best-effort fast-read mirror for
  *     getRdvRows()/useVehicleZone. If step 1 fails, nothing is written
@@ -280,7 +280,7 @@ async function writeToFlatTab(input: RdvAddInput): Promise<{ rowIndex: number } 
   // strings as numbers — silently eating leading zeros on phone numbers in
   // Contact (confirmed live: "0000000000" round-tripped as "0"). Date is
   // written as an already-computed serial number, so RAW stores it correctly
-  // too — same convention as lib/googleSheetsBdd.ts's updateSheetRow().
+  // too — same convention as src/lib/sheets/googleSheetsBdd.ts's updateSheetRow().
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: spreadsheetId!,
     requestBody: { valueInputOption: "RAW", data: writes },
@@ -412,7 +412,7 @@ async function tryUpdateFlatTab(oldSnapshot: RdvAddInput, field: RdvEditableFiel
  * "Clear" (not delete) on purpose in both tabs — this flat tab's clear
  * already wiped all 8 columns including Date/Heure (its own reuse scan in
  * writeToFlatTab() looks for a blank Date), unchanged here; the monthly
- * tab's clear (lib/googleSheetsRdvMonthly.ts) only wipes C:H, matching
+ * tab's clear (src/lib/sheets/googleSheetsRdvMonthly.ts) only wipes C:H, matching
  * *that* tab's own empty-slot convention (Date/Heure always pre-filled).
  * Two intentionally different clear behaviors, one per tab.
  */

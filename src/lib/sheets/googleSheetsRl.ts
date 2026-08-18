@@ -3,7 +3,7 @@ import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, withCache, invalida
 
 // Reads the "RL" tab (véhicule de remplacement / replacement-vehicle data)
 // via the authenticated service-account Sheets API — replacing the
-// gviz-based public fetch app/api/sheet/route.ts used to make directly.
+// gviz-based public fetch src/app/api/sheet/route.ts used to make directly.
 // Tab name and column list confirmed by a live spreadsheets.values.get()
 // read (gid=1827846977, 1000 rows x 26 cols) — not a guess.
 
@@ -13,7 +13,7 @@ if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 const RL_TAB_NAME = "RL";
 
 // The tab has 26 real columns but only these are surfaced — matches the
-// original gviz-era RL_COLUMNS allowlist in app/api/sheet/route.ts exactly
+// original gviz-era RL_COLUMNS allowlist in src/app/api/sheet/route.ts exactly
 // (all 10 names confirmed present verbatim in the live header row).
 const RL_COLUMNS = [
   "Reference",
@@ -43,7 +43,7 @@ const DATE_LIKE_COLUMNS = new Set<(typeof RL_COLUMNS)[number]>(["Date", "Date d�
  * Immatriculation_a_remplacer or Immatriculation_remplacement matches any
  * WW-prefix/suffix variant of `immFilter` — same OR-match behavior the
  * gviz-era route had. 1,000 rows is cheap enough to read in full and filter
- * server-side in JS, same pattern as lib/googleSheetsBdd.ts.
+ * server-side in JS, same pattern as src/lib/sheets/googleSheetsBdd.ts.
  */
 export async function getRlRows(immFilter?: string): Promise<RlRow[]> {
   const sheets = getSheetsClient();
@@ -151,7 +151,7 @@ export async function getRlReunionRows(immFilter?: string): Promise<RlReunionRow
   return rows.filter((r) => variants.has(r.Immatriculation.trim().toUpperCase()));
 }
 
-/** Called by app/api/bdd/refresh/route.ts — DS History's search reads RL_reunion alongside BDD, so its hard refresh needs to bust this cache too. getRlRows() itself is deliberately never cached (see its own history), nothing to bust there. */
+/** Called by src/app/api/bdd/refresh/route.ts — DS History's search reads RL_reunion alongside BDD, so its hard refresh needs to bust this cache too. getRlRows() itself is deliberately never cached (see its own history), nothing to bust there. */
 export function invalidateRlReunionRowsCache(): void {
   invalidateCache(RL_REUNION_ROWS_CACHE_KEY);
 }

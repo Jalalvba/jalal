@@ -9,10 +9,10 @@ import type {
   ReformulateCommentResponse,
 } from "@/types";
 
-// Same pattern as hooks/useParkingRows.ts / useAtelierRows.ts, against the
+// Same pattern as src/hooks/useParkingRows.ts / useAtelierRows.ts, against the
 // existing /api/bdd and /api/bdd/update endpoints (unchanged).
 //
-// Note for the app/suivi-rl/page.tsx migration specifically: the original
+// Note for the src/app/suivi-rl/page.tsx migration specifically: the original
 // page persisted rows to localStorage itself (loadCachedRows/saveCachedRows)
 // so a repeat visit painted instantly from the last-known cache before the
 // background refresh landed. Plain useQuery's cache is in-memory only and
@@ -37,7 +37,7 @@ export function useBddRows() {
     queryFn: () => fetchJson<{ ok: true; rows: BddRow[] }>("/api/bdd"),
     select: (data) => data.rows,
     // Inherits the provider's 30s default staleTime — the persisted cache
-    // (see hooks/queryClient.tsx) plus TanStack Query's default
+    // (see src/hooks/queryClient.tsx) plus TanStack Query's default
     // refetchOnMount already paint instantly from the last-known cache and
     // refetch in the background, without forcing an unconditional refetch
     // on every mount the way staleTime: 0 used to.
@@ -46,10 +46,10 @@ export function useBddRows() {
 
 /**
  * Genuine hard refresh for Suivi RL's ListPageHeader "Actualiser" button —
- * see useRefreshParkingRows() in hooks/useParkingRows.ts for the full
- * reasoning. app/api/bdd/refresh also busts RL_reunion's cache, since DS
+ * see useRefreshParkingRows() in src/hooks/useParkingRows.ts for the full
+ * reasoning. src/app/api/bdd/refresh also busts RL_reunion's cache, since DS
  * History's search reads both — this hook only needs to refetch BDD's own
- * query key, DS History manages its own refetch (see app/ds-history/page.tsx).
+ * query key, DS History manages its own refetch (see src/app/ds-history/page.tsx).
  */
 export function useRefreshBddRows() {
   const queryClient = useQueryClient();

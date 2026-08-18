@@ -28,11 +28,11 @@ import {
 import { useStableRowOrder } from "@/hooks/useStableRowOrder";
 
 // ─── CATEGORIE_OPTIONS and TECHNICIEN_OPTIONS are Mongo-backed now
-// (lib/sheetFieldOptions.ts, admin-editable at /admin/config), loaded via
-// useSheetFieldOptions() — shared with app/suivi-rl/page.tsx and
-// app/ds-history/page.tsx through the same hook, one fetch either way. Used
+// (src/lib/mongo/sheetFieldOptions.ts, admin-editable at /admin/config), loaded via
+// useSheetFieldOptions() — shared with src/app/suivi-rl/page.tsx and
+// src/app/ds-history/page.tsx through the same hook, one fetch either way. Used
 // to be an independently hand-duplicated hardcoded copy here (CATEGORIE_OPTIONS
-// had already drifted a stray typo out of sync with lib/types.ts's static
+// had already drifted a stray typo out of sync with src/types/index.ts's static
 // list before that was fixed, then briefly a shared static import, now
 // config-driven). ──
 

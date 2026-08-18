@@ -510,9 +510,9 @@ function FieldSelector({
 
 // ─── Sheet Card (BDD + RL merged) ────────────────────────────────────────────
 
-// etatBadgeClass (lib/types.ts) replaces this file's own local mapping —
+// etatBadgeClass (src/types/index.ts) replaces this file's own local mapping —
 // that local one covered ANNULEE but not ANNULE, and drifted independently
-// from app/suivi-rl/page.tsx's own simpler ETAT styling. Shared now so
+// from src/app/suivi-rl/page.tsx's own simpler ETAT styling. Shared now so
 // both pages render the same ETAT value identically. Kept as a thin local
 // alias (not inlining every call site) since etatStyle's name is already
 // used at both call sites below and in comments referencing it.
@@ -532,7 +532,7 @@ function f(label: string, val?: string) {
 // ─── BDD row (editable) ───────────────────────────────────────────────────────
 //
 // Same 6 BDD_EDITABLE_FIELDS, same InlineEdit* components, same
-// useUpdateBddRow/useOptimisticBddUpdate mutation as app/suivi-rl/page.tsx —
+// useUpdateBddRow/useOptimisticBddUpdate mutation as src/app/suivi-rl/page.tsx —
 // this card and Suivi RL edit the exact same sheet row (matched by `_row`),
 // now via the same shared react-query cache (see useBddRows()), so a write
 // from either page is reflected in the other. One component per row (not
@@ -555,7 +555,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
   // WARNING: Emplacement is admin-editable at /admin/config — if
   // EMPLACEMENT_INTROUVABLE's exact value is ever renamed or removed
   // there, this comparison silently stops matching anything and the alert
-  // styling disappears with no error (see its comment in lib/types.ts).
+  // styling disappears with no error (see its comment in src/types/index.ts).
   const isIntrouvable = row.Emplacement === EMPLACEMENT_INTROUVABLE;
 
   return (
@@ -789,7 +789,7 @@ export default function Home() {
   const queryClient = useQueryClient();
 
   // Plain onClick instead of <form action={logout}> — see
-  // lib/clearClientState.ts's comment: the persisted BDD dataset in
+  // src/lib/utils/clearClientState.ts's comment: the persisted BDD dataset in
   // localStorage must be cleared client-side before the server action
   // (which only destroys the session cookie) runs.
   async function handleLogout() {
@@ -849,7 +849,7 @@ export default function Home() {
   // BDD rows come from the same useBddRows() react-query cache Suivi RL uses
   // (unfiltered fetch of the whole tab) — filtered here to just the plate(s)
   // currently being viewed, by IMM/WW variant, the same matching logic
-  // /api/sheet?sheet=bdd used to apply server-side (see lib/plateVariants.ts).
+  // /api/sheet?sheet=bdd used to apply server-side (see src/lib/utils/plateVariants.ts).
   // Sharing the cache (not just the sheet) means an edit made here or on
   // Suivi RL is reflected in the other without a page reload.
   const bddRowsQuery = useBddRows();

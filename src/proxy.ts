@@ -8,12 +8,12 @@ import { sessionOptions, SessionData } from "@/lib/auth/session";
  * login redirect, and the authenticated passthrough) — cheap and avoids
  * having to reason about which branches strictly need it. The nonce itself
  * is only functionally required on the two NextResponse.next() branches
- * (the ones that actually reach app/layout.tsx's rendered <script>): the
+ * (the ones that actually reach src/app/layout.tsx's rendered <script>): the
  * 401/redirect responses never render a page, so the request-header
  * forwarding there is a no-op, not a bug.
  *
  * img-src has no googleusercontent.com and form-action has no
- * accounts.google.com — checked first: app/login/page.tsx's Google button
+ * accounts.google.com — checked first: src/app/login/page.tsx's Google button
  * is a plain `<a href="/api/auth/google">` GET link, not a <form>, and this
  * app requests only the `openid email` OAuth scopes (no `profile`), so it
  * never fetches or renders a Google avatar anywhere. Adding either would be

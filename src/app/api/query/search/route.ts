@@ -1,4 +1,4 @@
-// app/api/query/search/route.ts
+// src/app/api/query/search/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   try {
     const col = await getCollection<ParcDoc>("parc");
 
-    // See app/api/query/route.ts's identical fix for why: dropping
+    // See src/app/api/query/route.ts's identical fix for why: dropping
     // $options: "i" and uppercasing the query lets Mongo use the existing
     // Immatriculation/Numéro WW indexes instead of a full collection scan.
     const regex = { $regex: "^" + escapeRegex(q.toUpperCase()) };

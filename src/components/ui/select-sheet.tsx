@@ -10,7 +10,7 @@ import { Check } from "lucide-react";
  * this is a plain tap-to-select list, matching how a native mobile picker
  * behaves.
  *
- * No tailwindcss-animate plugin in this project (components/ui/alert-dialog.tsx's
+ * No tailwindcss-animate plugin in this project (src/components/ui/alert-dialog.tsx's
  * animate-in/fade-in classes are actually inert here, pre-existing and out of
  * scope to fix) — the slide/fade below use plain Tailwind transform+opacity
  * transitions gated on Radix's data-state, which work without a plugin.

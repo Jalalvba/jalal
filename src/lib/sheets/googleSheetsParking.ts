@@ -80,7 +80,7 @@ export async function getParkingRows(): Promise<ParkingRow[]> {
   return withCache(ROWS_CACHE_KEY, 15_000, () => fetchParkingRows());
 }
 
-/** Called by app/api/parking/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
+/** Called by src/app/api/parking/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
 export function invalidateParkingRowsCache(): void {
   invalidateCache(ROWS_CACHE_KEY);
 }
@@ -185,7 +185,7 @@ async function fetchParkingRows(): Promise<ParkingRow[]> {
  * ~5 days apart (2026-08-03, 2026-08-08) with everything between them
  * "skipped" (unchanged). A week-long default would otherwise risk serving
  * stale plates for up to 7 days after a genuine change, so
- * app/api/trigger-import/route.ts calls invalidateIMMListCache() the moment
+ * src/app/api/trigger-import/route.ts calls invalidateIMMListCache() the moment
  * it sees the parc pipeline report "success" (not "skipped_unchanged" /
  * "skipped_absent" / "failed"), so a real update is reflected immediately
  * instead of waiting out the TTL.
@@ -209,7 +209,7 @@ export async function getIMMList(): Promise<string[]> {
   });
 }
 
-/** Called by app/api/trigger-import/route.ts right after a successful parc pipeline run. */
+/** Called by src/app/api/trigger-import/route.ts right after a successful parc pipeline run. */
 export function invalidateIMMListCache(): void {
   invalidateCache(IMM_LIST_CACHE_KEY);
 }

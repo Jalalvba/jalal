@@ -1,10 +1,10 @@
 // Displays the cost of one Gemini call, next to that call's result. Every
 // action that calls Gemini gets its costInfo back inline in the same response
-// (see lib/gemini-cost-tracker.ts), so this renders immediately — it never
+// (see src/lib/gemini/costTracker.ts), so this renders immediately — it never
 // fetches anything itself.
 //
 // The figure is an estimate, not billing — hence the "est." prefix and the
-// title tooltip. See the header comment in lib/gemini-cost-tracker.ts.
+// title tooltip. See the header comment in src/lib/gemini/costTracker.ts.
 
 import { Badge } from "@/components/ui/badge";
 import type { CostInfo } from "@/types";

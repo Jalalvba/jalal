@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildPlateVariants } from "@/lib/utils/plateVariants";
 
-// The zone-detection pipeline (hooks/useVehicleZone.ts) and BDD/RL search
+// The zone-detection pipeline (src/hooks/useVehicleZone.ts) and BDD/RL search
 // both key exclusively off this function's output — a wrong variant list
 // silently breaks "is this plate in Parking/Atelier/RDV/Depot" for any
 // plate stored inconsistently as "980874WW" vs "WW980874" vs "980874"

@@ -1,4 +1,4 @@
-// app/api/import-status/route.ts
+// src/app/api/import-status/route.ts
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -31,10 +31,10 @@ type RawStatusDoc = {
 const KNOWN_STEP_STATUSES = new Set(["started", "success", "failed", "skipped"]);
 
 // Deliberately NOT the same set as KNOWN_STEP_STATUSES above: a pipeline
-// *run*'s status has its own vocabulary (lib/types.ts's
+// *run*'s status has its own vocabulary (src/types/index.ts's
 // ImportPipelineRunStatus), and the two are not interchangeable. Validating a
 // run status against the step set is exactly the bug 9fe833d fixed in
-// app/api/trigger-import/route.ts — since neither "skipped_absent" nor
+// src/app/api/trigger-import/route.ts — since neither "skipped_absent" nor
 // "skipped_unchanged" is a step status, both silently coerced to "failed",
 // reporting a legitimately skipped run as a failed one. The fix was never
 // applied here at the time; this is it.

@@ -12,7 +12,7 @@ import {
   RDV_CONVOYEURS_FALLBACK,
 } from "@/types";
 
-// Client-side counterpart to lib/sheetFieldOptions.ts's server-side fallback
+// Client-side counterpart to src/lib/mongo/sheetFieldOptions.ts's server-side fallback
 // — same *_FALLBACK constants, shown immediately on first render (and if the
 // fetch itself fails) instead of an empty dropdown while the query is
 // pending. The server-side fallback (Mongo unreachable) and this one
@@ -23,7 +23,7 @@ import {
 // failure) — /admin/config specifically must never let a user edit against
 // this data, since a save while it's showing CLIENT_FALLBACK would replace
 // whatever's actually in Mongo with these hardcoded values. See
-// app/admin/config/page.tsx's isLoading gate.
+// src/app/admin/config/page.tsx's isLoading gate.
 const CLIENT_FALLBACK: AllSheetFieldOptions = {
   EMPLACEMENT_OPTIONS: EMPLACEMENT_OPTIONS_FALLBACK,
   ETAT_OPTIONS: ETAT_OPTIONS_FALLBACK,

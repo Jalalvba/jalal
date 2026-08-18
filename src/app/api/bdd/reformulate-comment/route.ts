@@ -1,5 +1,5 @@
 // Reformulates a Suivi RL row's Commentaire via the Gemini API — same
-// provider/model/pattern as app/api/generate-email/route.ts (see that
+// provider/model/pattern as src/app/api/generate-email/route.ts (see that
 // file's header comment for the DEFAULT_MODEL rationale), just a shorter,
 // lower-temperature prompt suited to polishing an existing short comment
 // rather than drafting one from scratch. Never writes to the Sheet itself —
@@ -33,7 +33,7 @@ const SYSTEM_INSTRUCTION =
 // "Contexte:" line is dropped too if every field is blank. Context values
 // come from client-supplied JSON, not a type-checked internal call — a
 // BddRow field like modele can be a raw number straight from the Sheet
-// (see app/suivi-rl/page.tsx's downloadBddPdf comment on the same
+// (see src/app/suivi-rl/page.tsx's downloadBddPdf comment on the same
 // footgun), so this coerces via String() rather than trusting the
 // declared `string | undefined` type and calling .trim() directly.
 function buildUserTurn(comment: string, context: ReformulateCommentRequest["context"]): string {

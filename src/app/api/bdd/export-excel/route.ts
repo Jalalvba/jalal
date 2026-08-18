@@ -6,12 +6,12 @@ import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
 import { toErrorResponse } from "@/lib/http/apiError";
 
-// Same rate-limit bucket sizing as app/api/bdd/export's PDF export — this is
+// Same rate-limit bucket sizing as src/app/api/bdd/export's PDF export — this is
 // also a read-only report generator, not a Sheets mutation.
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 5 * 60 * 1000;
 
-// Same defensive caps as the PDF export route (app/api/bdd/export/route.ts)
+// Same defensive caps as the PDF export route (src/app/api/bdd/export/route.ts)
 // — kept in sync deliberately, not derived, since the two routes validate
 // independently.
 const MAX_ROWS = 2000;
@@ -19,7 +19,7 @@ const MAX_FIELD_LENGTH = 500;
 const MAX_COMMENTAIRE_LENGTH = 2000;
 
 // Identical field-for-field to the PDF export's BddExportRow
-// (app/api/bdd/export/route.ts) — Emplacement included. This route got the
+// (src/app/api/bdd/export/route.ts) — Emplacement included. This route got the
 // Emplacement column first (12bdc5e), when multi-select made an export able to
 // span several Emplacement values so the "Filtres actifs" header line could no
 // longer tell you which row was which; e3bc354 then applied the same reasoning

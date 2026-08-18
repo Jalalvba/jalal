@@ -1,4 +1,4 @@
-// app/api/trigger-import/route.ts
+// src/app/api/trigger-import/route.ts
 export const runtime = "nodejs";
 export const maxDuration = 180;
 
@@ -25,10 +25,10 @@ type RawTriggerResult = {
   label: string;
   filename: string;
   // Confirmed against ~/import/run.py's run_all() directly — never a bare
-  // "skipped", see lib/types.ts's ImportPipelineRunStatus comment.
+  // "skipped", see src/types/index.ts's ImportPipelineRunStatus comment.
   status: "success" | "failed" | "skipped_absent" | "skipped_unchanged";
   run_id: string;
-  steps: string[]; // "step:status" — no timestamp/detail, see lib/types.ts's comment
+  steps: string[]; // "step:status" — no timestamp/detail, see src/types/index.ts's comment
 };
 
 type RawTriggerBody = {
@@ -205,7 +205,7 @@ export async function POST(req: Request) {
       })
     );
 
-    // getIMMList()'s cache (lib/googleSheetsParking.ts) is a week-long TTL —
+    // getIMMList()'s cache (src/lib/sheets/googleSheetsParking.ts) is a week-long TTL —
     // refresh it immediately on a real parc change instead of waiting that
     // out. Only "success" counts: "skipped_unchanged"/"skipped_absent" mean
     // parc's data didn't actually change, and "failed" means it may not be
@@ -214,7 +214,7 @@ export async function POST(req: Request) {
       invalidateIMMListCache();
     }
 
-    // The combined parc+cp suggestion list (lib/vehicleSuggestions.ts) draws
+    // The combined parc+cp suggestion list (src/lib/mongo/vehicleSuggestions.ts) draws
     // from both collections, so either one changing real data invalidates it.
     if (results.some((r) => (r.pipeline === "parc" || r.pipeline === "cp") && r.status === "success")) {
       invalidateVehicleSuggestionListCache();

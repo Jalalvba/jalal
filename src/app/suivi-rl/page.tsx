@@ -1,7 +1,7 @@
 "use client";
 
 // DELIBERATE (2026-08-09): despite the "Suivi RL" name, this page reads/writes the
-// BDD sheet tab (lib/googleSheetsBdd.ts), not a separate "RL" tab — none exists.
+// BDD sheet tab (src/lib/sheets/googleSheetsBdd.ts), not a separate "RL" tab — none exists.
 // "RL" is a business/UI label for a view over BDD's RL-related columns.
 
 import { useMemo, useState } from "react";
@@ -63,7 +63,7 @@ function formatAge(dataUpdatedAt: number): string {
 // *individual* items — folding a "clear all" pseudo-value into that same
 // array would fight the group's own on/off semantics per real item. Same
 // visual language as ToggleGroupItem's own on/off classes
-// (components/ui/toggle-group.tsx) so it reads as part of the same chip row.
+// (src/components/ui/toggle-group.tsx) so it reads as part of the same chip row.
 function AllChip({ active, onClick }: { active: boolean; onClick: () => void }) {
   return (
     <button
@@ -205,7 +205,7 @@ async function downloadBddExcel(
   }
 }
 
-// Server allowlist (lib/types.ts's BDD_EDITABLE_FIELDS) is unchanged — this
+// Server allowlist (src/types/index.ts's BDD_EDITABLE_FIELDS) is unchanged — this
 // page just commits one of these keys at a time now instead of bundling
 // all of them into one form submit.
 type FieldKey = "ETAT" | "prestataire" | "flag" | "Emplacement" | "Catégorie" | "commentaire" | "Technicien";
@@ -250,14 +250,14 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
 
   const flagStyle = getFlagStyle(row.flag, options.FLAG_OPTIONS);
   const dot = getPrestataireDotClass(row.prestataire, options.PRESTATAIRE_OPTIONS);
-  // Emplacement is a human's manual assessment (see lib/types.ts) —
+  // Emplacement is a human's manual assessment (see src/types/index.ts) —
   // EMPLACEMENT_INTROUVABLE means someone has flagged this vehicle as
   // genuinely not located, a real alert worth the same red treatment
   // ds-history's SheetCard gives RL rows. WARNING: Emplacement is
   // admin-editable at /admin/config — if that exact value is ever renamed
   // or removed there, this comparison silently stops matching anything and
   // the alert styling disappears with no error (see EMPLACEMENT_INTROUVABLE's
-  // own comment in lib/types.ts).
+  // own comment in src/types/index.ts).
   const isIntrouvable = row.Emplacement === EMPLACEMENT_INTROUVABLE;
 
   return (
@@ -316,7 +316,7 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
               disabled={pending}
               className={cn(
                 "flex min-h-8 flex-shrink-0 items-center rounded-lg px-2 py-1 text-micro font-bold uppercase transition disabled:opacity-60",
-                // etatBadgeClass (lib/types.ts) — shared with ds-history's
+                // etatBadgeClass (src/types/index.ts) — shared with ds-history's
                 // ETAT badge, replaces this page's own two-branch
                 // (EXTERNE-vs-everything-else) ternary, which silently
                 // rendered DISPONIBLE/ANNULE/ANNULEE the same as INTERNE.
@@ -537,12 +537,12 @@ function ReformulateCommentButton({
 
 // ─── Main page ──────────────────────────────────────────────────────────────
 
-// "TOUS" has no corresponding lib/types.ts constant — it's a filter-only
+// "TOUS" has no corresponding src/types/index.ts constant — it's a filter-only
 // sentinel meaning "no ETAT filter applied", not a real ETAT value, so
 // there's nothing to rename-drift against. ETAT itself is admin-editable
 // at /admin/config (options.ETAT_OPTIONS, live set as of 2026-08:
 // INTERNE/EXTERNE/DISPONIBLE, plus ANNULE/ANNULEE in the fallback with no
-// live rows currently) — see the comment in lib/types.ts for the
+// live rows currently) — see the comment in src/types/index.ts for the
 // rename-drift risk.
 //
 // Fleet is a plain string (not a literal union) because the chip row below

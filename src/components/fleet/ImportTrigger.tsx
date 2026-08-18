@@ -38,7 +38,7 @@ type LastRunSummary = {
   finishedAt: string;
 };
 
-// Same "space instead of T" Python-str(datetime) shape app/api/trigger-import
+// Same "space instead of T" Python-str(datetime) shape src/app/api/trigger-import
 // already normalizes server-side to real ISO — this only needs the
 // browser-local HH:MM:SS.
 function fmtTime(iso: string | null): string {

@@ -14,7 +14,7 @@ describe("RDV export table columns — derived from RDV_HEADERS, not hand-copied
 
   it("has exactly 7 entries, matching the 7 hand-written <td> cells in ExportTable", () => {
     // The <td>s themselves are still positional (see the comment in
-    // app/rdv/page.tsx) — this at least catches a column COUNT drift, even
+    // src/app/rdv/page.tsx) — this at least catches a column COUNT drift, even
     // though it can't catch an ORDER drift without a bigger refactor.
     expect(EXPORT_COLUMNS).toHaveLength(7);
   });

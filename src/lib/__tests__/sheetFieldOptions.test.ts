@@ -191,7 +191,7 @@ describe("updateFieldOptions — validation", () => {
   it("trims values before storage (I2 — trim-consistency), not just before the duplicate check", async () => {
     const updateOne = fakeCollection();
 
-    // Route-layer trimming (app/api/config/options/route.ts) is what
+    // Route-layer trimming (src/app/api/config/options/route.ts) is what
     // actually strips this in production; this asserts updateFieldOptions
     // itself doesn't silently re-introduce untrimmed storage if called
     // directly with an already-untrimmed value from elsewhere.

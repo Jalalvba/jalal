@@ -7,12 +7,12 @@ import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persi
 import { toast } from "sonner";
 
 // Every write action in the app goes through a useMutation call (see
-// hooks/use*Rows.ts) — hooking success/error here once, via MutationCache,
+// src/hooks/use*Rows.ts) — hooking success/error here once, via MutationCache,
 // gives every one of them a toast without touching each call site. A
 // mutation opts into a specific success message with
 // `meta: { successMessage: "..." }`; without it, a generic fallback fires.
 // Errors always surface the thrown Error's message (already the real
-// server-side error text — see fetchJson() in each hooks/use*Rows.ts file).
+// server-side error text — see fetchJson() in each src/hooks/use*Rows.ts file).
 const mutationCache = new MutationCache({
   onSuccess: (_data, _variables, _context, mutation) => {
     const message =
@@ -24,7 +24,7 @@ const mutationCache = new MutationCache({
   },
 });
 
-// app/suivi-rl/page.tsx originally persisted its rows to localStorage itself
+// src/app/suivi-rl/page.tsx originally persisted its rows to localStorage itself
 // (loadCachedRows/saveCachedRows) so a repeat visit painted instantly from
 // the last-known cache before the background refresh landed. Plain
 // TanStack Query's cache is in-memory only and wouldn't survive a hard
@@ -33,7 +33,7 @@ const mutationCache = new MutationCache({
 const BDD_QUERY_KEY = "bdd";
 
 // The single shared full-plate-universe query (["vehicle-suggestions"], see
-// hooks/useVehicleSuggestionList.ts) backs Parking/Atelier/Depot/DS
+// src/hooks/useVehicleSuggestionList.ts) backs Parking/Atelier/Depot/DS
 // History's plate inputs — persisting it client-side means only the very
 // first page visited in a browser session ever fetches it; every other
 // page/navigation reads localStorage with zero network round trip, only

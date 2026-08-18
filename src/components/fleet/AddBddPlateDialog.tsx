@@ -23,7 +23,7 @@ const selectClass =
  * server-side typo-resolution + "not found in parc" warning badge via
  * ParkingAddResultItem/AddResultsList) with one deliberate difference: ETAT
  * is a second required field, since BDD's default Flotte filter hides any
- * row whose ETAT isn't INTERNE/EXTERNE (see lib/googleSheetsBdd.ts's
+ * row whose ETAT isn't INTERNE/EXTERNE (see src/lib/sheets/googleSheetsBdd.ts's
  * addBddRow() docstring) -- a plate added with a blank ETAT would be
  * invisible in the UI even though it exists in the sheet. Everything else
  * (prestataire/flag/Emplacement/Catégorie/Technicien/commentaire) is left

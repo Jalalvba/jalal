@@ -7,7 +7,7 @@ import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, fmtDateTime } from 
 // spreadsheets.values.get() read (gid=1699780918, 26,381 rows x 12 cols).
 //
 // 26,381 rows is too large to read in full and filter in JS the way
-// lib/googleSheetsBdd.ts / lib/googleSheetsRl.ts do for their much smaller
+// src/lib/sheets/googleSheetsBdd.ts / src/lib/sheets/googleSheetsRl.ts do for their much smaller
 // tabs. The Sheets API v4 has no WHERE-clause equivalent for values.get (the
 // gviz endpoint this route used to hit did, via its own query language) — so
 // this does a two-step targeted read instead: (1) scan only column H across
@@ -44,14 +44,14 @@ export type ImportRow = Record<(typeof IMPORT_COLUMNS)[number], string>;
 // endpoint pre-formatted both via its "formatted value" field — the
 // authenticated API's UNFORMATTED_VALUE doesn't, so both are converted
 // explicitly here rather than left as raw numbers. Slash-separated to match
-// the DD/MM/YYYY[ HH:mm:ss] shape app/ds-history/page.tsx's own parseDate()
+// the DD/MM/YYYY[ HH:mm:ss] shape src/app/ds-history/page.tsx's own parseDate()
 // regex expects.
 const DATE_ONLY_COLUMNS = new Set<(typeof IMPORT_COLUMNS)[number]>(["Date Ouverture"]);
 const DATE_TIME_COLUMNS = new Set<(typeof IMPORT_COLUMNS)[number]>(["DatePrestation"]);
 
 /**
  * Targeted lookup — requires a plate/WW value, matched via the same
- * WW-prefix/suffix variant rules as bdd/rl (lib/plateVariants.ts). Returns
+ * WW-prefix/suffix variant rules as bdd/rl (src/lib/utils/plateVariants.ts). Returns
  * every matching row (a vehicle can have several assistance events), not
  * just the first.
  */

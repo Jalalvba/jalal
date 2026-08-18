@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 /**
  * Dedupes stripAlnum/currentTokenFragment/suggestions-filtering, previously
- * copy-pasted verbatim between app/parking/page.tsx and app/atelier/page.tsx.
+ * copy-pasted verbatim between src/app/parking/page.tsx and src/app/atelier/page.tsx.
  * Matches only the trailing comma-separated token, exactly as both pages
  * already did — this is the multi-plate "add" input's autocomplete, not DS
  * History's single-value smart search (which debounces a remote query

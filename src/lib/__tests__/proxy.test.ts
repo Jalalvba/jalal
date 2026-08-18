@@ -12,7 +12,7 @@ import { sessionOptions } from "@/lib/auth/session";
 //
 // Deliberately does NOT mock iron-session or getIronSession — it mints a
 // real sealed cookie via sealData() (same helper e2e/helpers/auth.ts uses
-// for the Playwright suite) and lets proxy.ts's real unsealing code run, so
+// for the Playwright suite) and lets src/proxy.ts's real unsealing code run, so
 // this exercises the actual auth boundary, not a stand-in for it.
 
 async function authenticatedCookieValue(): Promise<string> {
@@ -44,7 +44,7 @@ describe("proxy — auth boundary (test-suite gap #1)", () => {
     const res = await proxy(reqTo("/api/bdd", cookie));
     // NextResponse.next() carries this internal marker header rather than
     // a real status/body — this route never actually gets invoked here,
-    // proxy.ts just decides whether to let the request continue.
+    // src/proxy.ts just decides whether to let the request continue.
     expect(res.headers.get("x-middleware-next")).toBe("1");
   });
 

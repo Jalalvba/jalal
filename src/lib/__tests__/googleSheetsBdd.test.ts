@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Mocked before importing the module under test (vitest hoists vi.mock()
-// above imports) — same pattern as lib/__tests__/sheetFieldOptions.test.ts.
+// above imports) — same pattern as src/lib/__tests__/sheetFieldOptions.test.ts.
 vi.mock("@/lib/sheets/googleSheetsClient", async () => {
   const actual = await vi.importActual<typeof import("@/lib/sheets/googleSheetsClient")>("@/lib/sheets/googleSheetsClient");
   return {

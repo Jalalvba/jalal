@@ -1,4 +1,4 @@
-// app/api/sheet/route.ts
+// src/app/api/sheet/route.ts
 import { NextResponse } from "next/server";
 import { getSheetRows as getBddRows } from "@/lib/sheets/googleSheetsBdd";
 import { getRlRows, getRlReunionRows } from "@/lib/sheets/googleSheetsRl";
@@ -6,7 +6,7 @@ import { getImportRows } from "@/lib/sheets/googleSheetsImport";
 import { toErrorResponse } from "@/lib/http/apiError";
 
 // All three sheet targets are served via the authenticated service-account
-// Sheets API now (lib/googleSheetsBdd.ts / googleSheetsRl.ts /
+// Sheets API now (src/lib/sheets/googleSheetsBdd.ts / googleSheetsRl.ts /
 // googleSheetsImport.ts) — the spreadsheet's public link-sharing was locked
 // down, which broke the gviz-based public fetch this route used to make.
 

@@ -1,4 +1,4 @@
-// app/api/cp/route.ts
+// src/app/api/cp/route.ts
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo/client";
 import { toErrorResponse } from "@/lib/http/apiError";
