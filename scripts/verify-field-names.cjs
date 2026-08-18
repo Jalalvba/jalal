@@ -64,7 +64,7 @@ const path = require("node:path");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const REGISTRY_PATH = path.join(REPO_ROOT, "field_registry.json");
-const SCAN_ROOTS = [path.join(REPO_ROOT, "app", "api"), path.join(REPO_ROOT, "lib")];
+const SCAN_ROOTS = [path.join(REPO_ROOT, "src", "app", "api"), path.join(REPO_ROOT, "src", "lib")];
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir)) {
