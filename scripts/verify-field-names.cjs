@@ -15,11 +15,11 @@
  * error. This script exists to make that class of bug fail loudly in CI
  * instead of shipping silently.
  *
- * Scope (documented limitation, not exhaustive): scans app/api/** AND
- * lib/**, since Mongo-facing helper code (e.g. lib/googleSheetsParking.ts)
- * lives outside app/api/** too -- widened 2026-08-09 after getIMMList()'s
+ * Scope (documented limitation, not exhaustive): scans src/app/api/** AND
+ * src/lib/**, since Mongo-facing helper code (e.g. src/lib/sheets/googleSheetsParking.ts)
+ * lives outside src/app/api/** too -- widened 2026-08-09 after getIMMList()'s
  * "Immatriculation" vs. real "immatriculation" typo (always silently
- * returned []) shipped undetected because lib/** wasn't scanned. Scans for
+ * returned []) shipped undetected because src/lib/** wasn't scanned. Scans for
  * quoted dollar-prefixed field references -- "$fieldname" -- the pattern
  * used throughout this codebase's aggregation pipelines ($project,
  * $group, $ifNull, etc) -- plus quoted string-literal bracket-index field

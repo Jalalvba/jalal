@@ -1,15 +1,15 @@
 # Config-driven dropdown options
 
-**Primary files:** [`lib/sheetFieldOptions.ts`](../lib/sheetFieldOptions.ts) ·
-[`app/api/config/options/route.ts`](../app/api/config/options/route.ts) ·
-[`hooks/useSheetFieldOptions.ts`](../hooks/useSheetFieldOptions.ts) ·
-[`app/admin/config/page.tsx`](../app/admin/config/page.tsx) ·
+**Primary files:** [`src/lib/mongo/sheetFieldOptions.ts`](../src/lib/mongo/sheetFieldOptions.ts) ·
+[`src/app/api/config/options/route.ts`](../src/app/api/config/options/route.ts) ·
+[`src/hooks/useSheetFieldOptions.ts`](../src/hooks/useSheetFieldOptions.ts) ·
+[`src/app/admin/config/page.tsx`](../src/app/admin/config/page.tsx) ·
 [`scripts/seed-sheet-field-options.ts`](../scripts/seed-sheet-field-options.ts) ·
-[`lib/types.ts:209-427`](../lib/types.ts#L209)
+[`src/types/index.ts:209-427`](../src/types/index.ts#L209)
 
-Tests: `lib/__tests__/sheetFieldOptions.test.ts`,
-`lib/__tests__/adminConfigKeys.test.ts`,
-`app/api/config/options/__tests__/route.test.ts`, `e2e/admin-config.spec.ts`.
+Tests: `src/lib/__tests__/sheetFieldOptions.test.ts`,
+`src/lib/__tests__/adminConfigKeys.test.ts`,
+`src/app/api/config/options/__tests__/route.test.ts`, `e2e/admin-config.spec.ts`.
 
 Introduced by `76d60b5` ("Stage 1 of config-driven sheet structure"), hardened
 by `5cf0eed` (audit C2) and `48f3fec` (audit I4).
@@ -31,15 +31,15 @@ Mongo**, admin-editable at `/admin/config` without a deploy.
 
 > Headers, row shape, and the editable allowlist are **out of scope for this
 > stage by decision, not by omission** — stated at
-> [`lib/sheetFieldOptions.ts:20`](../lib/sheetFieldOptions.ts#L20) and
-> [`lib/types.ts:213-216`](../lib/types.ts#L213). The colour-class maps are a
+> [`src/lib/mongo/sheetFieldOptions.ts:20`](../src/lib/mongo/sheetFieldOptions.ts#L20) and
+> [`src/types/index.ts:213-216`](../src/types/index.ts#L213). The colour-class maps are a
 > **design-system** concern, not sheet data, and deliberately do not move: an
 > admin picks *which* of six palette colours a value carries, never what
 > `"red"` renders as.
 
 ### The 7 option keys
 
-`OPTION_KEYS` ([`lib/types.ts:272-280`](../lib/types.ts#L272)):
+`OPTION_KEYS` ([`src/types/index.ts:272-280`](../src/types/index.ts#L272)):
 
 | Key | Type | Fallback constant |
 |---|---|---|
@@ -64,7 +64,7 @@ fix closed.
 ## 2. The `*_FALLBACK` constants are NOT dead code
 
 This is the single most likely wrong deletion in this codebase, so it is stated
-loudly in `lib/types.ts:218-224` and repeated here.
+loudly in `src/types/index.ts:218-224` and repeated here.
 
 Each `*_FALLBACK` constant serves **three** live purposes:
 
@@ -72,7 +72,7 @@ Each `*_FALLBACK` constant serves **three** live purposes:
    back **key by key** when a key has no Mongo document yet, and **wholesale**
    when Mongo is unreachable.
 2. **Client-side degradation** — `CLIENT_FALLBACK` in
-   [`useSheetFieldOptions.ts:27`](../hooks/useSheetFieldOptions.ts#L27)
+   [`useSheetFieldOptions.ts:27`](../src/hooks/useSheetFieldOptions.ts#L27)
    renders real values on first paint instead of empty dropdowns.
 3. **Seed data** — `scripts/seed-sheet-field-options.ts` inserts exactly these
    values as the initial Mongo documents.
@@ -104,11 +104,11 @@ page component
 regardless of how many components call the hook — TanStack Query dedupes by key,
 so a list page's chip row *and* every card's editors share one fetch.
 
-**Both TTLs are 5 minutes**, matching `lib/googleSheetsBdd.ts`'s header cache
+**Both TTLs are 5 minutes**, matching `src/lib/sheets/googleSheetsBdd.ts`'s header cache
 rather than inventing a third number. Options change "once every few weeks".
 
 `withCache`/`invalidateCache` are reused from
-[`lib/googleSheetsClient.ts`](../lib/googleSheetsClient.ts) — despite the module
+[`src/lib/sheets/googleSheetsClient.ts`](../src/lib/sheets/googleSheetsClient.ts) — despite the module
 name they are a generic `unstable_cache` wrapper keyed by an arbitrary string,
 not Sheets-specific. Reused rather than duplicating 15 lines under a new name.
 
@@ -149,7 +149,7 @@ replace is simpler and matches how the admin UI actually edits.
 
 ### 4.1 Validation, in order
 
-**Route layer** ([`route.ts:44`](../app/api/config/options/route.ts#L44)):
+**Route layer** ([`route.ts:44`](../src/app/api/config/options/route.ts#L44)):
 
 | Check | Failure |
 |---|---|
@@ -211,14 +211,14 @@ instead of waiting out the 5-minute TTL. The client additionally
 
 ## 5. `/admin/config` — the edit gate
 
-[`page.tsx:274`](../app/admin/config/page.tsx#L274):
+[`page.tsx:274`](../src/app/admin/config/page.tsx#L274):
 
 ```ts
 const editingBlocked = isLoading || degraded;
 ```
 
 **Both conditions block editing, for the same reason from two different
-directions** ([`useSheetFieldOptions.ts:22`](../hooks/useSheetFieldOptions.ts#L22)):
+directions** ([`useSheetFieldOptions.ts:22`](../src/hooks/useSheetFieldOptions.ts#L22)):
 
 - **`isLoading`** — the query hasn't resolved, so `options` is
   `CLIENT_FALLBACK`. Saving now would **replace whatever is actually in Mongo
@@ -231,7 +231,7 @@ case rather than leaving the disabled controls unexplained. This is audit item
 **C2** (`5cf0eed`).
 
 > **The page is not separately authenticated.** Like every route under
-> `app/api`, it is gated by `proxy.ts`'s session check — the same convention the
+> `src/app/api`, it is gated by `src/proxy.ts`'s session check — the same convention the
 > 17 Sheets mutation routes follow.
 
 ---
@@ -240,7 +240,7 @@ case rather than leaving the disabled controls unexplained. This is audit item
 
 `npx tsx scripts/seed-sheet-field-options.ts` — one-time bootstrap.
 
-- **Not part of the build**; not imported by anything under `app/` or `lib/`.
+- **Not part of the build**; not imported by anything under `src/app/` or `src/lib/`.
 - Parses `MONGODB_URI` / `MONGODB_DB` from `.env.local` **manually** — it cannot
   `import { getCollection } from "@/lib/mongo"` because that module throws at
   import time if those vars aren't already in `process.env`, which they aren't
@@ -273,9 +273,9 @@ case rather than leaving the disabled controls unexplained. This is audit item
    so they already render through `etatBadgeClass()`'s muted fallback and a
    rename changes nothing. Their named constants were removed in 2026-08 once
    confirmed unreferenced; the fact is preserved on that function's docstring
-   and pinned by `lib/__tests__/etatBadgeClass.test.ts`.
+   and pinned by `src/lib/__tests__/etatBadgeClass.test.ts`.
 
-   Centralising the literals in `lib/types.ts` means a rename needs updating in
+   Centralising the literals in `src/types/index.ts` means a rename needs updating in
    **one** place — **it does not remove the fragility**. Wiring behaviour flags
    into the Mongo documents was deliberately deferred past Stage 1.
 

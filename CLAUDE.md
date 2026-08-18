@@ -18,7 +18,7 @@ search/lookup and export.
 
 **Stack:** Next.js App Router (Next 16, React 19) · MongoDB (native
 driver) · Google Sheets API via a service-account JWT client
-(`lib/googleSheetsClient.ts` + per-tab `googleSheets*.ts` modules) ·
+(`src/lib/sheets/googleSheetsClient.ts` + per-tab `googleSheets*.ts` modules) ·
 iron-session · TanStack Query · Tailwind v4 + shadcn-pattern primitives on
 Radix UI. **Deployed on Vercel** — `NODE_ENV` gates cookie `secure`/CSP
 `unsafe-eval` between dev/prod.
@@ -44,7 +44,7 @@ Copy `.env.example` to `.env.local` and fill in real values:
 | `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth 2.0 web client — authorizes exactly one account, see §4 |
 | `IRON_SESSION_SECRET` | Encrypts the session cookie, ≥32 chars |
 | `GOOGLE_SERVICE_ACCOUNT_KEY_B64` | Base64-encoded service account JSON, grants Sheets/Drive access |
-| `GOOGLE_SHEETS_ID` | The spreadsheet ID every `lib/googleSheets*.ts` module reads/writes |
+| `GOOGLE_SHEETS_ID` | The spreadsheet ID every `src/lib/sheets/googleSheets*.ts` module reads/writes |
 | `GOOGLE_RDV_SHEETS_ID` | **Separate** spreadsheet holding the monthly appointment-calendar tabs — see §6's RDV entry. **Production scope only** on Vercel; a Preview deployment touching RDV code needs its own value added via `vercel env add` |
 | `GOOGLE_DRIVE_FOLDER_ID` | Only needed for the optional `scripts/test-service-account.ts` diagnostic |
 | `VERCEL_OIDC_TOKEN` | Auto-populated by `vercel env pull`/`vercel dev` — not set by hand |
@@ -60,12 +60,12 @@ tokens below, never a literal `zinc-*`/`bg-black`/`bg-white` class.
 
 - **Mechanism**: [`next-themes`](https://github.com/pacocoursey/next-themes)
   toggles `.dark` on `<html>`; default is **light 7am–7pm, dark
-  otherwise** (local time, via `lib/themeDefault.ts`'s
+  otherwise** (local time, via `src/lib/utils/themeDefault.ts`'s
   `getTimeBasedTheme()` — edit `LIGHT_START_HOUR`/`LIGHT_END_HOUR` there
   to change the cutoff) until an explicit choice sets
   `localStorage['theme-explicit']`, which then sticks. Full wiring:
   PROJECT_HISTORY.md's "Theming" section.
-- **Toggle**: `components/fleet/ThemeToggle.tsx` is the *only* toggle —
+- **Toggle**: `src/components/fleet/ThemeToggle.tsx` is the *only* toggle —
   `variant="pill"` or `"icon"` (wired into `ListPageHeader`). Don't build
   another one.
 
@@ -85,24 +85,24 @@ washes (`FLAG_STYLE`, ÉTAT badges, `ZoneBadges`), modal scrims
 (`bg-black/70`), and `focus:border-zinc-500` on inputs.
 
 **Font**: Inter (body/headings) + JetBrains Mono (`font-mono`,
-identifiers only), via a Google Fonts `@import` in `app/globals.css`. Do
+identifiers only), via a Google Fonts `@import` in `src/app/globals.css`. Do
 **not** reintroduce Playfair Display (dropped, too little footprint) or
 Geist (dropped, was a dead fetch). Change fonts via the `--font-*`
 tokens/`@import` in `globals.css`, not `layout.tsx`.
 
 ## 4. Authentication & security
 
-- **Auth**: single-user Google OAuth only (`app/api/auth/google/*`) — ID
+- **Auth**: single-user Google OAuth only (`src/app/api/auth/google/*`) — ID
   token verified, then checked against one hardcoded constant,
-  `lib/googleOAuth.ts`'s `AUTHORIZED_EMAIL`. No User model/allowlist.
-- **Every request gated by `proxy.ts`** via an iron-session cookie
+  `src/lib/auth/googleOAuth.ts`'s `AUTHORIZED_EMAIL`. No User model/allowlist.
+- **Every request gated by `src/proxy.ts`** via an iron-session cookie
   (`session.isLoggedIn`, sealed, 7-day expiry) — only `/login`,
   `/api/auth/google*`, and static assets excluded (anchored matching).
 - **CSRF**: OAuth flow uses a cookie-bound `state` token; the app's own
   mutation routes rely on `sameSite: lax` instead of a separate token.
 - **Sheets writes / Mongo regex**: `verifyRowIdentity()` and
   `escapeRegex()` are mandatory (see [`AGENTS.md`](./AGENTS.md) rules 3–4).
-- **Rate limiting**: `lib/rateLimit.ts`, Mongo atomic `$inc` — 17 Sheets
+- **Rate limiting**: `src/lib/http/rateLimit.ts`, Mongo atomic `$inc` — 17 Sheets
   mutation routes at 30 req/min; article/export at 20 req/5min.
 - **Secrets**: nothing committed anywhere (verified via full history
   search); `.gitignore` excludes all `.env*` but `.env.example`.
@@ -149,19 +149,19 @@ mistake is trivially revertible (`git revert`).
 
 ## 6. Feature / data model reference
 
-Each feature is a page + API routes + a `lib/googleSheets*.ts` module
+Each feature is a page + API routes + a `src/lib/sheets/googleSheets*.ts` module
 against one Sheet tab, except DS History/Articles (MongoDB).
 
 | Feature | Files | Notes |
 |---|---|---|
-| BDD / Suivi RL | `app/suivi-rl/page.tsx`, `lib/googleSheetsBdd.ts`, `/api/bdd*` | 7-field editable allowlist, per-field inline commit (no card save button). Plate-only search, which bypasses the chips. Four multi-select chip axes (Flotte/Emplacement/Prestataire/Flag), OR within an axis and AND across, each with a data-derived option list + "Non renseigné" blank chip. PDF + Excel export of the filtered view; AI comment reformulation. Read-only RDV/CONVOYEUR/Intervention via XLOOKUP. Full detail: [`docs/suivi-rl.md`](./docs/suivi-rl.md). |
-| Parking | `app/parking/page.tsx`, `lib/googleSheetsParking.ts`, `/api/parking/*` | GAS port. Delete = real row deletion, not cell-clear; add always appends. |
-| Atelier | `app/atelier/page.tsx`, `lib/googleSheetsAtelier.ts`, `/api/atelier/*` | GAS port, reuses Parking's `resolveIMM`/`getIMMList`. No ACTION field; editable surface is COMMENTAIRE/CATÉGORIE/TECHNICIEN/BESOIN PIÈCE only. |
-| Depot | `app/depot/page.tsx`, `lib/googleSheetsDepot.ts`, `/api/depot/*` | Structural clone of Parking; only ACTION editable. |
-| RDV | `app/rdv/page.tsx`, `lib/googleSheetsRdv.ts`, `lib/googleSheetsRdvMonthly.ts`, `lib/rdvIdentity.ts`, `/api/rdv/*` | Day-grouped table + mobile stacked cards, date picker, cross-day plate search, PNG export. Rules below. |
-| DS History | `app/ds-history/page.tsx`, `/api/ds/history`, `/api/parc`, `/api/cp`, `/api/query*`, `/api/sheet` | Plate-only Mongo search (`ds`/`bc`) + `VehicleCard` (`parc`/`cp`) + `SheetCard` (BDD/RL/Import tabs). |
-| Articles / Export | `app/articles/page.tsx`, `/api/article`, `/api/export` | Mongo article/BC search, PDF/DOCX export. Rate-limited 20 req/5min. |
-| Fleet Data Import | `components/fleet/ImportTrigger.tsx` (used from `app/page.tsx`), `/api/trigger-import`, `/api/import-status` | Button that proxies a **separate** Vercel project (`~/import`, deployed at `https://import-red.vercel.app`) which runs the DS/CP/PARC/BC Drive→Mongo ETL — this repo has no Drive/ETL code of its own. Rules below. |
+| BDD / Suivi RL | `src/app/suivi-rl/page.tsx`, `src/lib/sheets/googleSheetsBdd.ts`, `/api/bdd*` | 7-field editable allowlist, per-field inline commit (no card save button). Plate-only search, which bypasses the chips. Four multi-select chip axes (Flotte/Emplacement/Prestataire/Flag), OR within an axis and AND across, each with a data-derived option list + "Non renseigné" blank chip. PDF + Excel export of the filtered view; AI comment reformulation. Read-only RDV/CONVOYEUR/Intervention via XLOOKUP. Full detail: [`docs/suivi-rl.md`](./docs/suivi-rl.md). |
+| Parking | `src/app/parking/page.tsx`, `src/lib/sheets/googleSheetsParking.ts`, `/api/parking/*` | GAS port. Delete = real row deletion, not cell-clear; add always appends. |
+| Atelier | `src/app/atelier/page.tsx`, `src/lib/sheets/googleSheetsAtelier.ts`, `/api/atelier/*` | GAS port, reuses Parking's `resolveIMM`/`getIMMList`. No ACTION field; editable surface is COMMENTAIRE/CATÉGORIE/TECHNICIEN/BESOIN PIÈCE only. |
+| Depot | `src/app/depot/page.tsx`, `src/lib/sheets/googleSheetsDepot.ts`, `/api/depot/*` | Structural clone of Parking; only ACTION editable. |
+| RDV | `src/app/rdv/page.tsx`, `src/lib/sheets/googleSheetsRdv.ts`, `src/lib/sheets/googleSheetsRdvMonthly.ts`, `src/lib/sheets/rdvIdentity.ts`, `/api/rdv/*` | Day-grouped table + mobile stacked cards, date picker, cross-day plate search, PNG export. Rules below. |
+| DS History | `src/app/ds-history/page.tsx`, `/api/ds/history`, `/api/parc`, `/api/cp`, `/api/query*`, `/api/sheet` | Plate-only Mongo search (`ds`/`bc`) + `VehicleCard` (`parc`/`cp`) + `SheetCard` (BDD/RL/Import tabs). |
+| Articles / Export | `src/app/articles/page.tsx`, `/api/article`, `/api/export` | Mongo article/BC search, PDF/DOCX export. Rate-limited 20 req/5min. |
+| Fleet Data Import | `src/components/fleet/ImportTrigger.tsx` (used from `src/app/page.tsx`), `/api/trigger-import`, `/api/import-status` | Button that proxies a **separate** Vercel project (`~/import`, deployed at `https://import-red.vercel.app`) which runs the DS/CP/PARC/BC Drive→Mongo ETL — this repo has no Drive/ETL code of its own. Rules below. |
 
 **Fleet Data Import rules**: `/api/trigger-import` calls that project's
 token-gated `GET /api?token=...` (blocks ~60–90s until all 4 pipelines
@@ -183,7 +183,7 @@ a relative link since it isn't part of this one), not duplicated here.
 add/update/clear **dual-writes** `googleSheetsRdvMonthly.ts` (monthly
 tab, real source of truth) before `googleSheetsRdv.ts` (flat mirror —
 mirror-only writes are destroyed on the next GAS rebuild); update/clear
-never trust a client-held `rowIndex` — `lib/rdvIdentity.ts`'s
+never trust a client-held `rowIndex` — `src/lib/sheets/rdvIdentity.ts`'s
 `resolveUniqueMatch()` re-resolves the row by full-content match,
 throwing on an ambiguous match rather than guessing.
 
@@ -199,13 +199,13 @@ safety, auth model) live in [`AGENTS.md`](./AGENTS.md) — not restated
 here. Additional conventions:
 
 - **Don't rebuild a pattern that already exists.** Reuse
-  `components/fleet/` (`ListPageHeader`, `RecordCard`, `Field`,
+  `src/components/fleet/` (`ListPageHeader`, `RecordCard`, `Field`,
   `PlateSearchInput`, `PlateFilterInput`, `ZoneBadges`, `InlineEdit*`)
-  and `components/ui/` (Button, Input, Dialog, AlertDialog, Combobox,
+  and `src/components/ui/` (Button, Input, Dialog, AlertDialog, Combobox,
   Badge, ToggleGroup, Sheet, Card) instead of new markup — they exist
   because Parking/Atelier/Depot/BDD used to duplicate ~95% of this.
 - **One shared Sheets client, not per-tab copies.**
-  `lib/googleSheetsClient.ts` holds the shared JWT client,
+  `src/lib/sheets/googleSheetsClient.ts` holds the shared JWT client,
   `verifyRowIdentity()`, retry/caching, and `ApiError`/
   `toErrorResponse()` — every `googleSheets*.ts` module builds on this.
 
@@ -217,7 +217,7 @@ every real field name in `ds`/`bc`/`cp`/`parc`, generated by
 either repo's code assumes. `pnpm verify-field-names`
 (`scripts/verify-field-names.cjs`, wired into CI at
 [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) scans every
-`app/api/**` file's `"$fieldname"`-style Mongo references and fails the
+`src/app/api/**` file's `"$fieldname"`-style Mongo references and fails the
 build if any of them don't byte-for-byte match an entry in this file (for
 whichever collection(s) that file's `getCollection()`/`$lookup` calls
 touch). A deliberate, temporary exception (e.g. a dual-read during a

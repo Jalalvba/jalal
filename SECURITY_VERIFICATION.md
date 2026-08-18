@@ -17,25 +17,25 @@ the origin directly.
 **Result: does not exist in the code, and doesn't apply to this app's
 deployment.**
 
-- Searched the full codebase (`proxy.ts`, `next.config.ts`, all API
+- Searched the full codebase (`src/proxy.ts`, `next.config.ts`, all API
   routes, any headers/middleware config) for `X-Proxy-Secret`,
   `proxy.secret`, `origin.secret`, `edge.secret`, `x-vercel-protection`,
   and plain `secret` — no header-secret check anywhere. The only two
-  `secret`-matching files are `lib/session.ts` (iron-session cookie
-  secret) and `lib/googleOAuth.ts` (OAuth client secret), both unrelated.
+  `secret`-matching files are `src/lib/auth/session.ts` (iron-session cookie
+  secret) and `src/lib/auth/googleOAuth.ts` (OAuth client secret), both unrelated.
 - No `vercel.json` exists in this repo.
-- The only request-gating logic is `proxy.ts`, which checks the
+- The only request-gating logic is `src/proxy.ts`, which checks the
   iron-session cookie (`session.isLoggedIn`) — it never reads or
   validates any custom request header.
 
 **Why this isn't a real gap here:** this app is a single Next.js project
-deployed directly on Vercel. `proxy.ts` (Next middleware) runs inside the
+deployed directly on Vercel. `src/proxy.ts` (Next middleware) runs inside the
 same deployment in front of every route — there is no separate,
 independently-reachable origin server behind it that a request could
 bypass around. The "direct origin bypass" threat model assumes a topology
 like CDN/WAF → separate app server with its own reachable hostname; that
 second, bypassable origin doesn't exist here. The actual auth boundary
-(the session-cookie check in `proxy.ts`) sits in the one and only place
+(the session-cookie check in `src/proxy.ts`) sits in the one and only place
 every request passes through, so there's no alternate path to defend
 against.
 
@@ -53,13 +53,13 @@ stopped) rather than trusted from reading config alone.
 
 ### 1. Authentication — who gets in
 
-**Start route** — `app/api/auth/google/route.ts:11-32`
+**Start route** — `src/app/api/auth/google/route.ts:11-32`
 Generates a 32-byte random CSRF `state`, requests only `openid email`
 scope, forces `select_account`, redirects to Google, and stores `state`
 in an `oauth_state` cookie (`httpOnly`, `secure` in prod, `sameSite: lax`,
 10-minute expiry).
 
-**Callback route** — `app/api/auth/google/callback/route.ts:13-59`
+**Callback route** — `src/app/api/auth/google/callback/route.ts:13-59`
 - Line 27: rejects if `code`/`state` missing or `state !== expectedState`
   (cookie value) → redirects to `/login?error=state`.
 - Line 21: deletes the `oauth_state` cookie unconditionally — one-time use
@@ -74,7 +74,7 @@ in an `oauth_state` cookie (`httpOnly`, `secure` in prod, `sameSite: lax`,
   }
   ```
 
-**Still a single hardcoded email?** Yes — `lib/googleOAuth.ts:7`:
+**Still a single hardcoded email?** Yes — `src/lib/auth/googleOAuth.ts:7`:
 `export const AUTHORIZED_EMAIL = "chafiq.jalal@gmail.com";`. No User
 model, no DB-backed allowlist. Confirmed unchanged.
 
@@ -87,7 +87,7 @@ one email can ever pass.
 
 ### 2. Session handling
 
-**`lib/session.ts:7-16`** — full config:
+**`src/lib/auth/session.ts:7-16`** — full config:
 ```ts
 export const sessionOptions: SessionOptions = {
   password: process.env.IRON_SESSION_SECRET as string,
@@ -100,7 +100,7 @@ export const sessionOptions: SessionOptions = {
   },
 };
 ```
-- Session content: `{ isLoggedIn: boolean }` only (`lib/session.ts:3-5`) —
+- Session content: `{ isLoggedIn: boolean }` only (`src/lib/auth/session.ts:3-5`) —
   no PII, no tokens stored.
 - Encryption: iron-session's sealed cookie encryption keyed by
   `IRON_SESSION_SECRET` — the cookie value is encrypted+signed state, not
@@ -112,7 +112,7 @@ export const sessionOptions: SessionOptions = {
 - `httpOnly: true` — confirmed, not JS-readable. `sameSite: "lax"` —
   confirmed (not `strict`/`none`).
 
-**`proxy.ts` (lines 41-91)** — checked on every request:
+**`src/proxy.ts` (lines 41-91)** — checked on every request:
 - Lines 61-71: excluded from the session check: `/login`,
   `/api/auth/google` (+ `/api/auth/google/*`), `/_next/*`,
   `/favicon.ico` — anchored exact/prefix matches, not loose `startsWith`
@@ -133,7 +133,7 @@ Confirmed live (§8) this exclusion list is exactly what gates access.
 ### 3. CSRF protection (OAuth flow)
 
 Walked the real failure modes in
-`app/api/auth/google/callback/route.ts:19-29`:
+`src/app/api/auth/google/callback/route.ts:19-29`:
 - **Missing state**: `!state || !expectedState` → redirect to
   `/login?error=state`, no token exchange attempted.
 - **Tampered state**: `state !== expectedState` → same rejection.
@@ -149,7 +149,7 @@ separate CSRF token system for the app's own mutation routes — see
 ### 4. Data write safety
 
 **Google Sheets — real row-identity verification**,
-`lib/googleSheetsClient.ts:138-159`:
+`src/lib/sheets/googleSheetsClient.ts:138-159`:
 ```ts
 export async function verifyRowIdentity(sheets, spreadsheetId, cellRange, expected) {
   const expectedNorm = expected.trim().toUpperCase();
@@ -159,7 +159,7 @@ export async function verifyRowIdentity(sheets, spreadsheetId, cellRange, expect
   if (actual !== expectedNorm) throw new RowIdentityError(...); // 409
 }
 ```
-Called before every update/delete — e.g. `lib/googleSheetsParking.ts:398`
+Called before every update/delete — e.g. `src/lib/sheets/googleSheetsParking.ts:398`
 (update) and `:430` (delete) both call it against the plate column at the
 client-supplied `rowIndex` before writing; same pattern in
 `googleSheetsAtelier.ts:363`. Mechanism: a client holds a `rowIndex` from
@@ -171,10 +171,10 @@ and try again") instead of silently overwriting the wrong row.
 **MongoDB — no comparable race handling, and none appears needed.**
 Searched for `findOneAndUpdate`/`updateOne`/`insertOne` tied to plate data
 and found none — Mongo here is read-only lookup data
-(`getIMMListSafe()` in `lib/googleSheetsParking.ts:212-219` degrades to
+(`getIMMListSafe()` in `src/lib/sheets/googleSheetsParking.ts:212-219` degrades to
 `[]` on failure rather than blocking the Sheets write — the "fail-soft"
 behavior, confirmed at those exact lines). The only Mongo *writes* found
-are the rate limiter's own atomic `$inc` (`lib/rateLimit.ts:46-55`), which
+are the rate limiter's own atomic `$inc` (`src/lib/http/rateLimit.ts:46-55`), which
 is race-safe by construction. There's no Mongo collection holding
 authoritative Parking/Atelier/Depot/RDV records — that data lives in
 Sheets; Mongo's `parc` collection is a separate read-side reference
@@ -183,22 +183,22 @@ protect in this app's actual design.
 
 ### 5. Input validation / injection protection
 
-- `app/api/parc/route.ts:20-29`: `imm` query param used as a plain string
+- `src/app/api/parc/route.ts:20-29`: `imm` query param used as a plain string
   equality value in `$match` (`{ Immatriculation: q }`), not interpolated
   into an operator — `URLSearchParams.get()` always returns a string, so
   there's no NoSQL operator-injection vector here.
-- `app/api/query/route.ts:29` and `app/api/query/search/route.ts:25`: both
+- `src/app/api/query/route.ts:29` and `src/app/api/query/search/route.ts:25`: both
   build a `$regex` filter from user input, both pass it through
-  `escapeRegex()` first (`lib/regex.ts:6`:
+  `escapeRegex()` first (`src/lib/utils/regex.ts:6`:
   `s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")`), confirmed running at the
   exact line the regex object is constructed in both files. Closes both
   regex-injection and ReDoS (attacker-controlled quantifiers).
 - Zero unescaped `$regex`/`new RegExp` construction from request input
-  found anywhere in `app/api` or `lib` — grepped explicitly for both.
+  found anywhere in `src/app/api` or `lib` — grepped explicitly for both.
 
 ### 6. Rate limiting
 
-**`lib/rateLimit.ts`** (lines 35-61): fixed-window counter, keyed
+**`src/lib/http/rateLimit.ts`** (lines 35-61): fixed-window counter, keyed
 `route:ip:windowBucket`, incremented atomically via Mongo
 `findOneAndUpdate`'s `$inc` (race-safe across concurrent/multi-instance
 requests). TTL index expires old window docs.
@@ -208,16 +208,16 @@ memory of the commit message:
 - **17 Sheets mutation routes** (atelier/parking/depot/rdv/bdd
   add/update/delete/clear/action) — **all 17 use `30, 60_000`** → 30
   req/min, identical across every one.
-- `app/api/article/route.ts:7-8,17-21`: `RATE_LIMIT = 20`,
+- `src/app/api/article/route.ts:7-8,17-21`: `RATE_LIMIT = 20`,
   `RATE_WINDOW_MS = 5 * 60 * 1000` → 20 req/5min.
-- `app/api/export/route.ts:11-12,85-89`: same shape, also 20 req/5min.
+- `src/app/api/export/route.ts:11-12,85-89`: same shape, also 20 req/5min.
 - Both article/export call the lower-level `checkRateLimit()` directly
   rather than the `rateLimitOrNull()` wrapper (predate it), same
   underlying atomic Mongo mechanism.
 
-Stale-comment note: `lib/rateLimit.ts:63` says the IP-precedence logic
-mirrors "`app/login/actions.ts`'s clientKey()" — grepped the whole repo,
-`clientKey` doesn't exist anywhere, including in `app/login/actions.ts`
+Stale-comment note: `src/lib/http/rateLimit.ts:63` says the IP-precedence logic
+mirrors "`src/app/login/actions.ts`'s clientKey()" — grepped the whole repo,
+`clientKey` doesn't exist anywhere, including in `src/app/login/actions.ts`
 (read in full — now just a 14-line `logout()` server action, no rate
 limiting). Leftover from before the username/password login was replaced
 with Google OAuth (`003cb74`). Harmless, but a doc/reality mismatch.
@@ -251,12 +251,12 @@ with Google OAuth (`003cb74`). Harmless, but a doc/reality mismatch.
 the actual dev server and ran real `curl -I` requests:
 
 - `GET /` (unauthenticated) → `307` to `/login`, all four headers present,
-  plus a per-request nonce'd CSP from `proxy.ts` (different nonce on each
+  plus a per-request nonce'd CSP from `src/proxy.ts` (different nonce on each
   of three separate requests, confirmed by comparison).
 - `GET /login` (public path) → `200`, same four headers + CSP, plus
   Next's own `Cache-Control: no-store, must-revalidate`.
 - `GET /api/parc?imm=TEST` (unauthenticated API route) → `401` JSON, same
-  four headers + CSP — confirming `proxy.ts`'s claim that these reach
+  four headers + CSP — confirming `src/proxy.ts`'s claim that these reach
   every response branch (public passthrough, 401 JSON, redirect,
   authenticated passthrough) is actually true, not just commented as true.
 
@@ -282,16 +282,16 @@ returning connection refused).
   path remains (intentionally removed in `003cb74`) — this app cannot
   function without Google OAuth being reachable, by design.
 - **Rate limiting is per-IP, not per-session**, trusting
-  `x-forwarded-for`/`x-real-ip` (`lib/rateLimit.ts:64-69`). Reliable behind
+  `x-forwarded-for`/`x-real-ip` (`src/lib/http/rateLimit.ts:64-69`). Reliable behind
   Vercel's own edge; if ever exposed behind another untrusted proxy, these
   headers are client-influenceable and the limit could be bypassed by
   spoofing them. Not verified from the code what strips/sets these headers
   at Vercel's edge — that's platform behavior, not visible in this repo.
-- **Stale comment** in `lib/rateLimit.ts:63` referencing a nonexistent
+- **Stale comment** in `src/lib/http/rateLimit.ts:63` referencing a nonexistent
   `clientKey()` (see §6) — cosmetic only.
 - **Vercel's actual environment variable scopes were not verified** (§7)
   — requires platform access not available here.
 - **CSP allows `'unsafe-eval'` in development only**
-  (`proxy.ts:26`, conditional on `NODE_ENV === "development"`) — confirmed
+  (`src/proxy.ts:26`, conditional on `NODE_ENV === "development"`) — confirmed
   absent from the production CSP curled against in §8, but worth naming
   since it's a real weakening if that condition were ever wrong.

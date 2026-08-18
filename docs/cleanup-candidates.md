@@ -36,8 +36,8 @@ duplication is what allowed the run-status bug (fixed in `ef630e0`) to survive
 its own fix for four months. The recommendation below is aimed at making that
 recurrence structurally impossible, not just at deleting repeated lines.
 
-**Files:** [`app/api/trigger-import/route.ts`](../app/api/trigger-import/route.ts)
-(231 lines) · [`app/api/import-status/route.ts`](../app/api/import-status/route.ts)
+**Files:** [`src/app/api/trigger-import/route.ts`](../src/app/api/trigger-import/route.ts)
+(231 lines) · [`src/app/api/import-status/route.ts`](../src/app/api/import-status/route.ts)
 (121 lines)
 
 ## 1.1 The evidence
@@ -88,7 +88,7 @@ Deduplication alone would **not** have prevented the bug. The bug was a
 *category error*: a **run** status validated against the **step** status set.
 Both routes would have imported the same wrong set.
 
-The real cause is that `lib/types.ts` declares both vocabularies as
+The real cause is that `src/types/index.ts` declares both vocabularies as
 hand-written type unions with **no runtime counterpart**:
 
 ```ts
@@ -109,7 +109,7 @@ array `as const`, derive the type from it, and the two can never drift:
 
 ```ts
 export const PALETTE_COLORS = [...] as const;
-export type PaletteColor = (typeof PALETTE_COLORS)[number];          // lib/types.ts:228
+export type PaletteColor = (typeof PALETTE_COLORS)[number];          // src/types/index.ts:228
 export type OptionKey = (typeof OPTION_KEYS)[number];                // :281
 export type AtelierEditableField = (typeof ATELIER_EDITABLE_FIELDS)[number];  // :519
 export type RdvEditableField = (typeof RDV_EDITABLE_FIELDS)[number];          // :578
@@ -119,7 +119,7 @@ export type RdvEditableField = (typeof RDV_EDITABLE_FIELDS)[number];          //
 anomaly that skipped it.** Bringing them in line is not a new convention; it is
 applying the house rule to the two places that missed it.
 
-### Step 1 — invert the declarations in `lib/types.ts`
+### Step 1 — invert the declarations in `src/types/index.ts`
 
 ```ts
 export const IMPORT_STEP_STATUSES = ["started", "success", "failed", "skipped"] as const;
@@ -138,7 +138,7 @@ member to either type automatically updates its `Set`.
 
 ### Step 2 — one module for the upstream contract
 
-`lib/importPipeline.ts`, exporting `IMPORT_API_BASE`, `RawStep`,
+`src/lib/importPipeline.ts`, exporting `IMPORT_API_BASE`, `RawStep`,
 `RawStatusDoc`, `normalizeTimestamp()`, `normalizeStep()`, and
 `normalizeRunStatus()` — each built from the arrays above:
 
@@ -161,7 +161,7 @@ Two names differing by one word (`normalizeRunStatus` vs `normalizeStepStatus`)
 are still confusable. Make the confusion fail loudly:
 
 ```ts
-// lib/__tests__/importPipeline.test.ts
+// src/lib/__tests__/importPipeline.test.ts
 it("run and step vocabularies stay distinct", () => {
   expect(IMPORT_RUN_STATUSES).toContain("skipped_unchanged");
   expect(IMPORT_STEP_STATUSES).not.toContain("skipped_unchanged");
@@ -215,8 +215,8 @@ the two routes' *separate rate-limit buckets* — those are deliberately distinc
 
 ### (b) `getTimeBasedTheme()` vs the inline no-flash script
 
-[`lib/themeDefault.ts:11`](../lib/themeDefault.ts#L11) implements the
-light/dark cutoff in TypeScript. `app/layout.tsx` imports only
+[`src/lib/utils/themeDefault.ts:11`](../src/lib/utils/themeDefault.ts#L11) implements the
+light/dark cutoff in TypeScript. `src/app/layout.tsx` imports only
 `LIGHT_START_HOUR` / `LIGHT_END_HOUR` and **re-implements the comparison inside
 a template-literal script string**. The function itself has zero callers
 (see §2.3).
@@ -229,11 +229,11 @@ one that ships is the untested one.
 
 # 2. Orphaned code
 
-## 2.1 🟡 `app/api/query/search/route.ts` — no caller
+## 2.1 🟡 `src/app/api/query/search/route.ts` — no caller
 
 **Verified:** the only two references in the entire repo are the route's own
 first-line path comment, and a comment in
-[`app/ds-history/page.tsx:822`](../app/ds-history/page.tsx#L822) that describes
+[`src/app/ds-history/page.tsx:822`](../src/app/ds-history/page.tsx#L822) that describes
 it in the past tense:
 
 > `// already-fetched list (unlike the old /api/query/search server route`
@@ -245,10 +245,10 @@ client-side list over `parc` + `cp`. No test, no fetch, no link.
 nothing external (a bookmark, a script, another tool) calls it before deleting.
 Within this repo, nothing does.
 
-## 2.2 🟡 `app/api/generate-email/route.ts` — no UI caller
+## 2.2 🟡 `src/app/api/generate-email/route.ts` — no UI caller
 
 **Verified:** zero references outside the route file. Its types
-(`GenerateEmailRequest` / `GenerateEmailResponse`, `lib/types.ts:758-765`) are
+(`GenerateEmailRequest` / `GenerateEmailResponse`, `src/types/index.ts:758-765`) are
 used only by it.
 
 **Do not treat this as dead code by default.** `cb13749` describes it as *"a
@@ -262,14 +262,14 @@ cost/security/reliability rules. It reads as intentional groundwork.
 
 ## 2.3 🟡 `getTimeBasedTheme()` — no callers
 
-[`lib/themeDefault.ts:11`](../lib/themeDefault.ts#L11). Zero references
-repo-wide. `app/layout.tsx` imports only the two hour constants.
+[`src/lib/utils/themeDefault.ts:11`](../src/lib/utils/themeDefault.ts#L11). Zero references
+repo-wide. `src/app/layout.tsx` imports only the two hour constants.
 
 **Complication:** [`CLAUDE.md` §3](../CLAUDE.md) names this function as the
 mechanism —
 
 > *"default is light 7am–7pm, dark otherwise (local time, via
-> `lib/themeDefault.ts`'s `getTimeBasedTheme()`…)"*
+> `src/lib/utils/themeDefault.ts`'s `getTimeBasedTheme()`…)"*
 
 — so deleting it **falsifies CLAUDE.md**, and the file's own docstring already
 says the inline script is "the actual runtime consumer".
@@ -290,7 +290,7 @@ neither did, any more.
 Removed, with the fact they carried preserved in two places rather than one:
 `etatBadgeClass()`'s docstring now states that `ANNULE`/`ANNULEE` are real
 `ETAT_OPTIONS_FALLBACK` values deliberately falling through to the muted
-`return`, and points at `lib/__tests__/etatBadgeClass.test.ts`, which already
+`return`, and points at `src/lib/__tests__/etatBadgeClass.test.ts`, which already
 pinned `etatBadgeClass("ANNULE") === etatBadgeClass("ANNULEE")` — so the
 behaviour was executable-specified before the constants went, not just
 commented.
@@ -392,7 +392,7 @@ the repo. Keep it.
 Six were corrected in `443626c`. Scanning found **one more of the same family**,
 plus two minor imprecisions.
 
-## 4.1 ✅ DONE — `app/suivi-rl/page.tsx` comment falsified by `c0d5965`
+## 4.1 ✅ DONE — `src/app/suivi-rl/page.tsx` comment falsified by `c0d5965`
 
 The comment justified `type Fleet = string` on the grounds that *"the chip row
 below renders every `option.ETAT_OPTIONS` value"*. **It no longer does** — since
@@ -438,12 +438,12 @@ document — found **seven** unlisted:
 
 | Unlisted file | Covers |
 |---|---|
-| `lib/__tests__/proxy.test.ts` | the auth boundary itself — 401 for API, redirect for pages, sealed cookie passes |
-| `lib/__tests__/googleSheetsBdd.test.ts` | `verifyRowIdentity()` before write + `BDD_EDITABLE_FIELDS` enforcement |
-| `app/api/auth/google/callback/__tests__/authorizedEmail.test.ts` | `AUTHORIZED_EMAIL` enforcement, incl. `email_verified: false` |
-| `lib/__tests__/adminConfigKeys.test.ts` | derived `PLAIN_KEYS`/`COLORED_KEYS` (I4) |
-| `lib/__tests__/etatBadgeClass.test.ts` | the shared ETAT colour mapping (M4) |
-| `lib/__tests__/rdvExportColumns.test.ts` | RDV export columns derived from `RDV_HEADERS` (M2) |
+| `src/lib/__tests__/proxy.test.ts` | the auth boundary itself — 401 for API, redirect for pages, sealed cookie passes |
+| `src/lib/__tests__/googleSheetsBdd.test.ts` | `verifyRowIdentity()` before write + `BDD_EDITABLE_FIELDS` enforcement |
+| `src/app/api/auth/google/callback/__tests__/authorizedEmail.test.ts` | `AUTHORIZED_EMAIL` enforcement, incl. `email_verified: false` |
+| `src/lib/__tests__/adminConfigKeys.test.ts` | derived `PLAIN_KEYS`/`COLORED_KEYS` (I4) |
+| `src/lib/__tests__/etatBadgeClass.test.ts` | the shared ETAT colour mapping (M4) |
+| `src/lib/__tests__/rdvExportColumns.test.ts` | RDV export columns derived from `RDV_HEADERS` (M2) |
 | `e2e/logout.spec.ts` | logout clears the persisted BDD query cache (I3) |
 
 Three of those cover the **security model** (`proxy`, `authorizedEmail`,

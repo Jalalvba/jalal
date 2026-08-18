@@ -21,8 +21,8 @@ collections (`ds`, `bc`, `parc`, `cp`) used for search/lookup and export.
 
 **Stack:**
 - Next.js App Router (React Server Components + API routes)
-- MongoDB (native driver, `lib/mongo.ts`'s `getCollection()`)
-- Google Sheets API via a service-account JWT client (`lib/googleSheetsClient.ts`
+- MongoDB (native driver, `src/lib/mongo/client.ts`'s `getCollection()`)
+- Google Sheets API via a service-account JWT client (`src/lib/sheets/googleSheetsClient.ts`
   and the per-tab modules — `googleSheetsBdd.ts`, `googleSheetsParking.ts`,
   `googleSheetsAtelier.ts`, `googleSheetsDepot.ts`, `googleSheetsRdv.ts`)
 - iron-session for authentication state (sealed cookie, no server-side
@@ -42,7 +42,7 @@ The repo starts from a plain `create-next-app` scaffold (`df5a4c3`), followed
 by a run of undescriptive early commits (`860dfb4`, `131aad1`, `e7128a8`,
 `a1ac4c8`, `527feaa`, `c227154`, `906ddb4`, `55f20f0`) during initial buildout.
 The first real application logic lands in `f3eb3ee` ("article") and `8c5b7c1`
-("jalal sheet", the first `app/api/sheet/route.ts` + home page Sheets
+("jalal sheet", the first `src/app/api/sheet/route.ts` + home page Sheets
 integration), followed by `a57ae1f` (iron-session auth added) and `13c4178`
 (replacement warnings, dark-mode toggle, sheet colors). `adc6469` merges the
 parc/cp/sheet cards, adds RL support, and fixes an import date-dedup bug.
@@ -51,20 +51,20 @@ removed exposed credentials, `df39166` added a pre-push hook), `12698d3`
 builds an early, uncommitted-until-later "suivi BDD" draft page (filters,
 flag system, PDF export). A large July 19 audit-driven pass then
 consolidates the app: `a91333f`/`563c95e`/`a2b226e` fix phantom export
-fields, unify API response types (`lib/types.ts`, `lib/format.ts`), add
+fields, unify API response types (`src/types/index.ts`, `src/lib/utils/format.ts`), add
 consistent error handling, `escapeRegex()` regex-injection protection, and
 `.env.example`; `f59cb47` adds the 6 MongoDB indexes recommended by the
 original audit (`ds`/`bc`/`parc`/`cp`, cutting DS History search from 339ms
 to 45ms). `50b6c46` then formalizes navigation (new home screen, DS History
 moved to `/ds-history`) and wires up the first real BDD Sheets integration
-(`lib/googleSheetsBdd.ts`, `/api/bdd`, `/api/bdd/update`) reading/writing the
+(`src/lib/sheets/googleSheetsBdd.ts`, `/api/bdd`, `/api/bdd/update`) reading/writing the
 live "BDD" tab (gid `868042157`) through an editable-fields allowlist.
 
 ### BDD (Suivi RL)
 
-Read/write integration lands in `50b6c46` (`lib/googleSheetsBdd.ts`,
+Read/write integration lands in `50b6c46` (`src/lib/sheets/googleSheetsBdd.ts`,
 `/api/bdd`, `/api/bdd/update`, a 6-field editable allowlist). `295e1a8`
-migrates the page onto shared fleet components/TanStack Query. `8199db9`
+migrates the page onto shared fleet src/components/TanStack Query. `8199db9`
 replaces the card's tap-to-expand-form pattern with per-field inline commit
 (new `SelectSheet` primitive, `useInlineFieldCommit` hook, `InlineEditSelect`/
 `InlineEditText`/`InlineEditCombobox` components) — each of the 6 editable
@@ -82,7 +82,7 @@ to the sheet's actual live columns and adding new RDV/CONVOYEUR/Intervention
 columns; `6757ffd` then restored `date_ds` as a read-only field after the
 sheet owner manually corrected that column's header text back from the
 duplicate "Technicien" label. `c0c3258` adds real row delete
-(`deleteBddRow()`, `app/api/bdd/delete/route.ts`, `useDeleteBddRow()`),
+(`deleteBddRow()`, `src/app/api/bdd/delete/route.ts`, `useDeleteBddRow()`),
 mirroring Parking/Atelier/Depot exactly (`DeleteDimensionRequest`, gated
 by `verifyRowIdentity()` so a stale client-held row index 409s instead of
 deleting the wrong vehicle's row) — wired into each Suivi RL card via
@@ -93,7 +93,7 @@ before relying on it in production if that hasn't happened since.*
 
 ### Parking
 
-Ported from Google Apps Script in `d218c23` (`lib/googleSheetsParking.ts` +
+Ported from Google Apps Script in `d218c23` (`src/lib/sheets/googleSheetsParking.ts` +
 `/api/parking/*` against the live "PARKING" tab). `3e03663` migrates the
 page onto shared components + TanStack Query. Delete behavior changed in
 `5828d2b`: `deletePlate()` now issues a real Sheets row deletion
@@ -152,7 +152,7 @@ field list that didn't include them yet, unlike Suivi RL's dynamically-driven
 read-only section which already showed them). With RDV data now surfaced
 contextually on BDD cards, `eeec56a` removes the standalone `/rdv` page and
 its home nav card as redundant — the data layer
-(`lib/googleSheetsRdv.ts`, `/api/rdv/*`, `useRdvRows()`) is deliberately kept
+(`src/lib/sheets/googleSheetsRdv.ts`, `/api/rdv/*`, `useRdvRows()`) is deliberately kept
 since `useVehicleZone.ts` still depends on it for the zone-badge check and
 the API routes remain available for future direct RDV CRUD.
 
@@ -170,7 +170,7 @@ warning rather than a hard failure if only the mirror write fails; a
 read+add-only `/rdv` page and `AddRdvDialog` return, with edit/clear
 deliberately left out of this pass since the existing `rowIndex`-based
 versions only ever touched the flat tab. `34f5191` closes that gap:
-`lib/rdvIdentity.ts`'s `resolveUniqueMatch()` replaces row-number-based
+`src/lib/sheets/rdvIdentity.ts`'s `resolveUniqueMatch()` replaces row-number-based
 edit/clear entirely, re-scanning both tabs for an exact full-row content
 match (date-scoped, whitespace-normalized so the flat tab's cleaned values
 and the monthly tab's raw cells compare equal) at write time and refusing
@@ -249,11 +249,11 @@ That BC-price join was later removed entirely, not just its display:
 `323497a` deletes the whole `$lookup`-replacement code path
 (`collectPairs`/`fetchBcMatches`/`mergeBcPrices`) from `/api/ds/history`,
 plus every downstream consumer — `Line.mt_ht`/`price_source` from
-`lib/types.ts`, the Mt HT line column/BC-DS source badge/MAD total on the
+`src/types/index.ts`, the Mt HT line column/BC-DS source badge/MAD total on the
 page itself, and the by-then-dead `totalMtHt`/`mt_ht` handling in both the
 PDF and DOCX export builders (the DOCX total-row branch was already
 unreachable — `totalMtHt` was never passed a value at any call site). The
-`bc` Mongo collection itself is untouched: `app/api/article/route.ts` still
+`bc` Mongo collection itself is untouched: `src/app/api/article/route.ts` still
 uses it independently for Articles' own price lookups, a fully separate
 code path. `24e34cd` then tightens the PDF/DOCX export layout unrelated to
 that removal — dropped dead spacer paragraphs, tighter heading/section
@@ -279,20 +279,20 @@ in `072cc58`.
 ### Component redesign
 
 `f1af645` adds the shared foundation as purely additive infrastructure (no
-page migrated yet): `components/ui/` — hand-written shadcn-pattern
+page migrated yet): `src/components/ui/` — hand-written shadcn-pattern
 primitives (Button, Input, Dialog, AlertDialog, Combobox, Badge,
 ToggleGroup, Sheet, Card) built on Radix UI + cmdk rather than scaffolded
 via shadcn's CLI, re-skinned to the app's existing zinc palette from the
 start, with touch targets enlarged to ≥40–44px after the audit found
-existing icon buttons undersized at ~24–28px; `hooks/` — `AppQueryProvider`
+existing icon buttons undersized at ~24–28px; `src/hooks/` — `AppQueryProvider`
 (TanStack Query), `useParkingRows`/`useAtelierRows`/`useBddRows`,
 `useDarkMode`, `usePlateAutocomplete`, `useEditableState`; and
-`components/fleet/` — `ListPageHeader`, `PlateSearchInput`,
+`src/components/fleet/` — `ListPageHeader`, `PlateSearchInput`,
 `PlateFilterInput`, `AddResultsList`, `RecordCard`, `Field`. Pages then
 migrate one at a time: Parking (`3e03663`), Atelier (`de1473e`), Suivi RL
 (`295e1a8`), with DS History's types/dark-mode toggle/`FieldSelector`
 deduped in `14403c3` and the home page's dark-mode toggle deduped in
-`51dda77`. `080e6fd` removes confirmed-dead `components/ui/` files and an
+`51dda77`. `080e6fd` removes confirmed-dead `src/components/ui/` files and an
 unused dependency once migration was complete. `8199db9` layers the
 per-field inline-commit UX (described under BDD above) on top of this
 foundation.
@@ -302,7 +302,7 @@ foundation.
 A 6-stage audit/fix, fully documented in `baaea19`. Stage 1 (`7005334`)
 installs `next-themes`, adds the synchronous no-flash inline script
 distinguishing an explicit past choice from no choice yet (time-based
-default: 7am–7pm light, computed by `lib/themeDefault.ts`'s
+default: 7am–7pm light, computed by `src/lib/utils/themeDefault.ts`'s
 `getTimeBasedTheme()`, re-evaluated on every visit until an explicit choice
 is made), defines real semantic CSS tokens in `globals.css` (the audit
 found zero color tokens existed before this — every component hardcoded a
@@ -328,7 +328,7 @@ for this exact case.
 A second, narrower audit (`6cb1f1b`, `DESIGN_SYSTEM.md` — a persistent
 doc, unlike the deleted `AUDIT_REPORT.md`) found color, typography, radius,
 and error-banner drift that had accumulated since the first theming pass,
-fixed across 7 commits: `f7eeb33` introduces `lib/constants/zones.ts` as
+fixed across 7 commits: `f7eeb33` introduces `src/config/zones.ts` as
 the single source for each zone's accent color (previously duplicated
 across `ZoneBadges`, each list page's header, Suivi RL's card, and
 `NavCard`), fixing a real Atelier badge-color mismatch (violet vs. the
@@ -371,13 +371,13 @@ cookie and redirecting to Google's consent screen (`openid email` scope
 only), and a callback route that validates the `state`, exchanges the code,
 cryptographically verifies the ID token against Google's own public keys,
 and checks the verified email against a single hardcoded constant
-(`lib/googleOAuth.ts`'s `AUTHORIZED_EMAIL`) — no User model, no MongoDB
+(`src/lib/auth/googleOAuth.ts`'s `AUTHORIZED_EMAIL`) — no User model, no MongoDB
 collection, no registration flow, confirmed with the user as an explicit
 non-goal. No rate limiter was added to the callback route by deliberate
 decision: authorization codes are single-use, short-lived, and issued by
 Google only after real consent, unlike the password-based login it
 replaced. `66940ba` gitignores the downloaded OAuth client secret and lets
-the proxy pass the Google auth routes through unauthenticated. `proxy.ts`'s
+the proxy pass the Google auth routes through unauthenticated. `src/proxy.ts`'s
 path-exclusion anchoring (exact/prefix matches instead of loose
 `startsWith()`, closing a latent auth-bypass footgun for any future route
 named e.g. `/login-x`) lands as part of `ede32dd`'s hardening pass, not the
@@ -394,7 +394,7 @@ BDD writes, row-identity verification before Parking/Atelier/Depot
 writes, `rateLimitOrNull()` applied to all 16 Sheets mutation routes,
 `ApiError`/`toErrorResponse()` so routes never leak raw driver exceptions,
 dropping the case-insensitive regex on parc's plate-prefix search so it can
-use the existing indexes, `proxy.ts`'s anchored path matching, and the
+use the existing indexes, `src/proxy.ts`'s anchored path matching, and the
 per-request nonce-based CSP + `X-Frame-Options`/`X-Content-Type-Options`/
 `Referrer-Policy`/HSTS headers. `c5d688f` documents a live re-verification
 finding that a claimed "Direct API Origin Bypass" secret-header protection
@@ -414,7 +414,7 @@ History's primary search from a full 247K-document collection scan (339ms)
 to 45ms. `1fac604` extracts a shared Sheets client + date helpers from 5
 near-identical per-tab copies. `150918f` adds the first Mongo-backed rate
 limiting (`/api/export`, `/api/article`, audit item 10); `ede32dd` extends
-the same atomic-`$inc`-based mechanism (`lib/rateLimit.ts`) to all 16 Sheets
+the same atomic-`$inc`-based mechanism (`src/lib/http/rateLimit.ts`) to all 16 Sheets
 mutation routes at 30 req/min each. `44760e9` (detailed under DS History
 above) is the largest standalone performance fix in the project.
 
@@ -443,7 +443,7 @@ columns.
 
 ### Fleet Data Import trigger
 
-`e6e44a4` adds a button on the home page (`components/fleet/ImportTrigger.tsx`)
+`e6e44a4` adds a button on the home page (`src/components/fleet/ImportTrigger.tsx`)
 that proxies a **separate** Vercel project (`~/import`, deployed at
 `import-red.vercel.app`) which runs the DS/CP/PARC/BC Drive→Mongo ETL — this
 repo gains no Drive or ETL code of its own, only two thin proxy routes
@@ -490,12 +490,12 @@ block above whitespace.
 ### Config-driven dropdown options (Stage 1)
 
 `4876ddf` and `c442df2` first deduped `CATEGORIE_OPTIONS`/`TECHNICIEN_OPTIONS`
-onto `lib/types.ts`, closing a live two-copy drift. `76d60b5` then moved
+onto `src/types/index.ts`, closing a live two-copy drift. `76d60b5` then moved
 dropdown option *values* out of hardcoded arrays entirely and into a Mongo
 `sheetFieldOptions` collection, admin-editable at `/admin/config` without a
 deploy. Headers, `BddRow`'s shape, and `BDD_EDITABLE_FIELDS` were
 deliberately left out of scope for this stage. The seven `*_FALLBACK`
-constants left behind in `lib/types.ts` are **not dead code**: they serve
+constants left behind in `src/types/index.ts` are **not dead code**: they serve
 server-side degradation, client-side degradation, and the one-time seed
 script. `1e47ff8` and `a1c88a4` added Atelier's Technicien chip row and its
 "Non assigné" blank-value chip — the direct precedent for Suivi RL's
@@ -537,7 +537,7 @@ key names, with `fa9f3ec` catching `/api/cp` which the original pass missed.
 `985e3d8` added a dual-read window for `designation_consommation` during the
 backfill and, more durably, added **`field_registry.json` CI enforcement** —
 a copy of a live-scan snapshot of every real field name, with
-`scripts/verify-field-names.cjs` failing the build if any `app/api/**` Mongo
+`scripts/verify-field-names.cjs` failing the build if any `src/app/api/**` Mongo
 field reference doesn't byte-match it. `6a4ecf0` resynced that snapshot after
 the upstream `~/import` whitespace-mapping fix. `8264de0` marked
 `scripts/add-indexes.ts` deprecated, pointing at `~/import`'s
@@ -635,13 +635,13 @@ currently has.
 
 ## 3. Architectural tradeoffs & known limitations
 
-- **Single-user hardcoded authorization.** `lib/googleOAuth.ts`'s
+- **Single-user hardcoded authorization.** `src/lib/auth/googleOAuth.ts`'s
   `AUTHORIZED_EMAIL` constant (introduced in `19926c6`) is the entire
   authorization check — adding a second legitimate user requires a code
   change and redeploy, not a config or database change. Confirmed as an
   explicit non-goal with the user at the time (`19926c6`'s commit message).
 - **CSRF defense on mutation endpoints relies on `SameSite=Lax` cookies**,
-  not an explicit per-route CSRF token. `lib/session.ts`'s
+  not an explicit per-route CSRF token. `src/lib/auth/session.ts`'s
   `sameSite: "lax"` setting means the session cookie isn't sent on
   cross-site POST/fetch/XHR requests, which is the actual (implicit)
   protection for the 16 Sheets mutation routes hardened in `ede32dd`. If
@@ -652,7 +652,7 @@ currently has.
   authentication method — if Google's OAuth service has an outage, this
   app cannot be logged into at all.
 - **Unindexed case-insensitive regex on non-prefix queries.**
-  `app/api/article/route.ts` still builds `$regex` filters with
+  `src/app/api/article/route.ts` still builds `$regex` filters with
   `$options: "i"` against `Description article`/`Marque`/`Modele` (input is
   escaped via `escapeRegex()`, added in `a2b226e`, so this is not an
   injection risk) — but unlike parc's plate-prefix search (fixed in

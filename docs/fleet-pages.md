@@ -11,7 +11,7 @@ the original AVIS Maroc Google Apps Script systems; RDV is new.
 
 ## 1. Shared shape
 
-All four are the same page composed from `components/fleet/`:
+All four are the same page composed from `src/components/fleet/`:
 
 ```
 ListPageHeader  ── title · count · Actualiser · plate Combobox · filter chips
@@ -21,7 +21,7 @@ ListPageHeader  ── title · count · Actualiser · plate Combobox · filter 
        └─ ReadonlyFieldList                                        (XLOOKUP columns)
 ```
 
-Backed by `hooks/use{Parking,Atelier,Depot,Rdv}Rows.ts` — the same TanStack
+Backed by `src/hooks/use{Parking,Atelier,Depot,Rdv}Rows.ts` — the same TanStack
 Query pattern, the same `fetchJson` helper, the same mutation-meta toasts.
 
 > **Do not rebuild any of this.** These components exist *because*
@@ -32,7 +32,7 @@ Query pattern, the same `fetchJson` helper, the same mutation-meta toasts.
 
 ## 2. Parking
 
-`app/parking/page.tsx` · `lib/googleSheetsParking.ts` · `/api/parking/*`
+`src/app/parking/page.tsx` · `src/lib/sheets/googleSheetsParking.ts` · `/api/parking/*`
 
 15 columns; only `IMM`, `ACTION`, `TIMESTAMP` are ever written — the other 12
 are sheet-side XLOOKUP formulas, read-only here.
@@ -48,7 +48,7 @@ are sheet-side XLOOKUP formulas, read-only here.
 
 ## 3. Atelier
 
-`app/atelier/page.tsx` · `lib/googleSheetsAtelier.ts` · `/api/atelier/*`
+`src/app/atelier/page.tsx` · `src/lib/sheets/googleSheetsAtelier.ts` · `/api/atelier/*`
 
 Structurally close to Parking, with two real differences:
 
@@ -67,7 +67,7 @@ for blank values (`a1c88a4`) — the direct precedent for Suivi RL's
 
 ## 4. Depot
 
-`app/depot/page.tsx` · `lib/googleSheetsDepot.ts` · `/api/depot/*`
+`src/app/depot/page.tsx` · `src/lib/sheets/googleSheetsDepot.ts` · `/api/depot/*`
 
 **A byte-for-byte structural clone of Parking** — same 15 columns, same 12
 XLOOKUP formulas verbatim (checked via a FORMULA-render read, not inferred from
@@ -76,8 +76,8 @@ resemblance). Only `ACTION` is editable. Reuses `ParkingAddResponse` /
 
 ## 5. RDV
 
-`app/rdv/page.tsx` · `lib/googleSheetsRdv.ts` · `lib/googleSheetsRdvMonthly.ts` ·
-`lib/rdvIdentity.ts` · `/api/rdv/*`
+`src/app/rdv/page.tsx` · `src/lib/sheets/googleSheetsRdv.ts` · `src/lib/sheets/googleSheetsRdvMonthly.ts` ·
+`src/lib/sheets/rdvIdentity.ts` · `/api/rdv/*`
 
 An appointment/convoyage log. **All 8 columns are manually typed** — this tab
 has no XLOOKUP columns at all, confirmed live.
@@ -115,7 +115,7 @@ layer, then rebuilt (`d1dcd28`, `c546f1d`). Both decisions are in
 
 ## 6. Zone badges
 
-`useVehicleZone(imm)` ([`hooks/useVehicleZone.ts`](../hooks/useVehicleZone.ts))
+`useVehicleZone(imm)` ([`src/hooks/useVehicleZone.ts`](../src/hooks/useVehicleZone.ts))
 returns `{ inParking, inAtelier, inRdv, inDepot }`.
 
 All four tabs are independent, so **any combination can be true at once** — a

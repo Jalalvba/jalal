@@ -1,11 +1,11 @@
 # BDD exports — PDF and Excel
 
-**Primary files:** [`app/api/bdd/export/route.ts`](../app/api/bdd/export/route.ts)
-(PDF) · [`app/api/bdd/export-excel/route.ts`](../app/api/bdd/export-excel/route.ts)
+**Primary files:** [`src/app/api/bdd/export/route.ts`](../src/app/api/bdd/export/route.ts)
+(PDF) · [`src/app/api/bdd/export-excel/route.ts`](../src/app/api/bdd/export-excel/route.ts)
 (Excel) · client helpers in
-[`app/suivi-rl/page.tsx:96`](../app/suivi-rl/page.tsx#L96)
+[`src/app/suivi-rl/page.tsx:96`](../src/app/suivi-rl/page.tsx#L96)
 
-Tests: `app/api/bdd/export/__tests__/isValidRow.test.ts`,
+Tests: `src/app/api/bdd/export/__tests__/isValidRow.test.ts`,
 `route.test.ts`, `route.mongo-down.test.ts`.
 
 > **These two routes are documented together on purpose.** They share the
@@ -40,14 +40,14 @@ Both are `POST`, both take the same body, both return a binary attachment.
 | Row validator | `isValidRow()` | `isValidExcelRow()` |
 
 **Separate rate-limit buckets** — exporting a PDF does not consume the Excel
-budget. `20 req / 5 min` matches `app/api/export/route.ts`'s DS-History export:
+budget. `20 req / 5 min` matches `src/app/api/export/route.ts`'s DS-History export:
 these are read-only report generators, so they deliberately do **not** sit in
 the 17-route `30/min` Sheets-mutation bucket.
 
 **Why `exceljs` rather than reusing something:** this is the app's first Excel
 export. Confirmed there was no existing xlsx utility — the repo had only
 `pdf-lib` (PDF) and `docx` (DS History's Word export). Noted at
-[`export-excel/route.ts:61-63`](../app/api/bdd/export-excel/route.ts#L61).
+[`export-excel/route.ts:61-63`](../src/app/api/bdd/export-excel/route.ts#L61).
 
 ---
 
@@ -61,8 +61,8 @@ export. Confirmed there was no existing xlsx utility — the repo had only
 | 4 | `Emplacement` | `Emplacement` | `Emplacement` | weight 1.3 | 16 |
 | 5 | `commentaire` | `Commentaire` | `Commentaire` | weight 2.3 | 50 (wrapped) |
 
-PDF: [`route.ts:304-310`](../app/api/bdd/export/route.ts#L304).
-Excel: [`route.ts:83`](../app/api/bdd/export-excel/route.ts#L83) and `:93-101`.
+PDF: [`route.ts:304-310`](../src/app/api/bdd/export/route.ts#L304).
+Excel: [`route.ts:83`](../src/app/api/bdd/export-excel/route.ts#L83) and `:93-101`.
 
 Both documents open with the same three header lines before the table:
 
@@ -101,7 +101,7 @@ Commentaire needs the space it has. Adding a sixth means re-measuring every
 weight against real live values (§4.2), not just appending to `BddExportRow`.
 
 > The comment at
-> [`export/route.ts:34`](../app/api/bdd/export/route.ts#L34) previously still
+> [`export/route.ts:34`](../src/app/api/bdd/export/route.ts#L34) previously still
 > gave the expired reason ("*since none of those axes support selecting multiple
 > values*"). Corrected to state the width constraint instead.
 
@@ -117,7 +117,7 @@ Two commits, in order — the second exists because of the first.
 ### 4.1 `12bdc5e` — Excel gets Emplacement, PDF does not
 
 When multi-select landed, Emplacement was added to the **Excel** export only.
-The reasoning ([`export-excel/route.ts:21`](../app/api/bdd/export-excel/route.ts#L21)):
+The reasoning ([`export-excel/route.ts:21`](../src/app/api/bdd/export-excel/route.ts#L21)):
 a multi-select Emplacement filter means one export can span several Emplacement
 values, so per-row Emplacement stopped being redundant with the header line.
 
@@ -137,7 +137,7 @@ whose PDF content stream was decoded to confirm the truncation — not estimated
 | `modele`'s weight `1.1` | — | too narrow for both |
 | `Emplacement`'s weight `1.3` | — | **~84 pt** ✓ |
 
-Hence [`route.ts:300`](../app/api/bdd/export/route.ts#L300):
+Hence [`route.ts:300`](../src/app/api/bdd/export/route.ts#L300):
 
 ```ts
 const IMM_W = 115;
@@ -162,9 +162,9 @@ three have been corrected:
 
 | Location | Said | Now |
 |---|---|---|
-| [`suivi-rl/page.tsx:154`](../app/suivi-rl/page.tsx#L154) | *"…why the PDF export deliberately omits it and this one doesn't"* | notes both exports include it, and which commit added each |
-| [`export-excel/route.ts:21`](../app/api/bdd/export-excel/route.ts#L21) | *"Unlike the PDF export's `BddExportRow`…"* | notes the two row types are now identical, and why they stay separately declared |
-| [`export/route.ts:150`](../app/api/bdd/export/route.ts#L150) | *"only 4 (narrower) columns now"* | 5 |
+| [`suivi-rl/page.tsx:154`](../src/app/suivi-rl/page.tsx#L154) | *"…why the PDF export deliberately omits it and this one doesn't"* | notes both exports include it, and which commit added each |
+| [`export-excel/route.ts:21`](../src/app/api/bdd/export-excel/route.ts#L21) | *"Unlike the PDF export's `BddExportRow`…"* | notes the two row types are now identical, and why they stay separately declared |
+| [`export/route.ts:150`](../src/app/api/bdd/export/route.ts#L150) | *"only 4 (narrower) columns now"* | 5 |
 
 > **The pattern worth noticing:** each comment was accurate when written and
 > falsified by the *next* commit, which changed behaviour without revisiting the
@@ -205,7 +205,7 @@ Error responses, in order of check: invalid JSON → `400` · non-object body �
 
 ## 6. PDF-specific: text sanitisation and layout
 
-### 6.1 `sanitize()` — [`route.ts:176`](../app/api/bdd/export/route.ts#L176)
+### 6.1 `sanitize()` — [`route.ts:176`](../src/app/api/bdd/export/route.ts#L176)
 
 `pdf-lib`'s `StandardFonts` are **WinAnsi-encoded** and throw on anything they
 can't encode. Applied in order:
@@ -254,7 +254,7 @@ Zebra striping on odd rows, a hairline rule under each row, and a right-aligned
 
 ---
 
-## 7. Client side — [`app/suivi-rl/page.tsx`](../app/suivi-rl/page.tsx)
+## 7. Client side — [`src/app/suivi-rl/page.tsx`](../src/app/suivi-rl/page.tsx)
 
 `downloadBddPdf()` (`:96`) and `downloadBddExcel()` (`:159`) are deliberate
 near-duplicates.
@@ -282,8 +282,8 @@ rest of the app's `sonner` toasts (noted in
    ("kept in sync deliberately, not derived, since the two routes validate
    independently"). A shared schema module would remove the drift class
    entirely — see Phase 2.
-2. **No auth check inside either route.** Both rely on `proxy.ts`'s
-   session gate, same as every other `app/api` route. Deliberate, not an
+2. **No auth check inside either route.** Both rely on `src/proxy.ts`'s
+   session gate, same as every other `src/app/api` route. Deliberate, not an
    omission.
 3. **`MAX_ROWS = 2000` is ~23× the live row count.** Generous by design, but it
    means a bug that duplicates rows client-side would still be accepted.

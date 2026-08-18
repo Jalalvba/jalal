@@ -3,7 +3,7 @@
 > **Summary-level doc.** Full chronology in
 > [`PROJECT_HISTORY.md`](../PROJECT_HISTORY.md) §2 ("DS History").
 
-**Files:** [`app/ds-history/page.tsx`](../app/ds-history/page.tsx) (1211 lines —
+**Files:** [`src/app/ds-history/page.tsx`](../src/app/ds-history/page.tsx) (1211 lines —
 the largest page in the app) · `/api/ds/history` · `/api/parc` · `/api/cp` ·
 `/api/query` · `/api/sheet` · `/api/export` · `/api/vehicle-suggestions`
 
@@ -37,12 +37,12 @@ The BDD SheetCard is **editable** (`c1ece8e`) — it reuses Suivi RL's own
 (`d794e82`).
 
 Suggestions come from the **single shared full-plate-universe query**
-(`["vehicle-suggestions"]`, `hooks/useVehicleSuggestionList.ts`), which spans
+(`["vehicle-suggestions"]`, `src/hooks/useVehicleSuggestionList.ts`), which spans
 `parc` + `cp` and is persisted to `localStorage` by the query-cache persister.
 Only the first page visited in a browser session fetches it; every subsequent
 page and navigation reads it with zero network round trip.
 
-Plate variants (`lib/plateVariants.ts`) let one typed plate match the several
+Plate variants (`src/lib/utils/plateVariants.ts`) let one typed plate match the several
 formats the same vehicle appears under across sources.
 
 > **`4742410`** fixed the page auto-loading a hardcoded plate (`48070-B-7`) on

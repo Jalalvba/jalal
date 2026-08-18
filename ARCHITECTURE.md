@@ -17,9 +17,9 @@ testing it**.
 ```
                           Browser (Next 16 App Router, React 19)
                                         │
-                              proxy.ts  │  iron-session gate on every request
+                              src/proxy.ts  │  iron-session gate on every request
                                         ▼
-   ┌────────────────────────────── app/api/* ──────────────────────────────┐
+   ┌────────────────────────────── src/app/api/* ──────────────────────────────┐
    │                                                                        │
    │  Sheets side (system of record)          Mongo side (read-mostly)      │
    │  ────────────────────────────            ───────────────────────       │
@@ -29,7 +29,7 @@ testing it**.
    │  /api/depot/*      → DEPOT               /api/article      → ds, bc    │
    │  /api/rdv/*        → RDV + monthly       /api/config/options           │
    │  /api/sheet        → RL / import           → sheetFieldOptions         │
-   │                                          lib/rateLimit    → rateLimits │
+   │                                          src/lib/rateLimit    → rateLimits │
    │  Report generators          External providers                         │
    │  ─────────────────          ──────────────────                         │
    │  /api/bdd/export        → PDF        /api/generate-email      → Gemini │
@@ -128,13 +128,13 @@ The behavioural bug in `ef630e0`; the six stale comments in `443626c`.
 
 | Where | Issue |
 |---|---|
-| [`app/api/import-status/route.ts`](./app/api/import-status/route.ts) | **Bug.** `skipped_absent` / `skipped_unchanged` run statuses coerced to `"failed"` — the *step*-status set was validating a *run* status. The fix `9fe833d` applied to `/api/trigger-import` had never been applied here. Now validated against `KNOWN_RUN_STATUSES` via `normalizeRunStatus()`, with a parameterised regression test over all five real statuses (verified to fail against the old implementation). → [detail](./docs/fleet-data-import.md#31-run-status-validation--and-the-bug-that-was-here) |
-| [`app/api/bdd/export/route.ts`](./app/api/bdd/export/route.ts) | Stale rationale — excluded columns "since none of those axes support selecting multiple values"; all four axes are multi-select since `c0d5965`. Now states the real current constraint (portrait A4 page width). |
-| [`app/suivi-rl/page.tsx`](./app/suivi-rl/page.tsx) | Stale — claimed the PDF export omits Emplacement. It includes it (`e3bc354`). |
-| [`app/api/bdd/export-excel/route.ts`](./app/api/bdd/export-excel/route.ts) | Stale — "Unlike the PDF export's `BddExportRow`…". Both row types are identical; corrected, with the reason they stay separately declared. |
-| [`app/api/bdd/export/route.ts`](./app/api/bdd/export/route.ts) | Stale — "only 4 (narrower) columns now". There are 5. |
+| [`src/app/api/import-status/route.ts`](./src/app/api/import-status/route.ts) | **Bug.** `skipped_absent` / `skipped_unchanged` run statuses coerced to `"failed"` — the *step*-status set was validating a *run* status. The fix `9fe833d` applied to `/api/trigger-import` had never been applied here. Now validated against `KNOWN_RUN_STATUSES` via `normalizeRunStatus()`, with a parameterised regression test over all five real statuses (verified to fail against the old implementation). → [detail](./docs/fleet-data-import.md#31-run-status-validation--and-the-bug-that-was-here) |
+| [`src/app/api/bdd/export/route.ts`](./src/app/api/bdd/export/route.ts) | Stale rationale — excluded columns "since none of those axes support selecting multiple values"; all four axes are multi-select since `c0d5965`. Now states the real current constraint (portrait A4 page width). |
+| [`src/app/suivi-rl/page.tsx`](./src/app/suivi-rl/page.tsx) | Stale — claimed the PDF export omits Emplacement. It includes it (`e3bc354`). |
+| [`src/app/api/bdd/export-excel/route.ts`](./src/app/api/bdd/export-excel/route.ts) | Stale — "Unlike the PDF export's `BddExportRow`…". Both row types are identical; corrected, with the reason they stay separately declared. |
+| [`src/app/api/bdd/export/route.ts`](./src/app/api/bdd/export/route.ts) | Stale — "only 4 (narrower) columns now". There are 5. |
 | [`CLAUDE.md`](./CLAUDE.md) §6 | Stale — "6-field editable allowlist" (it's 7); "Plate/WW search" (it's plate-only); listed 3 chip axes (there are 4). |
-| [`lib/types.ts`](./lib/types.ts) | Stale — "27 real columns". `BDD_HEADERS` has 28. |
+| [`src/types/index.ts`](./src/types/index.ts) | Stale — "27 real columns". `BDD_HEADERS` has 28. |
 
 ### Open
 
@@ -144,11 +144,11 @@ only; nothing there has been removed. Headlines:
 
 | Where | Issue |
 |---|---|
-| `app/api/import-status` + `app/api/trigger-import` | **Highest value.** Both re-implement the `~/import` contract — `normalizeTimestamp()` is `md5`-identical, and the step normaliser is a named function in one route and *inlined* in the other, so name-based search can't find the second copy. This is *how* the run-status bug above outlived its own fix. |
-| `lib/types.ts:708` / `:727` | The two import status vocabularies are hand-written unions with **no runtime counterpart** — the reason a validator had to hand-write a `Set` and reached for the wrong one. Four other types in the same file already use the `as const` → `(typeof X)[number]` pattern that prevents this. |
-| `app/api/bdd/export{,-excel}/route.ts` | Same class, latent: `MAX_*` caps duplicated and the row validators byte-identical. |
-| `app/api/query/search/route.ts` | No caller found; superseded by client-side filtering (`26e53fb`). |
-| `app/api/generate-email/route.ts` | No UI caller. Deliberately headless, but unreferenced. |
+| `src/app/api/import-status` + `src/app/api/trigger-import` | **Highest value.** Both re-implement the `~/import` contract — `normalizeTimestamp()` is `md5`-identical, and the step normaliser is a named function in one route and *inlined* in the other, so name-based search can't find the second copy. This is *how* the run-status bug above outlived its own fix. |
+| `src/types/index.ts:708` / `:727` | The two import status vocabularies are hand-written unions with **no runtime counterpart** — the reason a validator had to hand-write a `Set` and reached for the wrong one. Four other types in the same file already use the `as const` → `(typeof X)[number]` pattern that prevents this. |
+| `src/app/api/bdd/export{,-excel}/route.ts` | Same class, latent: `MAX_*` caps duplicated and the row validators byte-identical. |
+| `src/app/api/query/search/route.ts` | No caller found; superseded by client-side filtering (`26e53fb`). |
+| `src/app/api/generate-email/route.ts` | No UI caller. Deliberately headless, but unreferenced. |
 | `scripts/add-indexes.ts` | Self-declared deprecated, but the deprecation is a comment rather than a runtime guard. |
 | `DESIGN_SYSTEM.md` | Still framed as a proposal ("Sequencing — once approved") for work that shipped across seven commits. |
 

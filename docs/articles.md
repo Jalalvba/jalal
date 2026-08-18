@@ -3,8 +3,8 @@
 > **Summary-level doc.** Full chronology in
 > [`PROJECT_HISTORY.md`](../PROJECT_HISTORY.md) §2.
 
-**Files:** [`app/articles/page.tsx`](../app/articles/page.tsx) ·
-[`app/api/article/route.ts`](../app/api/article/route.ts)
+**Files:** [`src/app/articles/page.tsx`](../src/app/articles/page.tsx) ·
+[`src/app/api/article/route.ts`](../src/app/api/article/route.ts)
 
 A parts/article lookup across the Mongo `ds` and `bc` collections — "which
 vehicles consumed this part, and at what price".
@@ -25,7 +25,7 @@ atomic `$inc` — added in `150918f` (audit item 10). Exceeding it returns 429
 with a `Retry-After` header and a French message.
 
 **All user input reaching a `$regex` goes through `escapeRegex()`**
-([`lib/regex.ts`](../lib/regex.ts)) — mandatory per [`AGENTS.md`](../AGENTS.md)
+([`src/lib/utils/regex.ts`](../src/lib/utils/regex.ts)) — mandatory per [`AGENTS.md`](../AGENTS.md)
 rule 4. This closes both regex injection and ReDoS.
 
 `clampInt()` bounds `limit` rather than trusting the query string, so a

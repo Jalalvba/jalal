@@ -15,15 +15,15 @@ pre-fix state they describe).
 
 ### 1.1 Color inventory
 
-**Semantic tokens** (`app/globals.css`, `@theme` block) — `background`,
+**Semantic tokens** (`src/app/globals.css`, `@theme` block) — `background`,
 `foreground`, `card`, `card-foreground`, `muted`, `muted-foreground`,
 `border`, `input`, `popover`, `popover-foreground`. Well-adopted:
 Parking, Atelier, Depot, Suivi RL, Articles, Login, and every
-`components/ui`/`components/fleet` primitive consume these instead of
+`src/components/ui`/`src/components/fleet` primitive consume these instead of
 literal `zinc-*`.
 
-**Literal accent-hue usage** (non-zinc, grepped across `app/`,
-`components/`, `lib/`, counted by Tailwind property+hue):
+**Literal accent-hue usage** (non-zinc, grepped across `src/app/`,
+`src/components/`, `src/lib/`, counted by Tailwind property+hue):
 
 | Hue | Hits | Where |
 |---|---|---|
@@ -41,14 +41,14 @@ exists anywhere in the codebase** — that's not a live concern here.
 **Zone/page/nav-card accent consistency** — for each zone, compared the
 zone's own page header accent (`ListPageHeader`'s `accentClassName`),
 `ZoneBadges.tsx`'s badge color for that zone, and Home's `NavCard` accent
-(`app/page.tsx`):
+(`src/app/page.tsx`):
 
 | Zone | Page header | ZoneBadges | Home nav card | Consistent? |
 |---|---|---|---|---|
-| Parking | `text-sky-400` (`app/parking/page.tsx:145`) | `sky` (`ZoneBadges.tsx:15`) | `bg-sky-500` (`page.tsx:109`) | ✅ |
-| Atelier | `text-amber-400` (`app/atelier/page.tsx:233`) | **`violet`** (`ZoneBadges.tsx:18`) | `bg-amber-400` (`page.tsx:85`) | ❌ ZoneBadges disagrees with both |
-| Depot | `text-lime-400` (`app/depot/page.tsx:146`) | `lime` (`ZoneBadges.tsx:24`) | `bg-lime-500` (`page.tsx:131`) | ✅ |
-| BDD / Suivi RL | `text-amber-400` (`app/suivi-rl/page.tsx:276`) | *(no BDD badge — not a `VehicleZone`)* | **`bg-red-500`** (`page.tsx:120`) | ❌ page and nav card disagree, and page's amber collides with Atelier's amber |
+| Parking | `text-sky-400` (`src/app/parking/page.tsx:145`) | `sky` (`ZoneBadges.tsx:15`) | `bg-sky-500` (`page.tsx:109`) | ✅ |
+| Atelier | `text-amber-400` (`src/app/atelier/page.tsx:233`) | **`violet`** (`ZoneBadges.tsx:18`) | `bg-amber-400` (`page.tsx:85`) | ❌ ZoneBadges disagrees with both |
+| Depot | `text-lime-400` (`src/app/depot/page.tsx:146`) | `lime` (`ZoneBadges.tsx:24`) | `bg-lime-500` (`page.tsx:131`) | ✅ |
+| BDD / Suivi RL | `text-amber-400` (`src/app/suivi-rl/page.tsx:276`) | *(no BDD badge — not a `VehicleZone`)* | **`bg-red-500`** (`page.tsx:120`) | ❌ page and nav card disagree, and page's amber collides with Atelier's amber |
 | RDV (appointments) | *(no standalone page — removed per project history)* | `fuchsia` (`ZoneBadges.tsx:21`) | — | uncontested, nothing to compare against |
 
 Two genuine, verifiable mismatches: **Atelier's own badge color in
@@ -58,17 +58,17 @@ that page header color, amber, is already claimed by Atelier).
 
 **Semantic overload** — several hues carry more than one meaning:
 - **amber**: Atelier brand + Suivi RL brand + `INST` flag
-  (`lib/types.ts:191`) + yellow prestataire dot (`lib/types.ts:248`) — 4
+  (`src/types/index.ts:191`) + yellow prestataire dot (`src/types/index.ts:248`) — 4
   meanings on one hue.
-- **red**: BDD brand (Home nav) + `Urgent` flag (`lib/types.ts:188`) +
-  hardcoded `EXTERNE` état color (`app/ds-history/page.tsx:538`) + every
+- **red**: BDD brand (Home nav) + `Urgent` flag (`src/types/index.ts:188`) +
+  hardcoded `EXTERNE` état color (`src/app/ds-history/page.tsx:538`) + every
   destructive/error affordance in the app (delete buttons, error
   banners) — the single most-used hue in the codebase (78 hits) is also
   the one meant to universally signal "danger," yet it's also a brand
   color for one zone.
 
 **ÉTAT badges bypass the color system entirely** — `etatStyle()`
-(`app/ds-history/page.tsx:535-540`) hardcodes raw hex
+(`src/app/ds-history/page.tsx:535-540`) hardcodes raw hex
 (`#1a7a4a`/`#f4c430`/`red-600`/`zinc-700`), not Tailwind's named palette
 or the semantic tokens, and always renders white text regardless of
 theme. Separately, `ZoneBadges.tsx:4`'s comment claims ÉTAT is
@@ -81,9 +81,9 @@ hits per file:
 
 | File | Hits |
 |---|---|
-| `app/ds-history/page.tsx` | 225 |
-| `app/page.tsx` (Home) | 44 |
-| `app/articles/page.tsx` | 3 |
+| `src/app/ds-history/page.tsx` | 225 |
+| `src/app/page.tsx` (Home) | 44 |
+| `src/app/articles/page.tsx` | 3 |
 | everything else combined | 5 |
 
 97% of all remaining non-token color usage lives in exactly two files —
@@ -93,17 +93,17 @@ migration; everywhere else is done.
 ### 1.2 Typography
 
 - Only **5 real heading tags exist in the whole app**: `<h1>` in
-  `app/articles/page.tsx:79`, `app/ds-history/page.tsx:1020`,
-  `app/login/page.tsx:21`, `app/page.tsx:61`, and one `<h2>` in
-  `app/page.tsx:33`. Playfair Display is wired globally
-  (`app/globals.css:96-98`, `h1,h2,h3,h4 { font-family:
+  `src/app/articles/page.tsx:79`, `src/app/ds-history/page.tsx:1020`,
+  `src/app/login/page.tsx:21`, `src/app/page.tsx:61`, and one `<h2>` in
+  `src/app/page.tsx:33`. Playfair Display is wired globally
+  (`src/app/globals.css:96-98`, `h1,h2,h3,h4 { font-family:
   var(--font-display) }`) but, given how few heading tags exist, it
   visually renders in only these 5 spots despite being one of the app's
   three declared typefaces.
 - `font-mono` is used 10 times across 6 files. 9 of 10 are legitimate —
   plate numbers, article codes, references, count badges (all genuine
   data identifiers). The 1 exception:
-  **`components/fleet/ListPageHeader.tsx:56`** renders the page *title*
+  **`src/components/fleet/ListPageHeader.tsx:56`** renders the page *title*
   ("Parking"/"Atelier"/"Dépôt"/"Suivi RL" — a proper-noun label, not an
   identifier) in `font-mono` instead of a heading/display style.
 - `font-sans` (a Tailwind utility) has 0 hits anywhere — body font is
@@ -124,8 +124,8 @@ Six distinct radius values are in concurrent use with no declared scale:
 | `rounded-full` | pill | 15 |
 
 Concrete conflict: the shared `Card` primitive
-(`components/ui/card.tsx:14`) uses `rounded-xl`, but Home's `NavCard`
-(`app/page.tsx:24`) — visually the same card pattern — doesn't use the
+(`src/components/ui/card.tsx:14`) uses `rounded-xl`, but Home's `NavCard`
+(`src/app/page.tsx:24`) — visually the same card pattern — doesn't use the
 shared `Card` component at all, and hand-rolls its own markup at
 `rounded-2xl`. `AlertDialog` and Login's message box also use
 `rounded-2xl`, while most other card-like surfaces use `rounded-xl`, with
@@ -138,19 +138,19 @@ name — `text-xs` (12px, 56 hits), `text-[11px]` (11), `text-[10px]` (9),
 bespoke arbitrary-value classes.
 
 **Touch target**: `Button`'s shared `icon` size is `h-10 w-10`
-(`components/ui/button.tsx:29`), used consistently by every icon button
+(`src/components/ui/button.tsx:29`), used consistently by every icon button
 in `ListPageHeader`. The one exception is
-**`components/fleet/RecordCard.tsx:64`**, whose delete button overrides
+**`src/components/fleet/RecordCard.tsx:64`**, whose delete button overrides
 this down to `h-9 w-9` via `className` — the only place in the app a
 `Button`'s default size is fought rather than used as-is.
 
 ### 1.4 Cross-component consistency — error banners
 
 7 near-identical inline error-banner blocks exist with no shared
-component, across `app/parking/page.tsx:169`, `app/atelier/page.tsx:257`,
-`app/depot/page.tsx:170`, `app/suivi-rl/page.tsx:340`,
-`app/articles/page.tsx:145`, `app/ds-history/page.tsx:1111`, and
-`app/login/page.tsx:27`.
+component, across `src/app/parking/page.tsx:169`, `src/app/atelier/page.tsx:257`,
+`src/app/depot/page.tsx:170`, `src/app/suivi-rl/page.tsx:340`,
+`src/app/articles/page.tsx:145`, `src/app/ds-history/page.tsx:1111`, and
+`src/app/login/page.tsx:27`.
 
 **4 of them are byte-identical** (Parking/Atelier/Depot/Suivi RL:
 `rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm
@@ -171,7 +171,7 @@ before any code changes.
 
 ### 2.1 Zone/accent color — single source of truth
 
-Create `lib/constants/zones.ts` mapping each zone to exactly one color,
+Create `src/config/zones.ts` mapping each zone to exactly one color,
 consumed identically by `ZoneBadges.tsx`, each page's own
 `accentClassName`, and Home's `NavCard`. Proposed assignments — **zero
 new hues introduced**, only a reassignment of ones already in the
@@ -182,7 +182,7 @@ new hues introduced**, only a reassignment of ones already in the
 | Parking | sky | none — already consistent everywhere |
 | Atelier | amber | fix `ZoneBadges.tsx:18` (currently violet) to match the page/nav consensus |
 | Depot | lime | none — already consistent everywhere |
-| BDD / Suivi RL | **violet** (newly assigned) | fix both `app/suivi-rl/page.tsx` header and Home's `NavCard` (currently amber vs red) to a single, uncontested color — violet is freed up once Atelier's `ZoneBadges` entry is corrected, and reusing it means the palette doesn't grow |
+| BDD / Suivi RL | **violet** (newly assigned) | fix both `src/app/suivi-rl/page.tsx` header and Home's `NavCard` (currently amber vs red) to a single, uncontested color — violet is freed up once Atelier's `ZoneBadges` entry is corrected, and reusing it means the palette doesn't grow |
 | RDV (appointments) | fuchsia | none — uncontested |
 
 This also breaks red's overload: once BDD stops using red as a brand
@@ -213,7 +213,7 @@ not data) instead of `font-mono`.
 | Tier | Radius | Use |
 |---|---|---|
 | control | `rounded-lg` (8px) | inputs, buttons, badges, small chips |
-| surface | `rounded-xl` (12px) | cards, list rows, sheets — what `components/ui/card.tsx` already uses |
+| surface | `rounded-xl` (12px) | cards, list rows, sheets — what `src/components/ui/card.tsx` already uses |
 | container | `rounded-2xl` (16px) | modals/dialogs, Home's nav cards, page-level panels |
 | pill | `rounded-full` | count chips, pill buttons — unchanged |
 
@@ -231,13 +231,13 @@ Add a single `--text-micro` token (~10–11px) to `@theme` to replace the
 
 ### 2.5 Fix touch-target override
 
-Remove the `h-9 w-9` override on `components/fleet/RecordCard.tsx:64`;
+Remove the `h-9 w-9` override on `src/components/fleet/RecordCard.tsx:64`;
 let it use `Button`'s default `icon` size (`h-10 w-10`) like every other
 icon button in the app.
 
 ### 2.6 Shared error-banner component
 
-Extract the 7 inline banners into `components/ui/alert.tsx`, migrate all
+Extract the 7 inline banners into `src/components/ui/alert.tsx`, migrate all
 7 call sites. Every instance must ship with a real `dark:` variant —
 this is what fixes the light-mode bug on Parking/Atelier/Depot/Suivi RL,
 not just the duplication.

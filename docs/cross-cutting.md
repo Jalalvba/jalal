@@ -9,14 +9,14 @@
 
 ## 1. Data fetching — TanStack Query
 
-[`hooks/queryClient.tsx`](../hooks/queryClient.tsx) configures one
+[`src/hooks/queryClient.tsx`](../src/hooks/queryClient.tsx) configures one
 `QueryClient` for the whole app:
 
 ```ts
 defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } }
 ```
 
-Every page's data goes through a `hooks/use*Rows.ts` module exposing the same
+Every page's data goes through a `src/hooks/use*Rows.ts` module exposing the same
 shape: a `useQuery` for rows, plus `useAdd*` / `useUpdate*` / `useDelete*` /
 `useRefresh*` mutations built on a shared `fetchJson<T>()` that throws on
 `{ ok: false }` so the thrown `Error.message` is already the real server-side
@@ -36,7 +36,7 @@ two key families:
   Parking/Atelier/Depot/DS History's plate inputs. Persisting it means only the
   **first page visited in a browser session** ever fetches it.
 
-Cleared on logout by [`lib/clearClientState.ts`](../lib/clearClientState.ts)
+Cleared on logout by [`src/lib/utils/clearClientState.ts`](../src/lib/utils/clearClientState.ts)
 (`0d82965`, audit I3) — a persisted BDD dataset must not survive a sign-out.
 
 ---
@@ -52,7 +52,7 @@ useMutation({ …, meta: { successMessage: "Champ mis à jour" } })
 
 Without `meta.successMessage`, a generic `"Enregistré"` fires. Errors always
 surface the thrown message. Rendering is `sonner` via
-[`components/ui/toaster.tsx`](../components/ui/toaster.tsx).
+[`src/components/ui/toaster.tsx`](../src/components/ui/toaster.tsx).
 
 > **The one deliberate opt-out:** `useReformulateComment()` has no
 > `successMessage` — nothing was saved, so there is nothing to announce. See
@@ -67,7 +67,7 @@ The same commit added `aria-label`s to every icon-only button.
 
 ## 3. Stable row order
 
-[`hooks/useStableRowOrder.ts`](../hooks/useStableRowOrder.ts) (`ed0c3a7`).
+[`src/hooks/useStableRowOrder.ts`](../src/hooks/useStableRowOrder.ts) (`ed0c3a7`).
 
 **The problem:** Atelier/Parking/Depot rows are sorted server-side by
 `TIMESTAMP`. Editing a field **bumps that row's `TIMESTAMP`**, so the refetch it
@@ -102,7 +102,7 @@ manages its own.
 
 ## 5. Loading and empty states
 
-[`components/fleet/LoadingSkeleton.tsx`](../components/fleet/LoadingSkeleton.tsx)
+[`src/components/fleet/LoadingSkeleton.tsx`](../src/components/fleet/LoadingSkeleton.tsx)
 (`9140e07`) is the single skeleton shared by every list page, gated on
 `query.isPending`. Before it, each page had its own spinner or nothing.
 
@@ -113,11 +113,11 @@ manages its own.
 One pattern everywhere: a `Combobox` fed by `usePlateAutocomplete(search, list)`
 with `inputMode="numeric"` so mobile opens the numeric keypad (`f1670a8`).
 
-`components/fleet/PlateSearchInput.tsx` / `PlateFilterInput.tsx` wrap it.
+`src/components/fleet/PlateSearchInput.tsx` / `PlateFilterInput.tsx` wrap it.
 Suggestions stay focused after selection (`a352032`) and the dropdown opens on
 any input (`1997ec7`).
 
-`lib/plateVariants.ts`'s `buildPlateVariants()` generates the format variants
+`src/lib/utils/plateVariants.ts`'s `buildPlateVariants()` generates the format variants
 one vehicle appears under across `parc` / `cp` / the Sheet tabs.
 
 ---
@@ -125,14 +125,14 @@ one vehicle appears under across `parc` / `cp` / the Sheet tabs.
 ## 7. Auth, session, rate limiting
 
 Single-user Google OAuth; authorization is one literal constant,
-`lib/googleOAuth.ts`'s `AUTHORIZED_EMAIL`, checked **after** cryptographic
+`src/lib/auth/googleOAuth.ts`'s `AUTHORIZED_EMAIL`, checked **after** cryptographic
 ID-token verification. **No User model, no allowlist, no registration** —
 deliberate, per [`AGENTS.md`](../AGENTS.md) rule 5.
 
-`proxy.ts` gates every request via an iron-session cookie; only `/login`,
+`src/proxy.ts` gates every request via an iron-session cookie; only `/login`,
 `/api/auth/google*`, and static assets are excluded (anchored matching).
 
-[`lib/rateLimit.ts`](../lib/rateLimit.ts) — Mongo atomic `$inc`, per IP, per
+[`src/lib/http/rateLimit.ts`](../src/lib/http/rateLimit.ts) — Mongo atomic `$inc`, per IP, per
 named bucket. **It fails open** if Mongo is unavailable (`6a82a3e`) rather than
 crashing the request: an outage removes the ceiling instead of the app.
 
@@ -142,10 +142,10 @@ Full detail, file/line-cited: [`SECURITY_VERIFICATION.md`](../SECURITY_VERIFICAT
 
 ## 8. Errors
 
-- [`lib/apiError.ts`](../lib/apiError.ts)'s `ApiError` + `toErrorResponse()` —
+- [`src/lib/http/apiError.ts`](../src/lib/http/apiError.ts)'s `ApiError` + `toErrorResponse()` —
   one mapping for every route. `RowIdentityError extends ApiError(409)`, so no
   route needs its own `instanceof` check.
-- [`components/ui/alert.tsx`](../components/ui/alert.tsx) — the one error banner
+- [`src/components/ui/alert.tsx`](../src/components/ui/alert.tsx) — the one error banner
   (`e321bad`), after an audit found four visually-different banners, two of them
   unreadable in light mode.
 
@@ -158,15 +158,15 @@ refresh failing behind visible stale data stays silent.
 ## 9. Theming
 
 `next-themes` toggles `.dark` on `<html>`. Default is **light 07:00–19:00, dark
-otherwise** (`lib/themeDefault.ts`) until an explicit choice sets
+otherwise** (`src/lib/utils/themeDefault.ts`) until an explicit choice sets
 `localStorage['theme-explicit']`, which then sticks.
 
-`components/fleet/ThemeToggle.tsx` is the **only** toggle (`variant="pill"` or
+`src/components/fleet/ThemeToggle.tsx` is the **only** toggle (`variant="pill"` or
 `"icon"`). Use the semantic tokens — never a literal `zinc-*` / `bg-black` /
 `bg-white`. Documented exceptions (zone accents, translucent washes, modal
 scrims) are listed in [`CLAUDE.md`](../CLAUDE.md) §3.
 
-Fonts: Inter + JetBrains Mono, via `@import` in `app/globals.css`. **Playfair
+Fonts: Inter + JetBrains Mono, via `@import` in `src/app/globals.css`. **Playfair
 Display and Geist were both dropped deliberately** — don't reintroduce either.
 
 ---

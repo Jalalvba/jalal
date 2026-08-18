@@ -1,9 +1,9 @@
 # Suivi RL — filtering, cascade, and the card surface
 
-**Primary files:** [`app/suivi-rl/page.tsx`](../app/suivi-rl/page.tsx) ·
-[`hooks/useBddRows.ts`](../hooks/useBddRows.ts) ·
-[`lib/googleSheetsBdd.ts`](../lib/googleSheetsBdd.ts) ·
-[`lib/types.ts`](../lib/types.ts) · `app/api/bdd/*`
+**Primary files:** [`src/app/suivi-rl/page.tsx`](../src/app/suivi-rl/page.tsx) ·
+[`src/hooks/useBddRows.ts`](../src/hooks/useBddRows.ts) ·
+[`src/lib/sheets/googleSheetsBdd.ts`](../src/lib/sheets/googleSheetsBdd.ts) ·
+[`src/types/index.ts`](../src/types/index.ts) · `src/app/api/bdd/*`
 
 Related: [`bdd-exports.md`](./bdd-exports.md) (the two export buttons' server
 side) · [`ai-gemini.md`](./ai-gemini.md) (the ✨ reformulate button) ·
@@ -18,8 +18,8 @@ A filtered browsing/editing view over the **BDD** Google Sheet tab
 (`gid=868042157`). Despite the name, **there is no "RL" tab** — "RL" is a
 business label for a view over BDD's RL-related columns. This is stated as a
 `DELIBERATE` comment in two places that must stay in agreement:
-[`app/suivi-rl/page.tsx:3`](../app/suivi-rl/page.tsx#L3) and
-[`lib/googleSheetsBdd.ts:26`](../lib/googleSheetsBdd.ts#L26).
+[`src/app/suivi-rl/page.tsx:3`](../src/app/suivi-rl/page.tsx#L3) and
+[`src/lib/sheets/googleSheetsBdd.ts:26`](../src/lib/sheets/googleSheetsBdd.ts#L26).
 
 > **Reconsider only if** the sheet owner ever splits RL data into its own tab.
 
@@ -37,7 +37,7 @@ and the rest read-only.
 | 3 | **Prestataire** | `activePrestataire: string[]` | `emplacementFiltered` | `hasBlankPrestataire` |
 | 4 | **Flag** | `activeFlag: string[]` | `prestataireFiltered` | `hasBlankFlag` |
 
-Defined at [`page.tsx:579-582`](../app/suivi-rl/page.tsx#L579) (state) and
+Defined at [`page.tsx:579-582`](../src/app/suivi-rl/page.tsx#L579) (state) and
 `page.tsx:602-607` (derivation).
 
 ### 2.1 Combination semantics — OR within, AND across
@@ -47,7 +47,7 @@ Defined at [`page.tsx:579-582`](../app/suivi-rl/page.tsx#L579) (state) and
 - **Across axes:** AND. `Flotte ∩ Emplacement ∩ Prestataire ∩ Flag`.
 
 Both are implemented by the single shared predicate `axisMatches()`
-([`page.tsx:559-562`](../app/suivi-rl/page.tsx#L559)):
+([`page.tsx:559-562`](../src/app/suivi-rl/page.tsx#L559)):
 
 ```ts
 function axisMatches(value: string | undefined, selected: string[], normalize?: (v: string) => string): boolean {
@@ -67,7 +67,7 @@ times with four chances to diverge.
 
 **Why `normalize` is a parameter, not built in:** only Flotte needs it —
 `ETAT` is compared case-insensitively (`(v) => v.toUpperCase()`,
-[`page.tsx:606`](../app/suivi-rl/page.tsx#L606)). Emplacement, Prestataire,
+[`page.tsx:606`](../src/app/suivi-rl/page.tsx#L606)). Emplacement, Prestataire,
 and Flag are exact-match. That asymmetry is deliberate: `ETAT` values arrive
 from the sheet with inconsistent casing; the other three come from
 admin-config dropdowns and are already canonical.
@@ -76,7 +76,7 @@ admin-config dropdowns and are already canonical.
 
 An empty array means "no filter on this axis". For Emplacement/Prestataire/Flag
 that literally means *pass everything through*. **Flotte is different**
-([`page.tsx:602-607`](../app/suivi-rl/page.tsx#L602)):
+([`page.tsx:602-607`](../src/app/suivi-rl/page.tsx#L602)):
 
 ```ts
 if (activeFleet.length === 0) {
@@ -96,7 +96,7 @@ via their own explicit chip.
 ### 2.3 Default state
 
 `activeFleet` initialises to `[ETAT_INTERNE]`
-([`page.tsx:579-582`](../app/suivi-rl/page.tsx#L579)) — **not** empty. First paint
+([`page.tsx:579-582`](../src/app/suivi-rl/page.tsx#L579)) — **not** empty. First paint
 shows INTERNE only. The other three axes start empty.
 
 `e2e/suivi-rl.spec.ts:20` depends on this default; changing it breaks that test.
@@ -133,7 +133,7 @@ const visibleEmplacements = useMemo(
 
 ### 3.1 Selecting an upstream axis resets everything downstream
 
-[`page.tsx:710-724`](../app/suivi-rl/page.tsx#L710):
+[`page.tsx:710-724`](../src/app/suivi-rl/page.tsx#L710):
 
 ```ts
 function selectFleet(f)        { setActiveFleet(f);        setActiveEmplacement([]); setActivePrestataire([]); setActiveFlag([]); }
@@ -148,7 +148,7 @@ no longer reachable — producing a filter chip that is *selected* but not
 cheap, legible fix.
 
 Flag (axis 4) has nothing downstream, so it calls `setActiveFlag` directly
-([`page.tsx:824`](../app/suivi-rl/page.tsx#L824)) rather than a `select*`
+([`page.tsx:824`](../src/app/suivi-rl/page.tsx#L824)) rather than a `select*`
 wrapper. That asymmetry is intentional, not an oversight.
 
 ---
@@ -170,7 +170,7 @@ being rendered, and no BDD field legitimately contains the literal
 It is deliberately **kept out of `BDD_HEADERS` / `BddRow` entirely** — it is a
 filter-axis UI concept, never a field value, never written to the sheet.
 
-`displayAxisValue()` ([`page.tsx:551-553`](../app/suivi-rl/page.tsx#L551))
+`displayAxisValue()` ([`page.tsx:551-553`](../src/app/suivi-rl/page.tsx#L551))
 maps it to the human-readable `"Non renseigné"` for the PDF/Excel header line
 and the download filename slug.
 
@@ -184,10 +184,10 @@ i.e. post-cascade, not the full table:
 
 | Axis | Flag | Computed over | Code |
 |---|---|---|---|
-| Flotte | `hasBlankFleet` | `rows` | [`page.tsx:625`](../app/suivi-rl/page.tsx#L625) |
-| Emplacement | `hasBlankEmplacement` | `fleetFiltered` | [`page.tsx:642`](../app/suivi-rl/page.tsx#L642) |
-| Prestataire | `hasBlankPrestataire` | `emplacementFiltered` | [`page.tsx:642`](../app/suivi-rl/page.tsx#L642) |
-| Flag | `hasBlankFlag` | `prestataireFiltered` | [`page.tsx:653`](../app/suivi-rl/page.tsx#L653) |
+| Flotte | `hasBlankFleet` | `rows` | [`page.tsx:625`](../src/app/suivi-rl/page.tsx#L625) |
+| Emplacement | `hasBlankEmplacement` | `fleetFiltered` | [`page.tsx:642`](../src/app/suivi-rl/page.tsx#L642) |
+| Prestataire | `hasBlankPrestataire` | `emplacementFiltered` | [`page.tsx:642`](../src/app/suivi-rl/page.tsx#L642) |
+| Flag | `hasBlankFlag` | `prestataireFiltered` | [`page.tsx:653`](../src/app/suivi-rl/page.tsx#L653) |
 
 "Blank" means `!value?.trim()` — so `undefined`, `""`, and `"   "` all count.
 
@@ -218,12 +218,12 @@ Flag already derived from live data.
 **The bug that caused:** a config-only value with zero live rows rendered as a
 clickable chip that always returned nothing. `ANNULE` / `ANNULEE` are the
 confirmed real instances — both are in `ETAT_OPTIONS_FALLBACK`
-([`lib/types.ts:341`](../lib/types.ts#L341)) and neither had any live row.
+([`src/types/index.ts:341`](../src/types/index.ts#L341)) and neither had any live row.
 
 **What did *not* change, and must not:** `options.ETAT_OPTIONS` and
 `options.EMPLACEMENT_OPTIONS` are still used by the per-row `InlineEditSelect`
-editors ([`page.tsx:307`](../app/suivi-rl/page.tsx#L307),
-[`page.tsx:334`](../app/suivi-rl/page.tsx#L334)). **Editing a row must be able
+editors ([`page.tsx:307`](../src/app/suivi-rl/page.tsx#L307),
+[`page.tsx:334`](../src/app/suivi-rl/page.tsx#L334)). **Editing a row must be able
 to set a value no other row currently has** — so the editor needs the full
 admin-config list, not the data-derived one. The two lists serve different jobs:
 
@@ -239,7 +239,7 @@ admin-config list, not the data-derived one. The two lists serve different jobs:
 
 ## 6. The "TOUS" chip
 
-`AllChip` ([`page.tsx:65`](../app/suivi-rl/page.tsx#L65)) is a plain
+`AllChip` ([`page.tsx:65`](../src/app/suivi-rl/page.tsx#L65)) is a plain
 `<button>` rendered **outside** each `ToggleGroup`, not as a `ToggleGroupItem`.
 
 **Why:** Radix's `type="multiple"` ToggleGroup treats its `value` as the set of
@@ -254,7 +254,7 @@ Active state is `activeX.length === 0`; clicking it calls the axis's
 
 ## 7. Search bypasses the chip cascade
 
-[`page.tsx:673-677`](../app/suivi-rl/page.tsx#L673):
+[`page.tsx:673-677`](../src/app/suivi-rl/page.tsx#L673):
 
 ```ts
 const searched = useMemo(() => {
@@ -278,7 +278,7 @@ matching** on this page — `searched` reads `r.IMM` only.
 
 ### 7.1 The export summary mirrors the bypass
 
-`activeFilters` ([`page.tsx:687-695`](../app/suivi-rl/page.tsx#L687)) returns
+`activeFilters` ([`page.tsx:687-695`](../src/app/suivi-rl/page.tsx#L687)) returns
 `[]` when a search term is present. Without this, an exported PDF would print
 "Filtres actifs — Flotte: INTERNE" on a document whose rows ignored that filter
 entirely.
@@ -293,8 +293,8 @@ separate entries.
 
 ### 8.1 Editable fields — 7, per-field inline commit
 
-`FieldKey` ([`page.tsx:209`](../app/suivi-rl/page.tsx#L209)) matches
-`BDD_EDITABLE_FIELDS` ([`lib/types.ts:193-201`](../lib/types.ts#L193)):
+`FieldKey` ([`page.tsx:209`](../src/app/suivi-rl/page.tsx#L209)) matches
+`BDD_EDITABLE_FIELDS` ([`src/types/index.ts:193-201`](../src/types/index.ts#L193)):
 
 `ETAT` · `prestataire` · `flag` · `Emplacement` · `Catégorie` · `commentaire` ·
 `Technicien`
@@ -305,17 +305,17 @@ feedback. **There is no card-level save button** — this replaced an
 expand-then-submit form in `8199db9`.
 
 The server enforces the same allowlist independently
-(`lib/googleSheetsBdd.ts`'s `editableFieldSet`); the client list is for the UI,
+(`src/lib/sheets/googleSheetsBdd.ts`'s `editableFieldSet`); the client list is for the UI,
 not the security boundary.
 
 > **Counts to keep honest:** **7** editable fields out of **28** `BDD_HEADERS`
 > entries. Both numbers were stale in `CLAUDE.md` §6 ("6-field") and
-> `lib/types.ts:189` ("27 real columns") until corrected — `Emplacement` joined
+> `src/types/index.ts:189` ("27 real columns") until corrected — `Emplacement` joined
 > the allowlist in `3d9bd87` and neither count was updated with it.
 
 ### 8.2 Read-only fields
 
-`READONLY_HEADERS` ([`page.tsx:218`](../app/suivi-rl/page.tsx#L218)) is
+`READONLY_HEADERS` ([`page.tsx:218`](../src/app/suivi-rl/page.tsx#L218)) is
 `BDD_HEADERS` minus: `IMM`/`date`/`client`/`modele` (promoted into the card
 header/subtitle), the 7 editable fields, and `BDD_ZONE_DETECTION_HEADERS`.
 
@@ -328,19 +328,19 @@ like a human's entry.
 ### 8.3 INTROUVABLE alert styling
 
 `row.Emplacement === EMPLACEMENT_INTROUVABLE` tints the whole card red and adds
-a `⚠ Introuvable` badge ([`page.tsx:259`](../app/suivi-rl/page.tsx#L259)).
+a `⚠ Introuvable` badge ([`page.tsx:259`](../src/app/suivi-rl/page.tsx#L259)).
 
 > **Known fragility (documented, not fixed):** `Emplacement` is admin-editable
 > at `/admin/config`. Renaming or deleting the exact value `"INTROUVABLE"` there
 > silently disables this styling — no error, no warning, nothing logged.
-> `EMPLACEMENT_INTROUVABLE` ([`lib/types.ts:323`](../lib/types.ts#L323)) exists
+> `EMPLACEMENT_INTROUVABLE` ([`src/types/index.ts:323`](../src/types/index.ts#L323)) exists
 > so there is *one* place to update, not to remove the fragility. Same caveat
 > applies to the five `ETAT_*` constants. See
 > [`config-options.md`](./config-options.md#5-known-limitations).
 
 ### 8.4 ETAT badge colours
 
-`etatBadgeClass()` ([`lib/types.ts:383-389`](../lib/types.ts#L383)) is shared
+`etatBadgeClass()` ([`src/types/index.ts:383-389`](../src/types/index.ts#L383)) is shared
 with DS History. It replaced this page's own two-branch
 (EXTERNE-vs-everything-else) ternary, which rendered
 `DISPONIBLE`/`ANNULE`/`ANNULEE` identically to `INTERNE`.
@@ -372,10 +372,10 @@ error (`error`) surfaces unconditionally.
    `number` at runtime despite `BddRow` declaring `string` — real vehicle models
    are digit strings (Peugeot 208 / 508 / 2008 / 3008). Every consumer must
    `String()`-coerce: the PDF payload
-   ([`page.tsx:119`](../app/suivi-rl/page.tsx#L119)), the Excel payload
-   ([`page.tsx:174`](../app/suivi-rl/page.tsx#L174)), the reformulate context
-   ([`page.tsx:378`](../app/suivi-rl/page.tsx#L378)), and
-   `ReadonlyFieldList` ([`page.tsx:394`](../app/suivi-rl/page.tsx#L394)).
+   ([`page.tsx:119`](../src/app/suivi-rl/page.tsx#L119)), the Excel payload
+   ([`page.tsx:174`](../src/app/suivi-rl/page.tsx#L174)), the reformulate context
+   ([`page.tsx:378`](../src/app/suivi-rl/page.tsx#L378)), and
+   `ReadonlyFieldList` ([`page.tsx:394`](../src/app/suivi-rl/page.tsx#L394)).
    Discovered when one such row made the export route's strict `isValidRow()`
    reject the **whole batch** — fixed in `77f9eef`.
    → *Any new consumer of a BddRow field must coerce.* This is the single most
@@ -397,7 +397,7 @@ error (`error`) surfaces unconditionally.
    matches zero rows, the export header still lists it. Correct behaviour (the
    report should say what was asked for) but occasionally surprising.
 
-6. **`alert()` for export failures.** [`page.tsx:148`](../app/suivi-rl/page.tsx#L148)
+6. **`alert()` for export failures.** [`page.tsx:148`](../src/app/suivi-rl/page.tsx#L148)
    and `:200` use a native `alert()`, unlike every write path which uses the
    `sonner` toast. Inconsistent with the rest of the app.
 

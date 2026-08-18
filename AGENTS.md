@@ -31,20 +31,20 @@ for it.
 
 3. **Google Sheets mutation safety: `verifyRowIdentity()` is mandatory.**
    Every Sheets update/delete route that acts on a client-supplied
-   `rowIndex` must call `lib/googleSheetsClient.ts`'s `verifyRowIdentity()`
+   `rowIndex` must call `src/lib/sheets/googleSheetsClient.ts`'s `verifyRowIdentity()`
    before writing — it re-reads the row's key cell and refuses the write
    (409) if another change shifted rows in between. See
    [`CLAUDE.md` §4](./CLAUDE.md#4-authentication--security) and
    [`SECURITY_VERIFICATION.md` §4](./SECURITY_VERIFICATION.md#4-data-write-safety).
 
 4. **MongoDB regex safety: `escapeRegex()` is mandatory.** Any `$regex`
-   filter built from user input must be passed through `lib/regex.ts`'s
+   filter built from user input must be passed through `src/lib/utils/regex.ts`'s
    `escapeRegex()` first — never interpolate raw user input into a
    `$regex` filter. Closes both regex-injection and ReDoS. See
    [`SECURITY_VERIFICATION.md` §5](./SECURITY_VERIFICATION.md#5-input-validation--injection-protection).
 
 5. **Auth model: single hardcoded user.** Authorization is one literal
-   email constant — `lib/googleOAuth.ts`'s `AUTHORIZED_EMAIL` — checked
+   email constant — `src/lib/auth/googleOAuth.ts`'s `AUTHORIZED_EMAIL` — checked
    after cryptographic ID-token verification. There is no User model, no
    database-backed allowlist, and no registration flow; this is a
    deliberate design decision, not a gap to "fix" by adding one. See

@@ -19,24 +19,24 @@ under `**/__tests__/*.test.ts`.
 
 | File | What it locks in |
 |---|---|
-| `lib/__tests__/regex.test.ts` | `escapeRegex()` — regex-injection/ReDoS safety (pre-existing) |
-| `lib/__tests__/rdvIdentity.test.ts` | `resolveUniqueMatch()` — RDV row identity resolution (pre-existing) |
-| `lib/__tests__/googleSheetsClient.test.ts` | `verifyRowIdentity()` — stale-row-conflict detection (pre-existing) |
-| `lib/__tests__/plateVariants.test.ts` | `buildPlateVariants()` — the WW-prefix/suffix matching every zone-detection badge and BDD/RL plate search depends on |
-| `lib/__tests__/sheetFieldOptions.test.ts` | `getAllSheetFieldOptions()`'s fallback-to-hardcoded-defaults on Mongo failure (whole collection down, one query failing, and per-key partial fallback), plus `updateFieldOptions()`'s validation (empty list, duplicate value, invalid color) |
-| `lib/__tests__/rateLimit.test.ts` | `checkRateLimit()`/`rateLimitOrNull()` failing OPEN (allowing the request) when Mongo throws — the actual root cause of the BDD export 500 found via Vercel's production logs |
-| `app/api/bdd/export/__tests__/isValidRow.test.ts` | Row validation rejects a non-string field (the Peugeot 208/508/2008/3008 "modele as a raw number" bug) |
-| `app/api/bdd/export/__tests__/route.test.ts` | Route-level validation (empty rows, >2000 rows, malformed filters, bad JSON) and the happy path — asserts a real `%PDF`-prefixed byte stream comes back, not just a 200 |
-| `app/api/bdd/export/__tests__/route.mongo-down.test.ts` | The rate-limiter fix verified **at the exact route where it was reported**, with the real (unmocked) `lib/rateLimit.ts` and only Mongo mocked to fail |
-| `app/api/trigger-import/__tests__/route.test.ts` | Missing token, rate-limited, network failure, 401, malformed response, successful passthrough, and graceful degradation to the compact step summary when a run's status lookup fails |
-| `app/api/import-status/__tests__/route.test.ts` | Missing `run_id`, successful lookup, 404 passthrough, network failure, rate-limited — plus a parameterised pass over all five real `ImportPipelineRunStatus` values and one unrecognised one, the regression guard for `ef630e0` (`skipped_absent`/`skipped_unchanged` used to coerce to `"failed"`) |
-| `components/fleet/__tests__/buildSummary.test.ts` | Every `ImportPipelineRunStatus` combination (success / failed / skipped_unchanged / skipped_absent / mixed) — the exact status-string distinction a past bug collapsed into a bare `"skipped"` |
-| `lib/__tests__/proxy.test.ts` | The auth boundary itself — an unauthenticated API request gets 401 JSON, an unauthenticated page request redirects to `/login`, and a real sealed session cookie passes through |
-| `lib/__tests__/googleSheetsBdd.test.ts` | `updateSheetRow()` calls `verifyRowIdentity()` before writing and refuses the write on a stale row, plus `BDD_EDITABLE_FIELDS` allowlist enforcement |
-| `app/api/auth/google/callback/__tests__/authorizedEmail.test.ts` | `AUTHORIZED_EMAIL` enforcement — a verified non-authorized email creates no session, the exact authorized email logs in, and `email_verified: false` is rejected even for the right address |
-| `lib/__tests__/adminConfigKeys.test.ts` | `/admin/config`'s `PLAIN_KEYS`/`COLORED_KEYS` are derived from `OPTION_KEYS`, not hand-copied (I4) — includes a test asserting the old hand-copied pattern would have silently missed a newly-added key |
-| `lib/__tests__/etatBadgeClass.test.ts` | The shared ETAT colour mapping (M4) — every `ETAT_OPTIONS_FALLBACK` value returns a class, `ANNULE` and `ANNULEE` get identical treatment (the gap ds-history's old `etatStyle()` had), DISPONIBLE/INTERNE/EXTERNE stay visually distinct, case-insensitivity, and an unknown value falls back to `bg-muted` rather than a literal zinc shade |
-| `lib/__tests__/rdvExportColumns.test.ts` | RDV's export columns are derived from `RDV_HEADERS` minus `Date` (M2), using the real sheet header text `CONVOYEUR` rather than the hand-copied `Convoyeur` that had drifted |
+| `src/lib/__tests__/regex.test.ts` | `escapeRegex()` — regex-injection/ReDoS safety (pre-existing) |
+| `src/lib/__tests__/rdvIdentity.test.ts` | `resolveUniqueMatch()` — RDV row identity resolution (pre-existing) |
+| `src/lib/__tests__/googleSheetsClient.test.ts` | `verifyRowIdentity()` — stale-row-conflict detection (pre-existing) |
+| `src/lib/__tests__/plateVariants.test.ts` | `buildPlateVariants()` — the WW-prefix/suffix matching every zone-detection badge and BDD/RL plate search depends on |
+| `src/lib/__tests__/sheetFieldOptions.test.ts` | `getAllSheetFieldOptions()`'s fallback-to-hardcoded-defaults on Mongo failure (whole collection down, one query failing, and per-key partial fallback), plus `updateFieldOptions()`'s validation (empty list, duplicate value, invalid color) |
+| `src/lib/__tests__/rateLimit.test.ts` | `checkRateLimit()`/`rateLimitOrNull()` failing OPEN (allowing the request) when Mongo throws — the actual root cause of the BDD export 500 found via Vercel's production logs |
+| `src/app/api/bdd/export/__tests__/isValidRow.test.ts` | Row validation rejects a non-string field (the Peugeot 208/508/2008/3008 "modele as a raw number" bug) |
+| `src/app/api/bdd/export/__tests__/route.test.ts` | Route-level validation (empty rows, >2000 rows, malformed filters, bad JSON) and the happy path — asserts a real `%PDF`-prefixed byte stream comes back, not just a 200 |
+| `src/app/api/bdd/export/__tests__/route.mongo-down.test.ts` | The rate-limiter fix verified **at the exact route where it was reported**, with the real (unmocked) `src/lib/http/rateLimit.ts` and only Mongo mocked to fail |
+| `src/app/api/trigger-import/__tests__/route.test.ts` | Missing token, rate-limited, network failure, 401, malformed response, successful passthrough, and graceful degradation to the compact step summary when a run's status lookup fails |
+| `src/app/api/import-status/__tests__/route.test.ts` | Missing `run_id`, successful lookup, 404 passthrough, network failure, rate-limited — plus a parameterised pass over all five real `ImportPipelineRunStatus` values and one unrecognised one, the regression guard for `ef630e0` (`skipped_absent`/`skipped_unchanged` used to coerce to `"failed"`) |
+| `src/components/fleet/__tests__/buildSummary.test.ts` | Every `ImportPipelineRunStatus` combination (success / failed / skipped_unchanged / skipped_absent / mixed) — the exact status-string distinction a past bug collapsed into a bare `"skipped"` |
+| `src/lib/__tests__/proxy.test.ts` | The auth boundary itself — an unauthenticated API request gets 401 JSON, an unauthenticated page request redirects to `/login`, and a real sealed session cookie passes through |
+| `src/lib/__tests__/googleSheetsBdd.test.ts` | `updateSheetRow()` calls `verifyRowIdentity()` before writing and refuses the write on a stale row, plus `BDD_EDITABLE_FIELDS` allowlist enforcement |
+| `src/app/api/auth/google/callback/__tests__/authorizedEmail.test.ts` | `AUTHORIZED_EMAIL` enforcement — a verified non-authorized email creates no session, the exact authorized email logs in, and `email_verified: false` is rejected even for the right address |
+| `src/lib/__tests__/adminConfigKeys.test.ts` | `/admin/config`'s `PLAIN_KEYS`/`COLORED_KEYS` are derived from `OPTION_KEYS`, not hand-copied (I4) — includes a test asserting the old hand-copied pattern would have silently missed a newly-added key |
+| `src/lib/__tests__/etatBadgeClass.test.ts` | The shared ETAT colour mapping (M4) — every `ETAT_OPTIONS_FALLBACK` value returns a class, `ANNULE` and `ANNULEE` get identical treatment (the gap ds-history's old `etatStyle()` had), DISPONIBLE/INTERNE/EXTERNE stay visually distinct, case-insensitivity, and an unknown value falls back to `bg-muted` rather than a literal zinc shade |
+| `src/lib/__tests__/rdvExportColumns.test.ts` | RDV's export columns are derived from `RDV_HEADERS` minus `Date` (M2), using the real sheet header text `CONVOYEUR` rather than the hand-copied `Convoyeur` that had drifted |
 
 **Mocking approach:** `vi.mock()` at the module boundary (`@/lib/mongo`,
 `@/lib/rateLimit`, `global.fetch`), not a database emulator. Justification:
@@ -52,10 +52,10 @@ reach for `mongodb-memory-server` then rather than retrofitting it now.
 
 `vitest.config.mts` sets dummy `MONGODB_URI`/`MONGODB_DB`/
 `GOOGLE_SERVICE_ACCOUNT_KEY_B64` env vars — not because tests use them, but
-because `lib/mongo.ts`/`lib/googleSheetsClient.ts` throw at *module import
+because `src/lib/mongo/client.ts`/`src/lib/sheets/googleSheetsClient.ts` throw at *module import
 time* if they're unset, and several routes under test import those modules
-transitively (through `lib/rateLimit.ts`) even in files that mock them
-away. The dummy `MONGODB_URI` also means `lib/mongo.ts`'s module-level
+transitively (through `src/lib/http/rateLimit.ts`) even in files that mock them
+away. The dummy `MONGODB_URI` also means `src/lib/mongo/client.ts`'s module-level
 `client.connect()` fires a real (never-awaited, always-losing) connection
 attempt to an unreachable host once per test process — harmless (no test
 ever calls the real `getCollection()`), same pattern already established
@@ -95,7 +95,7 @@ pnpm start`) wouldn't carry this tax, at the cost of losing the dev
 server's fast-refresh loop while iterating on a spec.
 
 **Auth**: `e2e/helpers/auth.ts` seals a real iron-session cookie the same
-way `lib/session.ts` expects to unseal one — the formalized version of the
+way `src/lib/auth/session.ts` expects to unseal one — the formalized version of the
 `sealData(...)` script every manual Playwright pass this session wrote
 from scratch. `e2e/fixtures.ts` wraps `@playwright/test`'s own `test`/
 `expect` to apply that cookie automatically; every spec file imports from
@@ -135,7 +135,7 @@ reality within days.
   above) but means a spec can't assert something specific doesn't exist
   in the data without checking first.
 - **No coverage of the Sheets read/write modules themselves**
-  (`lib/googleSheets{Bdd,Atelier,Parking,Depot,Rdv,RdvMonthly}.ts`) beyond
+  (`src/lib/sheets/googleSheets{Bdd,Atelier,Parking,Depot,Rdv,RdvMonthly}.ts`) beyond
   what `verifyRowIdentity`/`resolveUniqueMatch` already had. Testing these
   properly means mocking the `sheets_v4.Sheets` client per module, which
   wasn't done in this pass — a real gap, not an oversight to hide.

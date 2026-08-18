@@ -5,9 +5,9 @@
 > [`SECURITY_VERIFICATION.md`](../SECURITY_VERIFICATION.md) §4. This page maps
 > the layer and records the decisions that aren't captured there.
 
-**Files:** [`lib/googleSheetsClient.ts`](../lib/googleSheetsClient.ts) (shared
-core) · `lib/googleSheets{Bdd,Parking,Atelier,Depot,Rdv,RdvMonthly,Rl,Import}.ts`
-(one per tab) · [`lib/rdvIdentity.ts`](../lib/rdvIdentity.ts)
+**Files:** [`src/lib/sheets/googleSheetsClient.ts`](../src/lib/sheets/googleSheetsClient.ts) (shared
+core) · `src/lib/sheets/googleSheets{Bdd,Parking,Atelier,Depot,Rdv,RdvMonthly,Rl,Import}.ts`
+(one per tab) · [`src/lib/sheets/rdvIdentity.ts`](../src/lib/sheets/rdvIdentity.ts)
 
 ---
 
@@ -16,12 +16,12 @@ core) · `lib/googleSheets{Bdd,Parking,Atelier,Depot,Rdv,RdvMonthly,Rl,Import}.t
 One shared JWT client, one module per Sheet tab. **Never per-tab copies of the
 client, the cache, or the error helpers.**
 
-`lib/googleSheetsClient.ts` owns:
+`src/lib/sheets/googleSheetsClient.ts` owns:
 
 | Export | Purpose |
 |---|---|
 | `getSheetsClient()` | Singleton JWT client (cached on `global`) |
-| `withCache` / `invalidateCache` | Generic `unstable_cache` wrapper, keyed by string — **not** Sheets-specific; `lib/sheetFieldOptions.ts` reuses it |
+| `withCache` / `invalidateCache` | Generic `unstable_cache` wrapper, keyed by string — **not** Sheets-specific; `src/lib/mongo/sheetFieldOptions.ts` reuses it |
 | `verifyRowIdentity()` / `RowIdentityError` | The write guard, §3 |
 | `serialToUTCDate` · `dateToSerial` · `nowToSerial` · `isoDateToSerial` | Sheet-serial ↔ Date |
 | `fmtDateOnlySlash` · `fmtDateOnlyDash` · `fmtDateTime` | Display formatting |
@@ -55,7 +55,7 @@ appointment calendars, which live in `GOOGLE_RDV_SHEETS_ID`.
 | RL / Import | `googleSheetsRl.ts`, `googleSheetsImport.ts` | read-only, feed DS History |
 
 Every tab's header row was **confirmed by a live `spreadsheets.values.get()`**,
-recorded in [`lib/types.ts`](../lib/types.ts)'s per-tab comment blocks. Those
+recorded in [`src/types/index.ts`](../src/types/index.ts)'s per-tab comment blocks. Those
 comments are the record of what was actually read — not assumptions.
 
 **Headers are read live at runtime**, not from `BDD_HEADERS`. The hardcoded
@@ -94,7 +94,7 @@ RDV rows are **not** keyed by plate — the same `Matricule` legitimately appear
 across many appointments, and there's no `TIMESTAMP` to bump. So a key-cell
 check can't disambiguate.
 
-Instead, `lib/rdvIdentity.ts`'s `resolveUniqueMatch()` re-resolves the row by
+Instead, `src/lib/sheets/rdvIdentity.ts`'s `resolveUniqueMatch()` re-resolves the row by
 **full-content match**, returning `null` on no-match and **throwing on an
 ambiguous match rather than guessing** (`b11035b`). Update and clear never trust
 a client-held `rowIndex`.

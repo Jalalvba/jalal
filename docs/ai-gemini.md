@@ -1,17 +1,17 @@
 # Gemini integration — email drafting and comment reformulation
 
 **Primary files:**
-[`app/api/generate-email/route.ts`](../app/api/generate-email/route.ts) ·
-[`app/api/bdd/reformulate-comment/route.ts`](../app/api/bdd/reformulate-comment/route.ts)
-· client: [`hooks/useBddRows.ts:98`](../hooks/useBddRows.ts#L98) and
+[`src/app/api/generate-email/route.ts`](../src/app/api/generate-email/route.ts) ·
+[`src/app/api/bdd/reformulate-comment/route.ts`](../src/app/api/bdd/reformulate-comment/route.ts)
+· client: [`src/hooks/useBddRows.ts:98`](../src/hooks/useBddRows.ts#L98) and
 `ReformulateCommentButton` in
-[`app/suivi-rl/page.tsx:408`](../app/suivi-rl/page.tsx#L408) · types:
-[`lib/types.ts:758-785`](../lib/types.ts#L758)
+[`src/app/suivi-rl/page.tsx:408`](../src/app/suivi-rl/page.tsx#L408) · types:
+[`src/types/index.ts:758-785`](../src/types/index.ts#L758)
 
 Two routes, one provider. `reformulate-comment` was built second and
 deliberately mirrors `generate-email`'s structure — it defers to that file for
 the model rationale rather than restating it
-([`reformulate-comment/route.ts:1`](../app/api/bdd/reformulate-comment/route.ts#L1)).
+([`reformulate-comment/route.ts:1`](../src/app/api/bdd/reformulate-comment/route.ts#L1)).
 
 ---
 
@@ -44,7 +44,7 @@ body:    { contents: [{ parts: [{ text }] }],
 **Why the different rate limits:** email drafting is a deliberate one-at-a-time
 action; reformulation sits next to every comment field on a list page where ~85
 cards are on screen, so a lower ceiling guards against a click-storm. Both are
-per-IP, Mongo-backed atomic `$inc` (see [`lib/rateLimit.ts`](../lib/rateLimit.ts)).
+per-IP, Mongo-backed atomic `$inc` (see [`src/lib/http/rateLimit.ts`](../src/lib/http/rateLimit.ts)).
 
 **Why `temperature` differs:** 0.25 for drafting a whole email from a short
 prompt (needs some freedom); 0.3 for polishing text that already exists. Both
@@ -63,7 +63,7 @@ const DEFAULT_MODEL = "gemini-flash-lite-latest";
 ### 2.1 Why a rolling alias and not a pinned snapshot
 
 Recorded verbatim at
-[`generate-email/route.ts:5`](../app/api/generate-email/route.ts#L5):
+[`generate-email/route.ts:5`](../src/app/api/generate-email/route.ts#L5):
 
 - It is the **cheapest active Flash-Lite tier**, on Gemini's free tier.
 - The alias was **verified live** against `GET /v1beta/models/gemini-flash-lite-latest`
@@ -96,7 +96,7 @@ const model = body.model?.trim() || DEFAULT_MODEL;   // generate-email:64
 Interpolated into the URL via `encodeURIComponent()` (`:82`). Deliberate: *"Model
 is never a secret and stays client-overridable per the route's contract — only
 the API key is locked to the server-side env var."* The route is gated by
-`proxy.ts`, so the only party who can set it is the single authorised user.
+`src/proxy.ts`, so the only party who can set it is the single authorised user.
 
 `reformulate-comment` **hardcodes** `DEFAULT_MODEL` into its URL — no override,
 no `encodeURIComponent` needed. Deliberate asymmetry: it's called from a fixed
@@ -116,7 +116,7 @@ if (!apiKey) {
 }
 ```
 
-**Why not module scope:** `lib/googleSheetsBdd.ts` throws at import time on a
+**Why not module scope:** `src/lib/sheets/googleSheetsBdd.ts` throws at import time on a
 missing `GOOGLE_SHEETS_ID` — appropriate for a variable the whole app needs.
 `GEMINI_API_KEY` powers two optional features; a missing key must degrade
 *those two routes*, not prevent the app from booting.
@@ -137,7 +137,7 @@ Clients only ever see the four fixed messages in §5.
 
 ### 4.1 The six context fields
 
-`ReformulateCommentContext` ([`lib/types.ts:768-775`](../lib/types.ts#L768)) —
+`ReformulateCommentContext` ([`src/types/index.ts:768-775`](../src/types/index.ts#L768)) —
 all optional:
 
 | Key | BDD field | Sent as |
@@ -149,7 +149,7 @@ all optional:
 | `categorie` | `Catégorie` | `Catégorie` |
 | `technicien` | `Technicien` | `Technicien` |
 
-Populated at [`page.tsx:378`](../app/suivi-rl/page.tsx#L378), each
+Populated at [`page.tsx:378`](../src/app/suivi-rl/page.tsx#L378), each
 `String()`-coerced — see [`suivi-rl.md` §10.1](./suivi-rl.md#10-known-limitations--edge-cases).
 
 **What is deliberately NOT sent:** `IMM`, `client`, `date`, `Emplacement`, and
@@ -163,7 +163,7 @@ exports, but it describes where the vehicle sits, not what the comment says.
 
 ### 4.2 The system instruction — verbatim
 
-[`reformulate-comment/route.ts:20`](../app/api/bdd/reformulate-comment/route.ts#L20):
+[`reformulate-comment/route.ts:20`](../src/app/api/bdd/reformulate-comment/route.ts#L20):
 
 ```
 You are reformulating a short internal fleet-maintenance comment (Commentaire)
@@ -190,7 +190,7 @@ invent · don't change meaning · don't wrap the output.** The context is
 disambiguation input, not content to merge in.
 
 `generate-email`'s instruction is one line by comparison
-([`route.ts:27`](../app/api/generate-email/route.ts#L27)):
+([`route.ts:27`](../src/app/api/generate-email/route.ts#L27)):
 
 ```
 You draft short, professional business emails. Output only the email body —
@@ -199,7 +199,7 @@ no preamble, no commentary.
 
 ### 4.3 Blank-context handling — `buildUserTurn()`
 
-[`route.ts:38`](../app/api/bdd/reformulate-comment/route.ts#L38):
+[`route.ts:38`](../src/app/api/bdd/reformulate-comment/route.ts#L38):
 
 ```ts
 const contextLine = pairs
@@ -267,7 +267,7 @@ matter; a one-line comment's does not.
 
 ## 6. Review-before-save UX
 
-`ReformulateCommentButton` — [`page.tsx:408`](../app/suivi-rl/page.tsx#L408).
+`ReformulateCommentButton` — [`page.tsx:408`](../src/app/suivi-rl/page.tsx#L408).
 
 ```
 ✨ click
@@ -292,7 +292,7 @@ matter; a one-line comment's does not.
 > Confirmer.
 
 Stated three times in the code — the route header (`:5-7`), the hook JSDoc
-([`useBddRows.ts:93`](../hooks/useBddRows.ts#L93)), and the component
+([`useBddRows.ts:93`](../src/hooks/useBddRows.ts#L93)), and the component
 (`page.tsx:404-407`) — because it is the property that makes the rolling-model-alias
 risk (§2.2) acceptable.
 
@@ -315,7 +315,7 @@ Specific decisions:
 - The dialog description reads *"Suggestion générée par IA — vérifiez avant
   d'enregistrer."* — the AI origin is disclosed in the UI, not just in code.
 
-`useReformulateComment()` ([`useBddRows.ts:98`](../hooks/useBddRows.ts#L98)) is
+`useReformulateComment()` ([`useBddRows.ts:98`](../src/hooks/useBddRows.ts#L98)) is
 the **only** mutation in that file with **no** `meta.successMessage` and **no**
 `invalidateQueries`. Both omissions are correct: nothing changed, so there is
 nothing to announce and no cache to invalidate.
@@ -324,7 +324,7 @@ nothing to announce and no cache to invalidate.
 
 ## 7. `generate-email` has no UI caller
 
-**Verified** by grep across `app/`, `components/`, `hooks/`, `lib/`, `e2e/`:
+**Verified** by grep across `src/app/`, `src/components/`, `src/hooks/`, `src/lib/`, `e2e/`:
 the only references to `/api/generate-email` are inside the route file itself.
 
 It is a **deliberately headless API surface** — `cb13749` describes it as *"a
