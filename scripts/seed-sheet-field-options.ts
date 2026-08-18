@@ -55,7 +55,7 @@ import {
   PRESTATAIRE_OPTIONS_FALLBACK,
   RDV_CONVOYEURS_FALLBACK,
   type OptionKey,
-} from "../lib/types";
+} from "../src/lib/types";
 
 function loadEnvLocal(): Record<string, string> {
   const path = resolve(process.cwd(), ".env.local");
