@@ -14,6 +14,7 @@
     "test:all": "vitest run && playwright test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.119.0",
     "@radix-ui/react-alert-dialog": "^1.1.19",
     "@radix-ui/react-dialog": "^1.1.19",
     "@radix-ui/react-toggle-group": "^1.1.15",
