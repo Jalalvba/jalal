@@ -32,6 +32,11 @@ export const PRICING: Record<string, { inputPer1M: number; outputPer1M: number }
   "gemini-3-5-flash-lite": { inputPer1M: 0.3, outputPer1M: 2.5 },
   "gemini-3-1-flash-lite": { inputPer1M: 0.25, outputPer1M: 1.5 },
   "gemini-3-5-flash": { inputPer1M: 1.5, outputPer1M: 9.0 },
+  // Promotional rate, verified 2026-08-19 against the pricing page: $0.75/$3.75
+  // "through December 31, 2026", doubling to $1.50/$7.50 on 2027-01-01. This
+  // table has no time dimension, so THIS ENTRY MUST BE UPDATED on that date or
+  // every gemini-3.7-flash call will be costed at half its real price.
+  "gemini-3-7-flash": { inputPer1M: 0.75, outputPer1M: 3.75 },
   "gemini-2-5-flash": { inputPer1M: 0.3, outputPer1M: 2.5 },
   "gemini-2-5-flash-lite": { inputPer1M: 0.1, outputPer1M: 0.4 },
 };
@@ -48,7 +53,13 @@ const MODEL_ALIASES: Record<string, string> = {
   // can still change under us at any time, which is what detectAliasDrift()
   // below is for.
   "gemini-flash-lite-latest": "gemini-3-5-flash-lite",
-  "gemini-flash-latest": "gemini-3-5-flash",
+  // Repointed 2026-08-19: detectAliasDrift() caught this live — a real call
+  // sending "gemini-flash-latest" came back with modelVersion
+  // "gemini-3.7-flash" while this table still said 3.5-flash, so those calls
+  // were costed at 1.5/9.0 instead of 0.75/3.75. Exactly the drift the
+  // mechanism exists to surface; the fix is to update the table, not to make
+  // pricing follow servedModel automatically.
+  "gemini-flash-latest": "gemini-3-7-flash",
 };
 
 /** Resolves aliases, then normalises "gemini-3.5-flash-lite" → "gemini-3-5-flash-lite". */
@@ -337,6 +348,20 @@ export type GeminiCallParams = {
   maxOutputTokens?: number;
   temperature?: number;
   timeoutMs?: number;
+  /**
+   * Set to "application/json" to put the model in JSON mode. Omitted entirely
+   * when absent, so existing callers keep the plain-text behaviour they had.
+   */
+  responseMimeType?: string;
+  /**
+   * Gemini's response schema. NOT the same dialect as JSON Schema: it is an
+   * OpenAPI 3.0 subset that ignores `additionalProperties` and rejects union
+   * types like ["string","null"] (use nullable instead). It steers the output
+   * strongly but — unlike Anthropic's json_schema strict mode — does NOT
+   * grammar-guarantee it, so a caller passing this must still validate what
+   * comes back. See src/lib/gemini/complaintPlaybook.ts's validator.
+   */
+  responseSchema?: Record<string, unknown>;
 };
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -358,6 +383,8 @@ export async function callGeminiWithTracking(
     maxOutputTokens,
     temperature,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    responseMimeType,
+    responseSchema,
   } = params;
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -387,6 +414,8 @@ export async function callGeminiWithTracking(
           generationConfig: {
             ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
             ...(temperature !== undefined ? { temperature } : {}),
+            ...(responseMimeType !== undefined ? { responseMimeType } : {}),
+            ...(responseSchema !== undefined ? { responseSchema } : {}),
           },
         }),
         signal: controller.signal,

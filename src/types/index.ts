@@ -871,10 +871,10 @@ export type GeneratePlaybookResponse =
   | {
       ok: true;
       playbook: StoredComplaintPlaybook;
-      costInfo: import("@/lib/anthropic/costTracker").ClaudeCostInfo;
+      costInfo: import("@/lib/gemini/costTracker").CostInfo;
     }
   | { ok: false; error: string };
 
-// Re-exported so client components can type costInfo without importing
-// src/lib/anthropic/costTracker.ts, which pulls in the Mongo driver.
-export type { ClaudeCostInfo } from "@/lib/anthropic/costTracker";
+// CostInfo is already re-exported above (see the generate-email section) so
+// client components can type costInfo without importing the tracker module,
+// which pulls in the Mongo driver.

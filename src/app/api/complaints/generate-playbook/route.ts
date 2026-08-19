@@ -1,7 +1,7 @@
 // POST /api/complaints/generate-playbook
 //
 // Phase 1 of the complaint handler: accepts the pasted/uploaded text of real
-// complaint email threads, runs the Claude analysis, stores the resulting
+// complaint email threads, runs the Gemini analysis, stores the resulting
 // playbook, and returns it.
 //
 // ── What is NOT stored ─────────────────────────────────────────────────────
@@ -12,7 +12,7 @@
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// The analysis is a single long Claude call; the platform default of 300s is
+// The analysis is a single long Gemini call; the platform default of 300s is
 // not enough headroom for a large upload at effort "high".
 export const maxDuration = 800;
 
@@ -21,9 +21,9 @@ import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo/client";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
 import { toErrorResponse, ApiError } from "@/lib/http/apiError";
-import { ClaudeCallError } from "@/lib/anthropic/costTracker";
-import { generateComplaintPlaybook } from "@/lib/anthropic/complaintPlaybook";
-import { estimateThreadCount } from "@/lib/anthropic/threadCount";
+import { GeminiCallError } from "@/lib/gemini/costTracker";
+import { generateComplaintPlaybook, PlaybookShapeError } from "@/lib/gemini/complaintPlaybook";
+import { estimateThreadCount } from "@/lib/gemini/threadCount";
 import type {
   GeneratePlaybookRequest,
   GeneratePlaybookResponse,
@@ -39,7 +39,7 @@ const MIN_CONTENT_LENGTH = 200;
 const MAX_CONTENT_LENGTH = 400_000; // ~100k tokens, well inside the model's window
 
 /** Client-facing messages per failure kind — upstream detail stays server-side. */
-const ERROR_MESSAGES: Record<ClaudeCallError["kind"], string> = {
+const ERROR_MESSAGES: Record<GeminiCallError["kind"], string> = {
   unconfigured: "L'analyse des réclamations n'est pas configurée",
   "rate-limited": "Le service d'analyse est saturé. Réessayez dans un moment.",
   upstream: "L'analyse a échoué",
@@ -107,10 +107,20 @@ export async function POST(request: Request): Promise<NextResponse<GeneratePlayb
 
     return NextResponse.json({ ok: true, playbook: stored, costInfo });
   } catch (e) {
-    if (e instanceof ClaudeCallError) {
+    if (e instanceof GeminiCallError) {
       return NextResponse.json(
         { ok: false, error: ERROR_MESSAGES[e.kind] },
         { status: e.status }
+      );
+    }
+    // Distinct from GeminiCallError's "bad-response" (which is an unusable
+    // envelope): here the call succeeded and the model simply did not respect
+    // the schema. Gemini's responseSchema is a steer, not a grammar — see
+    // src/lib/gemini/complaintPlaybook.ts.
+    if (e instanceof PlaybookShapeError) {
+      return NextResponse.json(
+        { ok: false, error: "L'analyse a produit une réponse inexploitable" },
+        { status: 500 }
       );
     }
     return toErrorResponse(e, "L'analyse a échoué", 500) as NextResponse<GeneratePlaybookResponse>;

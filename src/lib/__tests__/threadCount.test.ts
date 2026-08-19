@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { estimateThreadCount } from "@/lib/anthropic/threadCount";
+import { estimateThreadCount } from "@/lib/gemini/threadCount";
 
 // estimateThreadCount only ever feeds the upload preview ("~3 fils détectés"),
 // never the analysis itself — the real count comes back from the model in

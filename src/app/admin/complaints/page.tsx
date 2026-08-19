@@ -5,10 +5,10 @@ import { Upload, FileText, Download, X } from "lucide-react";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { estimateThreadCount } from "@/lib/anthropic/threadCount";
+import { estimateThreadCount } from "@/lib/gemini/threadCount";
 import { cn } from "@/lib/utils/cn";
 import type {
-  ClaudeCostInfo,
+  CostInfo,
   ComplaintCategory,
   GeneratePlaybookResponse,
   PlaybookConfidence,
@@ -44,7 +44,7 @@ export default function ComplaintsPlaybookPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playbook, setPlaybook] = useState<StoredComplaintPlaybook | null>(null);
-  const [costInfo, setCostInfo] = useState<ClaudeCostInfo | null>(null);
+  const [costInfo, setCostInfo] = useState<CostInfo | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const readFile = useCallback((file: File) => {
