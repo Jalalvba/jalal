@@ -1,17 +1,17 @@
-# Gemini integration — email drafting and comment reformulation
+# Gemini integration — comment reformulation
 
 **Primary files:**
-[`src/app/api/generate-email/route.ts`](../src/app/api/generate-email/route.ts) ·
 [`src/app/api/bdd/reformulate-comment/route.ts`](../src/app/api/bdd/reformulate-comment/route.ts)
+· cost tracking: [`src/lib/gemini/costTracker.ts`](../src/lib/gemini/costTracker.ts)
 · client: [`src/hooks/useBddRows.ts:98`](../src/hooks/useBddRows.ts#L98) and
 `ReformulateCommentButton` in
-[`src/app/suivi-rl/page.tsx:408`](../src/app/suivi-rl/page.tsx#L408) · types:
-[`src/types/index.ts:758-785`](../src/types/index.ts#L758)
+[`src/app/suivi-rl/page.tsx:408`](../src/app/suivi-rl/page.tsx#L408)
 
-Two routes, one provider. `reformulate-comment` was built second and
-deliberately mirrors `generate-email`'s structure — it defers to that file for
-the model rationale rather than restating it
-([`reformulate-comment/route.ts:1`](../src/app/api/bdd/reformulate-comment/route.ts#L1)).
+> **This page used to document two routes.** `/api/generate-email` was a
+> second, headless Gemini route that nothing in the repo ever called; it was
+> deleted as dead code. Its model rationale — which `reformulate-comment` used
+> to defer to — now lives in `reformulate-comment`'s own header comment, and
+> the comparison tables below have been reduced to the surviving route.
 
 ---
 
@@ -29,32 +29,31 @@ body:    { contents: [{ parts: [{ text }] }],
            generationConfig: { maxOutputTokens, temperature } }
 ```
 
-| | `generate-email` | `reformulate-comment` |
-|---|---|---|
-| Rate limit | **30 / min**, bucket `generate-email` | **20 / min**, bucket `bdd-reformulate` |
-| Rate-limit call | `checkRateLimit()` + manual 429 | `rateLimitOrNull()` |
-| Input cap | `MAX_PROMPT_LENGTH` 5000 | `MAX_COMMENT_LENGTH` 1000 |
-| `maxOutputTokens` | 400 | 150 |
-| `temperature` | 0.25 | **0.3** |
-| Timeout | 20 s (`AbortController`) | 20 s (`AbortController`) |
-| Model override by client | **yes** (`body.model`) | **no** — hardcoded |
-| Error language | English | French |
-| UI caller | **none** — API-only | Suivi RL ✨ button |
+| | `reformulate-comment` |
+|---|---|
+| Rate limit | **20 / min**, bucket `bdd-reformulate` |
+| Rate-limit call | `rateLimitOrNull()` |
+| Input cap | `MAX_COMMENT_LENGTH` 1000 |
+| `maxOutputTokens` | 150 |
+| `temperature` | **0.3** |
+| Timeout | 20 s (`AbortController`) |
+| Model override by client | **no** — hardcoded |
+| Error language | French |
+| UI caller | Suivi RL ✨ button |
 
-**Why the different rate limits:** email drafting is a deliberate one-at-a-time
-action; reformulation sits next to every comment field on a list page where ~85
-cards are on screen, so a lower ceiling guards against a click-storm. Both are
-per-IP, Mongo-backed atomic `$inc` (see [`src/lib/http/rateLimit.ts`](../src/lib/http/rateLimit.ts)).
+**Why 20/min:** reformulation sits next to every comment field on a list page
+where ~85 cards are on screen, so a low ceiling guards against a click-storm.
+It is per-IP, Mongo-backed atomic `$inc` (see
+[`src/lib/http/rateLimit.ts`](../src/lib/http/rateLimit.ts)).
 
-**Why `temperature` differs:** 0.25 for drafting a whole email from a short
-prompt (needs some freedom); 0.3 for polishing text that already exists. Both
-are low — neither task wants invention.
+**Why `temperature` 0.3:** low, because polishing text that already exists does
+not want invention.
 
 ---
 
 ## 2. Model choice: `gemini-flash-lite-latest`
 
-Both routes default to the same constant:
+The route pins one constant:
 
 ```ts
 const DEFAULT_MODEL = "gemini-flash-lite-latest";
@@ -63,7 +62,8 @@ const DEFAULT_MODEL = "gemini-flash-lite-latest";
 ### 2.1 Why a rolling alias and not a pinned snapshot
 
 Recorded verbatim at
-[`generate-email/route.ts:5`](../src/app/api/generate-email/route.ts#L5):
+[`reformulate-comment/route.ts:1`](../src/app/api/bdd/reformulate-comment/route.ts#L1)
+(relocated there when `generate-email` was deleted):
 
 - It is the **cheapest active Flash-Lite tier**, on Gemini's free tier.
 - The alias was **verified live** against `GET /v1beta/models/gemini-flash-lite-latest`
@@ -78,29 +78,22 @@ Recorded verbatim at
 > Output quality, tone, latency, and token accounting can all change with no
 > deploy on our side and no error anywhere.
 >
-> This was accepted **specifically because both uses are internal, low-stakes,
-> and human-reviewed before anything is persisted**. The original comment states
+> This was accepted **specifically because the use is internal, low-stakes, and
+> human-reviewed before anything is persisted**. The original comment states
 > the boundary explicitly: *"do not reuse this alias-over-snapshot choice for
 > anything output-sensitive without flagging that tradeoff again."*
 
-**If either route ever feeds something unreviewed** — an auto-sent email, a
+**If this route ever feeds something unreviewed** — an auto-sent email, a
 direct sheet write, a value another system consumes — **pin a dated snapshot
 first and accept the retirement-maintenance cost instead.**
 
-### 2.3 Client-overridable model — only on `generate-email`
-
-```ts
-const model = body.model?.trim() || DEFAULT_MODEL;   // generate-email:64
-```
-
-Interpolated into the URL via `encodeURIComponent()` (`:82`). Deliberate: *"Model
-is never a secret and stays client-overridable per the route's contract — only
-the API key is locked to the server-side env var."* The route is gated by
-`src/proxy.ts`, so the only party who can set it is the single authorised user.
+### 2.3 The model is not client-overridable
 
 `reformulate-comment` **hardcodes** `DEFAULT_MODEL` into its URL — no override,
-no `encodeURIComponent` needed. Deliberate asymmetry: it's called from a fixed
-UI button, not a general-purpose API.
+no `encodeURIComponent` needed, because it is called from a fixed UI button
+rather than as a general-purpose API. (The deleted `generate-email` route did
+accept a `body.model` override; with it gone, no route lets a client choose the
+model.)
 
 ---
 
@@ -111,15 +104,15 @@ Read from `process.env` **inside the request handler**, never at module scope:
 ```ts
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
-  console.error("[generate-email] GEMINI_API_KEY is not set");
-  return NextResponse.json({ ok: false, error: "Email generation is not configured" }, { status: 500 });
+  console.error("[bdd-reformulate] GEMINI_API_KEY is not set");
+  return NextResponse.json({ ok: false, error: "Comment reformulation is not configured" }, { status: 500 });
 }
 ```
 
 **Why not module scope:** `src/lib/sheets/googleSheetsBdd.ts` throws at import time on a
 missing `GOOGLE_SHEETS_ID` — appropriate for a variable the whole app needs.
-`GEMINI_API_KEY` powers two optional features; a missing key must degrade
-*those two routes*, not prevent the app from booting.
+`GEMINI_API_KEY` powers one optional feature; a missing key must degrade
+*that route*, not prevent the app from booting.
 
 **The key is never exposed to the client.** It travels as a request header, so
 Gemini's error bodies cannot echo it back. Even so, upstream error text is
@@ -129,7 +122,7 @@ Gemini's error bodies cannot echo it back. Even so, upstream error text is
 > content), but the raw text may carry other detail we don't want to promise as
 > a stable client-facing contract."*
 
-Clients only ever see the four fixed messages in §5.
+Clients only ever see the fixed messages in §5.
 
 ---
 
@@ -189,14 +182,6 @@ Four negative constraints, in priority order: **don't restate context · don't
 invent · don't change meaning · don't wrap the output.** The context is
 disambiguation input, not content to merge in.
 
-`generate-email`'s instruction is one line by comparison
-([`route.ts:27`](../src/app/api/generate-email/route.ts#L27)):
-
-```
-You draft short, professional business emails. Output only the email body —
-no preamble, no commentary.
-```
-
 ### 4.3 Blank-context handling — `buildUserTurn()`
 
 [`route.ts:38`](../src/app/api/bdd/reformulate-comment/route.ts#L38):
@@ -234,34 +219,32 @@ Commentaire original: vehicule en panne moteur attente piece
 
 ---
 
-## 5. Error handling — identical shape, different language
+## 5. Error handling
 
-| Condition | Status | `generate-email` | `reformulate-comment` |
-|---|---|---|---|
-| Rate limited (ours) | 429 | `Trop de requêtes. Réessayez dans {n}s.` | (via `rateLimitOrNull`) |
-| Bad JSON | 400 | `Invalid JSON body` | `Invalid JSON body` |
-| Empty input | 400 | `prompt is required` | `comment is required` |
-| Over length | 400 | `prompt exceeds 5000 characters` | `comment exceeds 1000 characters` |
-| Missing API key | 500 | `Email generation is not configured` | `Comment reformulation is not configured` |
-| Gemini 429 | **429** | `…rate-limited upstream. Try again shortly.` | `Reformulation rate-limited en amont…` |
-| Gemini ≥ 500 | **502** | `…temporarily unavailable.` | `Service de reformulation temporairement indisponible.` |
-| Gemini 4xx (other) | 500 | `Email generation failed` | `Échec de la reformulation` |
-| Timeout (20 s) | **504** | `Email generation timed out. Try again.` | `La reformulation a expiré. Réessayez.` |
-| Unexpected shape | 500 | `Email generation failed` | `Échec de la reformulation` |
+| Condition | Status | `reformulate-comment` |
+|---|---|---|
+| Rate limited (ours) | 429 | (via `rateLimitOrNull`) |
+| Bad JSON | 400 | `Invalid JSON body` |
+| Empty input | 400 | `comment is required` |
+| Over length | 400 | `comment exceeds 1000 characters` |
+| Missing API key | 500 | `Comment reformulation is not configured` |
+| Gemini 429 | **429** | `Reformulation rate-limitée en amont. Réessayez dans un instant.` |
+| Gemini ≥ 500 | **502** | `Service de reformulation temporairement indisponible.` |
+| Gemini 4xx (other) | 500 | `Échec de la reformulation` |
+| Timeout (20 s) | **504** | `La reformulation a expiré. Réessayez.` |
+| Unexpected shape | 500 | `Échec de la reformulation` |
 
 **Upstream status is mapped, not passed through** — 429→429, 5xx→**502**
-(upstream failed, we didn't), timeout→**504**. `clearTimeout` runs in `finally`
-in both.
+(upstream failed, we didn't), timeout→**504**. `clearTimeout` runs in `finally`.
 
 **Response shape validation:** `data?.candidates?.[0]?.content?.parts?.[0]?.text`
-must be a non-empty string. `reformulate-comment` additionally requires
-`.trim()` to be non-empty and returns the trimmed value — `generate-email`
-returns the raw string. Minor, deliberate: an email's leading whitespace may
-matter; a one-line comment's does not.
+must be a non-empty string, and must still be non-empty after `.trim()`; the
+trimmed value is what is returned.
 
-> **Language inconsistency is a known, accepted wart.** `generate-email`'s
-> messages are English (it has no UI); `reformulate-comment`'s are French (they
-> render in a French dialog). Worth unifying if `generate-email` ever gets a UI.
+Messages are French throughout, because they render in a French dialog. (The
+deleted `generate-email` route used English, which this page previously
+recorded as an accepted inconsistency; with that route gone, so is the
+inconsistency.)
 
 ---
 
@@ -322,19 +305,21 @@ nothing to announce and no cache to invalidate.
 
 ---
 
-## 7. `generate-email` has no UI caller
+## 7. The deleted `generate-email` route
 
-**Verified** by grep across `src/app/`, `src/components/`, `src/hooks/`, `src/lib/`, `e2e/`:
-the only references to `/api/generate-email` are inside the route file itself.
+`/api/generate-email` (added by `cb13749`, hardened by `6629251`) was a second,
+headless Gemini route for drafting business emails. Nothing in this repo ever
+called it: it was dead by reference from the day it landed, and a
+`gemini_usage` query later confirmed that **0 of 7 tracked Gemini calls** used
+its `generate-email` action, while `reformulate-comment` was logging real calls
+in the same window. Phase 2 flagged it as *needs judgment* rather than *safe*,
+on the theory that it might be intentional groundwork for an external consumer;
+that judgment was made and it was deleted.
 
-It is a **deliberately headless API surface** — `cb13749` describes it as *"a
-second, parallel LLM provider alongside this app, not a replacement for anything
-existing"*, and `6629251` hardened it to the same cost/security/reliability
-rules as the rest of the app. It is reachable (behind the session gate) but
-nothing in this repo calls it.
-
-Flagged in Phase 2 as **needs judgment** — dead-by-reference but plausibly
-intentional groundwork. Do not remove without confirming no external consumer.
+Kept deliberately when it went: the alias-over-snapshot rationale (moved into
+`reformulate-comment`'s header, §2.1), the `CostInfo` type, and all of
+`src/lib/gemini/`. Removed with it: the `GenerateEmailRequest` /
+`GenerateEmailResponse` types, which nothing else used.
 
 ---
 
@@ -352,11 +337,8 @@ intentional groundwork. Do not remove without confirming no external consumer.
    request; Gemini may still bill the completion.
 6. **No token accounting or cost logging.** Nothing records how many calls or
    tokens were spent. On the free tier this is invisible until quota is hit.
-7. **`generate-email` accepts an arbitrary `model` string.** Only the authorised
-   user can reach it, but a typo yields an opaque upstream 404 mapped to
-   `Email generation failed`.
-8. **Context is a flat `k=v` line, not structured.** A `Commentaire` containing
+7. **Context is a flat `k=v` line, not structured.** A `Commentaire` containing
    `Contexte:` or `Commentaire original:` could confuse turn boundaries. No
    escaping is applied — low risk given the 1000-char cap and human review, but
    it is a prompt-injection surface.
-9. **No caching.** Reformulating the same comment twice costs two calls.
+8. **No caching.** Reformulating the same comment twice costs two calls.

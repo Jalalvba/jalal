@@ -755,19 +755,9 @@ export type ImportStatusResponse =
   | { ok: true; run: ImportPipelineResult }
   | { ok: false; error: string };
 
-export type GenerateEmailRequest = {
-  prompt: string;
-  tone?: string;
-  model?: string;
-};
-
 // Re-exported so client components can type costInfo without importing
 // src/lib/gemini/costTracker.ts, which pulls in the Mongo driver.
 export type { CostInfo } from "@/lib/gemini/costTracker";
-
-export type GenerateEmailResponse =
-  | { ok: true; email: string; costInfo: import("@/lib/gemini/costTracker").CostInfo }
-  | { ok: false; error: string };
 
 export type ReformulateCommentContext = {
   modele?: string;

@@ -187,12 +187,12 @@ protect in this app's actual design.
   equality value in `$match` (`{ Immatriculation: q }`), not interpolated
   into an operator — `URLSearchParams.get()` always returns a string, so
   there's no NoSQL operator-injection vector here.
-- `src/app/api/query/route.ts:29` and `src/app/api/query/search/route.ts:25`: both
-  build a `$regex` filter from user input, both pass it through
-  `escapeRegex()` first (`src/lib/utils/regex.ts:6`:
+- `src/app/api/query/route.ts:29`: builds a `$regex` filter from user input and
+  passes it through `escapeRegex()` first (`src/lib/utils/regex.ts:6`:
   `s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")`), confirmed running at the
-  exact line the regex object is constructed in both files. Closes both
-  regex-injection and ReDoS (attacker-controlled quantifiers).
+  exact line the regex object is constructed. Closes both regex-injection and
+  ReDoS (attacker-controlled quantifiers). (`src/app/api/query/search/route.ts`
+  carried the same verified guard and was deleted as dead code.)
 - Zero unescaped `$regex`/`new RegExp` construction from request input
   found anywhere in `src/app/api` or `lib` — grepped explicitly for both.
 

@@ -819,9 +819,10 @@ export default function Home() {
   function handleImmChange(val: string) {
     setImm(val);
     // No minimum-length gate: suggestions are computed client-side from an
-    // already-fetched list (unlike the old /api/query/search server route
-    // this replaced, which required 2+ chars) — matches Parking/Atelier/
-    // Depot's PlateSearchInput, which opens on any non-empty change.
+    // already-fetched list (unlike the server-side autocomplete route this
+    // replaced, which required 2+ chars — see 6f24bdf; that route was later
+    // deleted as dead code) — matches Parking/Atelier/Depot's
+    // PlateSearchInput, which opens on any non-empty change.
     setShowSuggestions(val.trim().length > 0);
   }
 

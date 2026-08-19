@@ -48,9 +48,10 @@ formats the same vehicle appears under across sources.
 > **`4742410`** fixed the page auto-loading a hardcoded plate (`48070-B-7`) on
 > mount — a leftover from development.
 
-`/api/query/search` exists but **has no caller**: `page.tsx:822` notes the
-current implementation filters the already-fetched list "unlike the old
-/api/query/search server route". Flagged in Phase 2.
+`/api/query/search` was a server-side autocomplete route superseded by the
+client-side filtering above (`6f24bdf`) and left in place unused; it was
+deleted once confirmed dead. `/api/query` itself is unaffected and is still
+called from `page.tsx` to resolve a typed plate.
 
 ---
 

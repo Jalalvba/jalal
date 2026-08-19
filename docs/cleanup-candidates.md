@@ -229,7 +229,7 @@ one that ships is the untested one.
 
 # 2. Orphaned code
 
-## 2.1 🟡 `src/app/api/query/search/route.ts` — no caller
+## 2.1 ✅ `src/app/api/query/search/route.ts` — no caller — **DONE, deleted**
 
 **Verified:** the only two references in the entire repo are the route's own
 first-line path comment, and a comment in
@@ -245,7 +245,14 @@ client-side list over `parc` + `cp`. No test, no fetch, no link.
 nothing external (a bookmark, a script, another tool) calls it before deleting.
 Within this repo, nothing does.
 
-## 2.2 🟡 `src/app/api/generate-email/route.ts` — no UI caller
+> **Actioned.** Re-verified dead at deletion time (no caller anywhere in `src/`,
+> `e2e/`, `scripts/`; no commit had ever added one) and removed. The parent
+> `/api/query` was explicitly checked and **kept** — it is still called from
+> `src/app/ds-history/page.tsx` to resolve a typed plate. The `escapeRegex()`
+> verification this route carried is recorded against `/api/query` in
+> `SECURITY_VERIFICATION.md`.
+
+## 2.2 ✅ `src/app/api/generate-email/route.ts` — no UI caller — **DONE, deleted**
 
 **Verified:** zero references outside the route file. Its types
 (`GenerateEmailRequest` / `GenerateEmailResponse`, `src/types/index.ts:758-765`) are
@@ -259,6 +266,16 @@ cost/security/reliability rules. It reads as intentional groundwork.
 **Options:** (a) keep and add a one-line note that it is intentionally headless;
 (b) keep and build the UI; (c) delete route + its two types together. Your call
 — this one is about product intent, which the code cannot tell me.
+
+> **Actioned: option (c).** The product decision was made to delete. Additional
+> evidence gathered after this report: a `gemini_usage` query showed **0 of 7**
+> tracked Gemini calls ever used `action: "generate-email"`, while
+> `reformulate-comment` logged real calls in the same window — so the route was
+> unused in production, not merely unreferenced in source. Route and both types
+> removed together. `src/lib/gemini/` and the `CostInfo` type were untouched
+> (shared with the surviving route), and the alias-over-snapshot rationale that
+> lived in this route's header was relocated to
+> `src/app/api/bdd/reformulate-comment/route.ts` rather than lost.
 
 ## 2.3 🟡 `getTimeBasedTheme()` — no callers
 
@@ -465,8 +482,8 @@ All 26 test files are now listed; verified by script rather than by eye. The
 | **1** | **`~/import` contract duplicated across two routes** | 🔵 | **Refactor — highest value; already caused one production-visible bug** |
 | 1.5a | BDD export routes: `MAX_*` + validator duplicated | 🔵 | Refactor — same class, latent |
 | 1.5b | `getTimeBasedTheme()` vs inline script | 🔵 | Refactor — same class, latent |
-| 2.1 | `/api/query/search` — no caller | 🟡 | Delete after confirming no external consumer |
-| 2.2 | `/api/generate-email` — no UI caller | 🟡 | Product decision |
+| 2.1 | `/api/query/search` — no caller | ✅ | **Done** — deleted; parent `/api/query` kept |
+| 2.2 | `/api/generate-email` — no UI caller | ✅ | **Done** — deleted with its two types |
 | 2.3 | `getTimeBasedTheme()` — no callers | 🟡 | Prefer a test over deletion (see 1.5b) |
 | 2.4 | `ETAT_ANNULE` / `ETAT_ANNULEE` | ✅ | **Done** — removed; fact preserved on `etatBadgeClass()` |
 | 2.5 | `/api/import-status` — no client caller | 🟡 | Keep unless the feature is cancelled |

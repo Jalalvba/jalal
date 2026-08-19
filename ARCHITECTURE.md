@@ -32,10 +32,9 @@ testing it**.
    │                                          src/lib/rateLimit → rateLimits│
    │  Report generators          External providers                         │
    │  ─────────────────          ──────────────────                         │
-   │  /api/bdd/export        → PDF        /api/generate-email      → Gemini │
-   │  /api/bdd/export-excel  → XLSX       /api/bdd/reformulate-... → Gemini │
-   │  /api/export            → PDF/DOCX   /api/trigger-import  → ~/import   │
-   │                                      /api/import-status   → ~/import   │
+   │  /api/bdd/export        → PDF        /api/bdd/reformulate-... → Gemini │
+   │  /api/bdd/export-excel  → XLSX       /api/trigger-import  → ~/import   │
+   │  /api/export            → PDF/DOCX   /api/import-status   → ~/import   │
    └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -63,7 +62,7 @@ and only ever read here — plus two small app-owned collections
 | Doc | Covers | Depth |
 |---|---|---|
 | [`docs/bdd-exports.md`](./docs/bdd-exports.md) | `/api/bdd/export` (PDF) + `/api/bdd/export-excel` | full |
-| [`docs/ai-gemini.md`](./docs/ai-gemini.md) | `/api/generate-email` + `/api/bdd/reformulate-comment` | full |
+| [`docs/ai-gemini.md`](./docs/ai-gemini.md) | `/api/bdd/reformulate-comment` + the shared cost tracker | full |
 | [`docs/config-options.md`](./docs/config-options.md) | Mongo-backed dropdown options + `/admin/config` | full |
 | [`docs/fleet-data-import.md`](./docs/fleet-data-import.md) | `~/import` proxy + `field_registry.json` contract | full |
 
@@ -147,8 +146,6 @@ only; nothing there has been removed. Headlines:
 | `src/app/api/import-status` + `src/app/api/trigger-import` | **Highest value.** Both re-implement the `~/import` contract — `normalizeTimestamp()` is `md5`-identical, and the step normaliser is a named function in one route and *inlined* in the other, so name-based search can't find the second copy. This is *how* the run-status bug above outlived its own fix. |
 | `src/types/index.ts:708` / `:727` | The two import status vocabularies are hand-written unions with **no runtime counterpart** — the reason a validator had to hand-write a `Set` and reached for the wrong one. Four other types in the same file already use the `as const` → `(typeof X)[number]` pattern that prevents this. |
 | `src/app/api/bdd/export{,-excel}/route.ts` | Same class, latent: `MAX_*` caps duplicated and the row validators byte-identical. |
-| `src/app/api/query/search/route.ts` | No caller found; superseded by client-side filtering (`26e53fb`). |
-| `src/app/api/generate-email/route.ts` | No UI caller. Deliberately headless, but unreferenced. |
 | `scripts/add-indexes.ts` | Self-declared deprecated, but the deprecation is a comment rather than a runtime guard. |
 | `DESIGN_SYSTEM.md` | Still framed as a proposal ("Sequencing — once approved") for work that shipped across seven commits. |
 

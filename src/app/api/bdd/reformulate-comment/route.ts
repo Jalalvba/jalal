@@ -1,10 +1,21 @@
-// Reformulates a Suivi RL row's Commentaire via the Gemini API — same
-// provider/model/pattern as src/app/api/generate-email/route.ts (see that
-// file's header comment for the DEFAULT_MODEL rationale), just a shorter,
-// lower-temperature prompt suited to polishing an existing short comment
-// rather than drafting one from scratch. Never writes to the Sheet itself —
-// the caller reviews the suggestion and saves it via the existing
-// /api/bdd/update path (same as any other manual Commentaire edit).
+// Reformulates a Suivi RL row's Commentaire via the Gemini API. Never writes
+// to the Sheet itself — the caller reviews the suggestion and saves it via the
+// existing /api/bdd/update path (same as any other manual Commentaire edit).
+//
+// DEFAULT_MODEL is pinned to the "-latest" rolling alias for the cheapest
+// active Flash-Lite tier rather than a dated snapshot like
+// "gemini-2.5-flash-lite", which Google has already retired once for this key
+// (404, "no longer available"). A rolling alias can silently swap the
+// underlying model version over time — acceptable here because every
+// suggestion is reviewed by a human before it reaches the Sheet, but do not
+// reuse this alias-over-snapshot choice for anything output-sensitive without
+// flagging that tradeoff again. src/lib/gemini/costTracker.ts's
+// detectAliasDrift() is what makes such a swap visible after the fact. The API
+// key belongs to the "jalal" project in Google AI Studio.
+//
+// This header previously lived in src/app/api/generate-email/route.ts, which
+// this route deferred to; that route was deleted as dead code, so the
+// rationale was moved here rather than lost with it.
 
 export const runtime = "nodejs";
 
@@ -68,8 +79,8 @@ const ERROR_MESSAGES: Record<GeminiCallError["kind"], string> = {
   "bad-response": "Échec de la reformulation",
 };
 
-// Return type is left unannotated (unlike generate-email's POST) because
-// rateLimitOrNull's early return is a NextResponse<unknown>. The response
+// Return type is left unannotated because rateLimitOrNull's early return is
+// a NextResponse<unknown>. The response
 // bodies below still conform to ReformulateCommentResponse.
 export async function POST(request: Request) {
   const limited = await rateLimitOrNull(request, "bdd-reformulate", RATE_LIMIT, RATE_WINDOW_MS);

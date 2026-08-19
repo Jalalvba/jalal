@@ -42,8 +42,9 @@ export const PRICING: Record<string, { inputPer1M: number; outputPer1M: number }
 };
 
 // Rolling "-latest" aliases have no pricing entry of their own and Google can
-// swap what they point at without notice (see src/app/api/generate-email/route.ts's
-// header comment on why this app deliberately uses an alias). We resolve an
+// swap what they point at without notice (see
+// src/app/api/bdd/reformulate-comment/route.ts's header comment on why this app
+// deliberately uses an alias). We resolve an
 // alias to a concrete priced model for costing purposes only — the alias string
 // is still what gets sent to the API, and is what's logged.
 const MODEL_ALIASES: Record<string, string> = {
