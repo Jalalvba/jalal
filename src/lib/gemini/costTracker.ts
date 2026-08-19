@@ -348,20 +348,6 @@ export type GeminiCallParams = {
   maxOutputTokens?: number;
   temperature?: number;
   timeoutMs?: number;
-  /**
-   * Set to "application/json" to put the model in JSON mode. Omitted entirely
-   * when absent, so existing callers keep the plain-text behaviour they had.
-   */
-  responseMimeType?: string;
-  /**
-   * Gemini's response schema. NOT the same dialect as JSON Schema: it is an
-   * OpenAPI 3.0 subset that ignores `additionalProperties` and rejects union
-   * types like ["string","null"] (use nullable instead). It steers the output
-   * strongly but — unlike Anthropic's json_schema strict mode — does NOT
-   * grammar-guarantee it, so a caller passing this must still validate what
-   * comes back. See src/lib/gemini/complaintPlaybook.ts's validator.
-   */
-  responseSchema?: Record<string, unknown>;
 };
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -383,8 +369,6 @@ export async function callGeminiWithTracking(
     maxOutputTokens,
     temperature,
     timeoutMs = DEFAULT_TIMEOUT_MS,
-    responseMimeType,
-    responseSchema,
   } = params;
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -414,8 +398,6 @@ export async function callGeminiWithTracking(
           generationConfig: {
             ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
             ...(temperature !== undefined ? { temperature } : {}),
-            ...(responseMimeType !== undefined ? { responseMimeType } : {}),
-            ...(responseSchema !== undefined ? { responseSchema } : {}),
           },
         }),
         signal: controller.signal,
