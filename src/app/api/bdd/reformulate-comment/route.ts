@@ -6,6 +6,8 @@
 // the caller reviews the suggestion and saves it via the existing
 // /api/bdd/update path (same as any other manual Commentaire edit).
 
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
 import { callGeminiWithTracking, GeminiCallError } from "@/lib/gemini/costTracker";

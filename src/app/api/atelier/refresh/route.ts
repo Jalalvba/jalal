@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { invalidateAtelierRowsCache } from "@/lib/sheets/googleSheetsAtelier";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";

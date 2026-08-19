@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { updateAction } from "@/lib/sheets/googleSheetsParking";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";

@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { updateRdvField } from "@/lib/sheets/googleSheetsRdv";
 import { RDV_EDITABLE_FIELDS, type RdvEditableField, type RdvAddInput } from "@/types";

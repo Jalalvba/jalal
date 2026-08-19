@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { addRdvRow } from "@/lib/sheets/googleSheetsRdv";
 import type { RdvAddInput } from "@/types";

@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { updateAtelierField } from "@/lib/sheets/googleSheetsAtelier";
 import { ATELIER_EDITABLE_FIELDS, type AtelierEditableField } from "@/types";

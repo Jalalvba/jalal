@@ -13,6 +13,8 @@
 // without flagging that tradeoff again. The API key belongs to the "jalal"
 // project in Google AI Studio.
 
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { checkRateLimit, clientIp } from "@/lib/http/rateLimit";
 import { callGeminiWithTracking, GeminiCallError } from "@/lib/gemini/costTracker";

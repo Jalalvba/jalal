@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { invalidateBddRowsCache } from "@/lib/sheets/googleSheetsBdd";
 import { invalidateRlReunionRowsCache } from "@/lib/sheets/googleSheetsRl";

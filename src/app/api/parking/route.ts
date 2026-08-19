@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { getParkingRows } from "@/lib/sheets/googleSheetsParking";
 import { toErrorResponse } from "@/lib/http/apiError";

@@ -1,4 +1,6 @@
 // src/app/api/sheet/route.ts
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { getSheetRows as getBddRows } from "@/lib/sheets/googleSheetsBdd";
 import { getRlRows, getRlReunionRows } from "@/lib/sheets/googleSheetsRl";

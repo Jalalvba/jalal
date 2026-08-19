@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { updateSheetRow } from "@/lib/sheets/googleSheetsBdd";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";

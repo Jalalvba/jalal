@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo/client";
 import { escapeRegex } from "@/lib/utils/regex";

@@ -1,4 +1,6 @@
 // src/app/api/ds/history/route.ts
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo/client";
 import { toErrorResponse } from "@/lib/http/apiError";
