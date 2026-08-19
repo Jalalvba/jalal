@@ -631,6 +631,54 @@ clickable, permanently-empty chip. The admin-config lists remain in use by
 the per-row editors, which must be able to set a value no other row
 currently has.
 
+# Continuation — dependency upgrades (`32631bb`, 2026-08-20)
+
+Scoped to the toolchain upgrade below. The commits between `c0d5965` and
+`32631bb` (the `src/` restructure, the Gemini cost-tracking wrapper, the
+complaint-handler feature and its revert, and the env-validation hardening)
+are **not** yet recorded in this chronology — a known documentation gap, not
+an implicit claim that nothing happened.
+
+### Next.js 16.3.1 security upgrade; TypeScript 7 deferred
+
+`32631bb` moved `next` 16.1.6 → 16.3.1, `eslint-config-next` in lockstep, and
+`react`/`react-dom` 19.2.3 → 19.2.8 (the May 2026 advisories set a
+`react-server-dom-*` floor of 19.2.6, so React had to move too). The driver
+was the Next.js coordinated security release of May 2026 — 13 advisories,
+16.x patched at 16.2.5/16.2.6 — of which five are middleware/proxy
+authorization bypasses.
+
+Those five applied to this app **directly, not theoretically**: `src/proxy.ts`
+is the entire auth boundary, with all 46 API routes and every page carrying
+no session check of their own (verified by grepping `getIronSession|isLoggedIn`
+across `src/app`, which matches only the OAuth callback and
+`src/app/login/actions.ts`). Every advisory's stated mitigation — "enforce
+authorization in route or page logic instead of relying solely on middleware"
+— describes a fallback layer this app does not have. Two of the five are
+inapplicable on their own terms: CVE-2026-44574 needs a dynamic route segment
+(this app has none) and CVE-2026-44573 needs the Pages Router with i18n
+(App Router, no `i18n` config).
+
+One mitigating detail worth preserving, since it bounds what the exposure
+actually was: every protected page is `"use client"` and all fleet data
+arrives via `/api/*` route handlers, which have no `.rsc` transport variant.
+The segment-prefetch bypass (CVE-2026-44575) would therefore have yielded an
+empty client-component shell, not Sheets or Mongo data. Patch-worthy, not a
+breach. Post-upgrade the bypass shapes were probed live against a dev server
+and all return 307 → `/login`: `/parking.rsc`, an `RSC: 1` header, an
+`RSC` + `Next-Router-Prefetch` + `Next-Router-Segment-Prefetch: /_tree`
+combination, and an injected `x-nextjs-data` header (which now yields a
+proper `location:` header rather than the internal `x-nextjs-redirect`).
+
+**TypeScript 7.0.2 was attempted in the same session and deliberately not
+landed** — see the tradeoffs section below for the standing blocker.
+
+Also of note: `next dev` on 16.3 writes a `<!-- BEGIN:nextjs-agent-rules -->`
+block into [`AGENTS.md`](./AGENTS.md) and re-adds it on every run (see
+`node_modules/next/dist/server/lib/generate-agent-files.js`). It is committed
+rather than stripped, because stripping it only recreates the uncommitted
+change on the next `pnpm dev`.
+
 ---
 
 ## 3. Architectural tradeoffs & known limitations
@@ -651,6 +699,25 @@ currently has.
   removed the username/password login path entirely, there is no fallback
   authentication method — if Google's OAuth service has an outage, this
   app cannot be logged into at all.
+- **TypeScript 7 is blocked by `typescript-eslint`, not by this codebase.**
+  Attempted 2026-08-20 alongside `32631bb` and reverted the same session.
+  TypeScript 7.0.2 itself is clean here: `tsc --noEmit` passes with **zero**
+  new errors and no `tsconfig.json` changes, and type-check time drops from
+  13.27 s to 2.53 s (5.2×). The blocker is that `@typescript-eslint` reads
+  TypeScript compiler internals the native port restructured, so ESLint
+  crashes on startup — `TypeError: Cannot read properties of undefined
+  (reading 'Cjs')` at `@typescript-eslint/typescript-estree`'s
+  `create-program/shared.js` — exiting 2 without linting a single file. No
+  compatible release exists on any tag: `typescript-eslint@latest` (8.67.0)
+  and `@canary` (8.67.1-alpha.22) both peer `typescript: ">=4.8.4 <6.1.0"`,
+  and it arrives transitively via `eslint-config-next`, so it is not a
+  version this repo can pin its way out of. Since
+  [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) gates `pnpm lint`
+  on every push to `main`, landing TS 7 would red the build. The rejected
+  workarounds — running TS 5.9 for ESLint and TS 7 for `tsc`, or dropping
+  lint from CI — were both judged worse than waiting for upstream. Retry
+  when `typescript-eslint` ships TS 7 support; that is the single gating
+  item, and the upgrade should then be a clean dependency bump.
 - **Unindexed case-insensitive regex on non-prefix queries.**
   `src/app/api/article/route.ts` still builds `$regex` filters with
   `$options: "i"` against `Description article`/`Marque`/`Modele` (input is
