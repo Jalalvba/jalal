@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "pnpm check-env && next build",
     "start": "next start",
     "lint": "eslint",
     "verify-field-names": "node scripts/verify-field-names.cjs",
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
-    "test:all": "vitest run && playwright test"
+    "test:all": "vitest run && playwright test",
+    "check-env": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-env.mjs"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.19",
