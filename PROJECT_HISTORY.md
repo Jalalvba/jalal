@@ -1,13 +1,14 @@
 # Project history
 
 Permanent record of this project's development history, built directly from
-`git log --oneline main` (163 commits, `df5a4c3` → `c0d5965`) with diffs
+`git log --oneline main` (187 commits, `df5a4c3` → `32631bb`) with diffs
 inspected wherever a commit message needed clarification. Every claim below
 cites the commit(s) it's based on — nothing here is inferred beyond what a
 commit message or its diff actually states.
 
 Sections 1–2 cover `df5a4c3` → `c546f1d` (synchronized by `3c83ed5`); the
-**Continuation** section after §2 covers `c546f1d` → `c0d5965`. For
+two **Continuation** sections after §2 carry the chronology forward through
+`c546f1d` → `c0d5965` and `ef630e0` → `32631bb`. For
 *current-state* reference documentation — what each feature does today,
 rather than when it changed — start at [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
@@ -631,13 +632,234 @@ clickable, permanently-empty chip. The admin-config lists remain in use by
 the per-row editors, which must be able to set a value no other row
 currently has.
 
-# Continuation — dependency upgrades (`32631bb`, 2026-08-20)
+# Continuation — `ef630e0` → `32631bb` (2026-08-16 → 2026-08-20)
 
-Scoped to the toolchain upgrade below. The commits between `c0d5965` and
-`32631bb` (the `src/` restructure, the Gemini cost-tracking wrapper, the
-complaint-handler feature and its revert, and the env-validation hardening)
-are **not** yet recorded in this chronology — a known documentation gap, not
-an implicit claim that nothing happened.
+The 24 commits after `c0d5965`, in the same commit-cited style. The period is
+dominated by two things that are not features: a repo-wide move to a `src/`
+layout, and a documentation/cleanup pass that turned several implicit
+invariants into executable ones. One feature was built, ported to a different
+LLM provider, and then removed entirely — recorded below because the reverts
+kept two deliberate exceptions.
+
+### Import-status run vocabulary, and a sweep of stale comments
+
+`ef630e0` fixed `/api/import-status` validating a pipeline **run**'s status
+against `KNOWN_STEP_STATUSES`, the per-**step** set. The vocabularies differ,
+so `skipped_absent` and `skipped_unchanged` matched neither and both coerced
+to `failed`: a legitimately skipped past run was reported as a failed one.
+This is the same bug `9fe833d` had already fixed in `/api/trigger-import`,
+never applied to this second route — it survived because the tests only ever
+exercised `status: "success"`. The fix adds `KNOWN_RUN_STATUSES` and
+`normalizeRunStatus()` (live at `src/app/api/import-status/route.ts:41-53`)
+with a parameterised regression test over all five real run statuses, verified
+to fail on three cases against the previous implementation before being
+applied. A bare `"skipped"` is still deliberately rejected: it is never a real
+run status. The two sets stay separate on purpose — collapsing them recreates
+the bug.
+
+`443626c` then corrected six comments that a later commit had falsified
+without revisiting the prose around them, with no behaviour change: two in
+the BDD PDF export (an exclusion justified by "none of those axes support
+selecting multiple values", expired when `c0d5965` made all four multi-select
+— the columns stay excluded, but for the portrait-A4 width constraint; and a
+stale column count), one in the Excel export, one in `suivi-rl/page.tsx`
+pointing at the PDF export as omitting a field it includes, one in the types
+module, and `CLAUDE.md` §6's field/search/chip counts.
+
+### ARCHITECTURE.md and the `docs/` reference set
+
+`b2fcb80` addressed the same class of gap this section does: `PROJECT_HISTORY.md`
+had been frozen at `c546f1d` while 66 commits landed. It added the Continuation
+section above **and** a current-state reference alongside this chronology —
+[`ARCHITECTURE.md`](./ARCHITECTURE.md) plus eleven [`docs/`](./docs) pages.
+The two tables carrying most of the value are ARCHITECTURE.md's "decisions that
+look like bugs but are not" (13 entries) and its running defect list. Each page
+records what the code does, why, what it is explicitly *not* meant to do, and
+the limitations found while testing — derived from current code and `git log`
+rather than from commit-message paraphrase, with every file:line reference and
+all 188 relative links machine-verified.
+
+The division of labour it established still holds: **this file is the
+chronology ("when and why did X change"), `ARCHITECTURE.md` and `docs/` are
+the reference ("how does X work today")**.
+
+### Phase 2 cleanup: proposal, application, resync
+
+`89b8fad` produced [`docs/cleanup-candidates.md`](./docs/cleanup-candidates.md)
+as a proposal only, each candidate carrying a confidence level and the scan
+that produced it. The scans: 269 exported symbols by reference count (3
+unused), 46 API routes by URL search with tests counted separately (3 with no
+non-test caller), 33 dependencies against imports across 168 tracked files
+(0 unused), plus history-wide checks for temp files, TODO/FIXME markers and
+commented-out code (0 each).
+
+Its most useful finding is an argument *against* the obvious fix. Deduplicating
+the `~/import` contract would **not** have prevented `ef630e0`'s bug — both
+routes would have imported the same wrong Set. The root cause is that
+`ImportPipelineStepStatus` and `ImportPipelineRunStatus` are hand-written
+unions with no runtime counterpart, so a validator had nothing to import and
+hand-wrote a Set, and only the step-level one was ever named. The proposed fix
+applies this repo's existing `as const` → `(typeof X)[number]` idiom (already
+used by `PALETTE_COLORS`, `OPTION_KEYS`, `ATELIER_EDITABLE_FIELDS`,
+`RDV_EDITABLE_FIELDS`) so set-vs-type drift becomes unrepresentable. It also
+explains mechanically how `9fe833d`'s fix missed the second route:
+`normalizeTimestamp()` is md5-identical across both, but is a named function
+in one and inlined into a `.map()` in the other, so name-based search finds one
+copy and looks correct.
+
+`9c21627` applied only the four items marked safe. It removed `ETAT_ANNULE`/
+`ETAT_ANNULEE` (zero references repo-wide, including the `etatBadgeClass()`
+just below them, which branches only on DISPONIBLE/INTERNE/EXTERNE) while
+preserving the fact they carried in two places rather than one:
+`etatBadgeClass()`'s docstring now states that ANNULE/ANNULEE are real
+fallback values deliberately falling through to the single muted return, and
+points at the test that already pinned
+`etatBadgeClass("ANNULE") === etatBadgeClass("ANNULEE")` — the behaviour was
+executable-specified before the constants went, not merely commented.
+
+The commit also corrected its own first draft on a point worth keeping:
+`TESTING.md` was missing **seven** test files, not the two originally
+reported, because that count came from spot-checking rather than diffing the
+list. Three of the seven cover the security model (the auth boundary,
+`AUTHORIZED_EMAIL` enforcement, the BDD editable-field allowlist) — and
+`TESTING.md`'s "Deliberately NOT covered" section is precisely what a reader
+consults to decide whether a risk is untested. It read as untested when it was
+not.
+
+`95665a0` marked the applied items done and recomputed every line reference
+shifted by those edits from the real symbols rather than by assuming an offset
+(194 links re-verified, 0 broken).
+
+### Gemini cost tracking
+
+`221b1a9` added a central wrapper as the single door to every Gemini call,
+returning a cost breakdown inline with the model output so the UI can show a
+per-action cost in the same round trip. Its design decisions: a `PRICING`
+table plus an alias map (both routes send the rolling
+`gemini-flash-lite-latest` alias, which has no price of its own); free/paid
+tier inferred from a per-model, per-day counter that resets at midnight
+**Pacific**, not UTC, per Google's rate-limit docs; and state in MongoDB via
+atomic `$inc`, mirroring the rate limiter, because on Vercel a JSON/log file
+would be both ephemeral and unsafe under concurrency. Both call sites were
+refactored to go through it; neither fetches the API directly any more.
+
+`e9a270c` closed the loop on the rolling-alias risk this whole design hangs
+on. `GenerateContentResponse` exposes a top-level `modelVersion` — the only
+signal that Google has repointed a `-latest` alias at a differently-priced
+model — so it is captured as `costInfo.servedModel` alongside `pricedAs`, both
+logged on every usage line, with an explicit error when they disagree.
+Crucially, **pricing still follows the assumed key rather than silently
+adopting the served model's price**, so a mismatch stays visible instead of
+being absorbed. `efc62b7` recorded the first live confirmation (a production
+call returning `gemini-3.5-flash-lite`, drift false), and the mechanism later
+paid for itself — see the complaint-handler entry below.
+
+Two supporting fixes: `ecce243` moved the new indexes out of
+`scripts/add-indexes.ts`, which is marked DEPRECATED because its field-name
+literals predate the 2026-08 Mongo key migration — adding to it made the new
+setup step unrunnable in practice — into a script touching only the three
+collections this repo owns. `0d61639` stripped quotes when reading
+`MONGODB_URI` from `.env.local`, which `vercel env pull` writes quoted and the
+driver rejects as an invalid scheme.
+
+### The `src/` restructure
+
+Seven commits moved the repo to a `src/` layout, each verified independently
+rather than as one big-bang move. `4182994` (phase A0) moved `app/`,
+`components/`, `hooks/`, `lib/` and `proxy.ts` under `src/` and repointed the
+`@/` alias — **no import statements changed**, because every internal import
+already went through `@/`; the repo's only relative cross-directory import was
+in one script. `23d40bf` moved the shell script into `scripts/backup/`,
+repointed `verify-field-names.cjs`'s scan roots, and excluded `scripts/` from
+type-checking. No `public/` was created, because nothing static exists to put
+in it (favicon uses App Router colocation, fonts load via `@import`, PDFs are
+generated at runtime).
+
+`a7daae9` (phase B) centralised pure, dependency-free helpers into
+`src/lib/utils/` and moved `cn()` there from `components/ui/` — it is a plain
+function, not a component, and `lib/utils` is also where shadcn expects it.
+`46775cd` (phase C) grouped `lib/` **by what each module talks to**, which is
+the layout still in place today: `lib/sheets/`, `lib/mongo/`, `lib/gemini/`,
+`lib/auth/`, `lib/http/`, and `types/`. The three highest-fan-in modules moved
+last within the phase by design — `rateLimit` (37 importers), `apiError` (41),
+`types` (46).
+
+`9532464` and `b05689d` then synced path references in the docs and in 189
+lines of `src/` comments, the latter a strict 1:1 swap (189 insertions / 189
+deletions) with two string literals deliberately included, since both name a
+file the reader is being sent to. `b05689d` explicitly left ARCHITECTURE.md's
+now-misaligned ASCII diagrams alone on the grounds that realigning them is
+hand-editing rather than find/replace; `c653a5b` did that by hand afterwards,
+whitespace and border characters only.
+
+### Complaint handler: built, ported, removed
+
+`5115c95` added a Phase 1 complaint-handling playbook generator — upload a
+`.txt` of real client complaint threads, get back structured findings — built
+on Anthropic's SDK in a new `src/lib/anthropic/` mirroring `src/lib/gemini/`.
+Its grounding rules were the load-bearing part: work only from the uploaded
+text, invent no policies, mark single-thread categories low confidence, and
+record what the threads do **not** establish in a required `notEvidenced`
+array, on the reasoning that a model with nowhere to put uncertainty invents
+certainty instead. Raw complaint text was never persisted.
+
+`ed8172d` ported it to Gemini, because there is no Anthropic account for this
+project. A real port rather than a config swap: Gemini's `responseSchema` is an
+OpenAPI 3.0 subset that steers rather than grammar-guarantees the output shape,
+a genuine downgrade from Anthropic's strict `json_schema` mode, so a
+hand-written shape validator had to gate everything reaching Mongo or the UI.
+It also produced a finding that outlived the feature — `detectAliasDrift()`
+caught `gemini-flash-latest` serving `gemini-3.7-flash` while `MODEL_ALIASES`
+still said 3.5-flash, mispricing those calls at 1.5/9.0 instead of 0.75/3.75.
+
+`c831826` removed the feature entirely as a detour from this repo's focus. The
+revert is worth reading for **what it deliberately kept**: the alias repoint
+and its pricing entry, which were correct independently of the feature and
+were also affecting `/api/generate-email`; and `CostInfo`, which predates it.
+It also reverted the two optional structured-output params added to the Gemini
+wrapper for this feature, on the grounds that leaving them would strand a
+param pair documented entirely in terms of something that no longer exists.
+`src/types/index.ts`, `.env.example` and `package.json` were returned
+byte-identical to their pre-feature state. Verified today: the only
+"complaint" left in `src/` is the English word in
+`src/app/api/generate-email/route.ts:1` describing what kind of emails it
+drafts.
+
+### Region, runtime, and environment validation
+
+`db61526` pinned functions to `cdg1` (Paris) to match the MongoDB Atlas
+cluster — the SRV record resolves to three MongoDB, Inc. addresses geolocated
+in Paris, while the Vercel project carried no region and so ran on the default
+`iad1` (Washington). **Every Mongo roundtrip was crossing the Atlantic.** It
+also declared `export const runtime = "nodejs"` on all 46 API routes (verified
+today: 46 of 46), a no-op since Node is the default, but an explicit statement
+of a real requirement — an import-graph walk shows all 46 reach `src/lib/mongo/`
+transitively, almost all via the rate limiter.
+
+The same commit added boot-time environment validation via
+`src/instrumentation.ts` against a Zod schema in `src/config/env.ts`, so a
+misconfigured deploy fails with every missing variable listed at once instead
+of surfacing as a per-route 500. Required vs optional follows **real behaviour,
+not `.env.example` membership**: `IMPORT_PIPELINE_TOKEN`, `GEMINI_API_KEY`,
+`USD_TO_MAD_RATE` and `GEMINI_PREPAID_USD_BALANCE` stay optional because each
+has a documented, test-asserted graceful fallback that a hard boot failure
+would break.
+
+It also evaluated and deliberately rejected `force-dynamic`, for the same
+reason the Cache Components evaluation later reached the same conclusion: all
+pages are `"use client"` and read data client-side via React Query, and
+`src/app/layout.tsx`'s `await headers()` CSP-nonce call already forces the
+whole tree dynamic — a real build reports zero static routes.
+
+`eb9dd31` closed the remaining hole: `register()` covers server boot but does
+**not** run during `next build`'s "Collecting page data" phase, where the first
+module-level throw wins instead, naming one variable at a time and forcing a
+fix-one-rerun-repeat loop. `scripts/check-env.mjs` runs the same schema before
+`next build` is invoked, failing in about a second with every problem listed
+instead of after a 25s compile with one. It is chained explicitly into `build`
+rather than relying on the implicit `prebuild` hook, because pnpm's
+`enable-pre-post-scripts` default has moved across releases and a guard that
+silently stops running is worse than no guard.
 
 ### Next.js 16.3.1 security upgrade; TypeScript 7 deferred
 
