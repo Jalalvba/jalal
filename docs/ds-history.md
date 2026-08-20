@@ -190,6 +190,63 @@ Cost impact, measured on the same vehicle with and without the fields:
 **4,832 → 5,111 input tokens (+5.8%)**. No change to rate limit, timeout or
 model.
 
+### Maintenance-interval compliance
+
+Three fixed-threshold checks — **vidange 10,000 km**, **filtre à air 30,000 km**,
+**filtre à gasoil 40,000 km** — computed in
+[`maintenanceIntervals.ts`](../src/lib/ai/prompts/maintenanceIntervals.ts) and
+handed to the model as finished facts. Prompt rules 11–12 forbid it from doing
+any km or date arithmetic itself. Same reasoning as the contract date: the math
+is deterministic, models are unreliable at it, and computing it here makes each
+check unit-testable.
+
+There is **no per-model interval data** in this project — `kb_specs` /
+`part_families` do not exist in any collection, in any database on the cluster,
+or anywhere in git history. Fixed thresholds are the only option available.
+
+**Service detection is not keyword matching** — see
+[`serviceTypes.ts`](../src/lib/ai/prompts/serviceTypes.ts). AVIS logs oil
+services as package codes (`VIDANGE 2:HUILE+FILTRE H/A+MO`, where H=huile,
+A=air, G=gasoil), so an air-filter change is usually the `A` inside a
+VIDANGE 2, not a `FILTRE A AIR` line. Detecting only the latter would miss
+~15,000 services and report vehicles as overdue that are not. The obvious
+keywords also carry high-volume false positives — `COURROIE ALTERNATEUR`
+(724 rows) is not the timing belt, `FILTRE A HUILE` (26,379) is the filter
+part not the service — so matching on `courroie` alone is ~75% wrong. Validated
+against all **6,098** distinct designations in production.
+
+#### The odometer is not monotonic, and that shaped the design
+
+Over 400 sampled vehicles with ≥10 DS: only **55.3%** non-decreasing, **44.8%**
+carry at least one backward step, 68 with a drop over 5,000 km (worst
+**−30,574**). Two consequences, both found by testing rather than planning:
+
+1. `currentKmOf()` takes the **maximum** reading, not the latest, so one
+   mistyped low value cannot shrink the odometer. That makes a backward step
+   invisible to a negative-gap check — a test caught the guard never firing and
+   returning a confident "ok". Coherence is now asserted explicitly.
+2. That guard was first written over the **whole history**, and a scan of real
+   high-DS vehicles returned "indéterminé" for every check on **5 of 6** —
+   precisely the long histories most worth analysing. It is now scoped to the
+   window **since the last service of that type**, the only span the arithmetic
+   depends on. A mistyped reading in 2022 says nothing about the gap since a
+   2025 service.
+
+Tolerance is 1,000 km, which separates keying noise (most common observed drop:
+−67 km) from odometer swaps. `never` is kept distinct from `overdue` — no
+record at all is a different, often more suspicious statement than a late one.
+
+Live example, `28220-B-7`: computed `Filtre à gasoil overdue +61,463 km, last
+2023-01-10 @133,841, now 235,304` — and the model restated exactly those
+numbers rather than recalculating. Cost 4,940 input tokens; the computed block
+is ~4 lines regardless of history size.
+
+**Rule 2 (kit de distribution / pompe à eau) is not implemented.** Its
+confirmed spec, for the follow-up: flag when the vehicle is **>6 months past
+`date_fin_contrat`** AND has **>120,000 km** AND has **no** recorded
+distribution/water-pump service; **skip the check entirely and say so** when
+`date_fin_contrat` is missing.
+
 **Nothing is persisted.** The analysis is advisory output from a
 non-deterministic model and would go stale the moment a new DS entry lands;
 `gemini_usage` already records that the call happened and what it cost, under
