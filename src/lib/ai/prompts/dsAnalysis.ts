@@ -428,11 +428,15 @@ export const DS_FOLLOWUP_SYSTEM_PROMPT = [
   "RÈGLES — elles priment sur toute autre considération :",
   "1. RÉEXAMINE LES DONNÉES fournies ci-dessous en fonction de la question. Ne te contente pas de justifier ton analyse précédente : elle peut être incomplète ou erronée.",
   "2. VÉRIFIE D'ABORD, CONCÈDE ENSUITE. Ne commence JAMAIS par « Vous avez raison » avant d'avoir retrouvé la chose dans les données. Si, après vérification, l'utilisateur a effectivement raison, dis-le simplement puis donne le constat manquant avec le nombre d'occurrences et les dates réelles. Si la vérification ne confirme pas sa remarque, ne concède rien : explique ce que montrent réellement les données.",
-  "3. Si ton analyse était correcte et que la question repose sur un malentendu, explique-le précisément et poliment, en citant les données concernées. Ne sois ni défensif ni complaisant.",
-  "4. Travaille EXCLUSIVEMENT à partir des interventions fournies. N'invente aucune intervention, date, pièce ni panne — ni pour te justifier, ni pour donner raison à l'utilisateur.",
-  "5. Si les données ne permettent pas de trancher, dis-le franchement plutôt que de spéculer.",
-  "6. Recopie les DATES et KILOMÉTRAGES exactement tels qu'ils apparaissent dans les données. Une date approximative ou de mémoire est une erreur : relis la ligne avant de la citer.",
-  "7. Réponds en français, en texte simple (PAS de JSON), de façon concise et factuelle. Deux à six phrases suffisent dans la plupart des cas.",
+  "3. QUESTION DU TYPE « pourquoi n'as-tu pas signalé X ? » : vérifier si X figure dans les interventions NE SUFFIT PAS. Va lire le bloc RÈGLES DE CONTRÔLE ci-dessous, qui donne pour chaque règle son seuil et le statut déjà calculé pour CE véhicule, puis réponds sur cette base :",
+  "   a) si la règle ne s'applique pas encore, dis-le avec les vrais chiffres — le seuil et la valeur réelle du véhicule (ex. « ce contrôle ne se déclenche qu'au-delà de 120 000 km ; le compteur fiable est à 118 157 km, la règle ne s'applique donc pas encore ») ; ne réponds JAMAIS par un simple « aucune intervention de ce type n'existe dans l'historique », qui est vrai mais à côté de la question ;",
+  "   b) si le statut calculé montre que la règle ÉTAIT déclenchée et qu'elle n'apparaît pas dans ton analyse, concède directement et donne le constat manquant avec les vrais chiffres ;",
+  "   c) n'invente jamais un seuil : n'utilise que ceux du bloc RÈGLES DE CONTRÔLE.",
+  "4. Si ton analyse était correcte et que la question repose sur un malentendu, explique-le précisément et poliment, en citant les données concernées. Ne sois ni défensif ni complaisant.",
+  "5. Travaille EXCLUSIVEMENT à partir des interventions fournies. N'invente aucune intervention, date, pièce ni panne — ni pour te justifier, ni pour donner raison à l'utilisateur.",
+  "6. Si les données ne permettent pas de trancher, dis-le franchement plutôt que de spéculer.",
+  "7. Recopie les DATES et KILOMÉTRAGES exactement tels qu'ils apparaissent dans les données. Une date approximative ou de mémoire est une erreur : relis la ligne avant de la citer.",
+  "8. Réponds en français, en texte simple (PAS de JSON), de façon concise et factuelle. Deux à six phrases suffisent dans la plupart des cas.",
 ].join("\n");
 
 /**
@@ -462,10 +466,17 @@ export function buildFollowUpPrompt(params: {
   input: DsAnalysisInput;
   contractStatus: ReturnType<typeof computeContractStatus>;
   intervalLines: readonly string[];
+  /**
+   * Every tracked rule with its threshold and this vehicle's computed status —
+   * including rules that did NOT fire, which intervalLines deliberately omits.
+   * Built by formatRulesReference() from the same check objects, never
+   * recomputed, so the two turns cannot disagree about a number.
+   */
+  rulesLines: readonly string[];
   previousAnalysis: DsAnalysis;
   question: string;
 }): string {
-  const { input, contractStatus, intervalLines, previousAnalysis, question } = params;
+  const { input, contractStatus, intervalLines, rulesLines, previousAnalysis, question } = params;
 
   const prior = [
     `Statut du contrat : ${previousAnalysis.contractFlag.label}`,
@@ -476,6 +487,11 @@ export function buildFollowUpPrompt(params: {
   return [
     "=== DONNÉES SOURCES (identiques à celles de l'analyse) ===",
     buildDsAnalysisPrompt(input, contractStatus, intervalLines),
+    "",
+    "=== RÈGLES DE CONTRÔLE ET STATUT CALCULÉ POUR CE VÉHICULE ===",
+    "Seuils et statuts déjà calculés en code. Une règle « NON APPLICABLE » n'a pas",
+    "été signalée dans l'analyse par construction, et non par oubli.",
+    ...rulesLines,
     "",
     "=== ANALYSE QUE TU AS PRODUITE ===",
     prior,

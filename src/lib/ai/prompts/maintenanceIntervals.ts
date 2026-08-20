@@ -391,3 +391,73 @@ export function formatBeltPumpCheck(c: BeltPumpCheck): string[] {
       return [];
   }
 }
+
+
+// ── Rules reference (follow-up path only) ─────────────────────────────────
+//
+// The main analysis is deliberately SILENT about checks that did not fire:
+// formatIntervalChecks() narrates only what it found, and formatBeltPumpCheck()
+// returns [] for "not_applicable". That silence is right for the analysis —
+// a clean vehicle should not produce a wall of "this rule did not apply".
+//
+// It is wrong for a FOLLOW-UP. Live on 44329-B-7 someone asked why the timing
+// belt was never flagged; the vehicle sits at 118,157 km against a 120,000 km
+// threshold, so rule 2 correctly stayed silent — but "correctly silent" and
+// "absent from the prompt" are the same thing to the model, which could only
+// answer "no such intervention exists in the history". Factually true, and it
+// completely missed the point: the reason it was not flagged is the threshold,
+// not the data gap.
+//
+// So the follow-up gets EVERY rule stated with its threshold and this
+// vehicle's actual computed value against it — including the ones that did not
+// fire — reusing the exact same IntervalCheck/BeltPumpCheck objects the
+// analysis was built from. Nothing is recomputed, so the two turns can never
+// disagree about a number.
+
+/**
+ * Every tracked rule, its threshold, and where this vehicle actually stands —
+ * including rules that did not fire. Follow-up prompt only.
+ */
+export function formatRulesReference(
+  checks: readonly IntervalCheck[],
+  belt: BeltPumpCheck
+): string[] {
+  const km = (n?: number) => (n === undefined ? "?" : n.toLocaleString("fr-FR"));
+
+  const lines = checks.map((c) => {
+    const head = `- ${c.label} — règle : à refaire tous les ${km(c.intervalKm)} km.`;
+    switch (c.status) {
+      case "ok":
+        return `${head} Statut calculé : RESPECTÉE — dernier le ${c.lastDate?.slice(0, 10)} à ${km(c.lastKm)} km, compteur ${km(c.currentKm)} km, soit ${km(c.kmSince)} km parcourus depuis (sous le seuil).`;
+      case "overdue":
+        return `${head} Statut calculé : DÉPASSÉE de ${km(c.overdueByKm)} km — dernier le ${c.lastDate?.slice(0, 10)} à ${km(c.lastKm)} km, compteur ${km(c.currentKm)} km.`;
+      case "never":
+        return `${head} Statut calculé : AUCUNE intervention de ce type dans l'historique (compteur ${km(c.currentKm)} km).`;
+      default:
+        return `${head} Statut calculé : INDÉTERMINÉ — ${c.note}`;
+    }
+  });
+
+  const bHead = `- ${belt.label} — règle : signalé UNIQUEMENT si le véhicule dépasse ${km(belt.thresholdKm)} km sans aucune intervention enregistrée.`;
+  switch (belt.status) {
+    case "not_applicable":
+      lines.push(
+        `${bHead} Statut calculé : NON APPLICABLE — le compteur fiable est à ${km(belt.currentKm)} km, soit ${km(belt.thresholdKm - (belt.currentKm ?? 0))} km sous le seuil. Aucune intervention n'est enregistrée, mais la règle ne s'applique pas encore : l'absence seule ne constitue pas une anomalie à ce kilométrage.`
+      );
+      break;
+    case "never":
+      lines.push(
+        `${bHead} Statut calculé : DÉCLENCHÉE — compteur ${km(belt.currentKm)} km, au-dessus du seuil, et aucune intervention enregistrée.`
+      );
+      break;
+    case "ok":
+      lines.push(
+        `${bHead} Statut calculé : NON APPLICABLE — une intervention est enregistrée le ${belt.lastServiceDate?.slice(0, 10) ?? "?"}${belt.lastServiceKm ? ` à ${km(belt.lastServiceKm)} km` : ""}.`
+      );
+      break;
+    default:
+      lines.push(`${bHead} Statut calculé : NON VÉRIFIÉ — ${belt.note}`);
+  }
+
+  return lines;
+}

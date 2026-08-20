@@ -8,6 +8,7 @@ import {
   currentKmOf,
   computeIntervalChecks,
   formatIntervalChecks,
+  formatRulesReference,
   INTERVALS,
   type IntervalEntry,
 } from "@/lib/ai/prompts/maintenanceIntervals";
@@ -349,5 +350,78 @@ describe("checkInterval — tiered guard", () => {
     expect(r.status).toBe("unknown");
     expect(r.note).toMatch(/aucun segment cohérent/i);
     expect(r.note).not.toMatch(/^Relevés kilométriques incohérents\.$/);
+  });
+});
+
+
+// ── Regression: a fired rule must reach the MAIN analysis prompt ───────────
+//
+// The bug this locks in: on 44329-B-7 a user had to ASK before the
+// timing-belt situation was discussed at all. Whenever a tracked condition is
+// actually met, the finding must already be in the lines the main analysis
+// prompt is built from — a follow-up must never be the thing that surfaces it.
+describe("regression — a met condition appears in the MAIN analysis lines", () => {
+  it("an overdue interval is in the analysis lines, without any follow-up", () => {
+    const entries: IntervalEntry[] = [
+      e("2024-01-01", 100_000, "VIDANGE 1:HUILE+FILTRE H+MO"),
+      e("2025-01-01", 135_000, "PNEU"),
+    ];
+    const lines = formatIntervalChecks(computeIntervalChecks(entries));
+    expect(lines.some((l) => /Vidange/.test(l) && /DÉPASSÉ/.test(l))).toBe(true);
+  });
+
+  it("a triggered belt/pump rule is in the analysis lines, without any follow-up", () => {
+    const lines = formatBeltPumpCheck(checkBeltPump([e("2025-01-01", 150_000, "PNEU")]));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/JAMAIS ENREGISTRÉ/);
+    expect(lines[0]).toMatch(/150\s000/);
+  });
+
+  it("stays silent in the analysis when the belt/pump threshold is NOT met", () => {
+    // 44329-B-7's real shape: 118,157 km against a 120,000 km threshold.
+    expect(formatBeltPumpCheck(checkBeltPump([e("2026-05-04", 118_157, "PNEU")]))).toEqual([]);
+  });
+});
+
+// ── The follow-up rules reference ─────────────────────────────────────────
+describe("formatRulesReference — every rule stated, including the silent ones", () => {
+  const entries: IntervalEntry[] = [
+    e("2025-12-15", 106_980, "FILTRE A AIR"),
+    e("2026-05-04", 118_157, "VIDANGE 1:HUILE+FILTRE H+MO"),
+  ];
+  const lines = formatRulesReference(computeIntervalChecks(entries), checkBeltPump(entries));
+  const belt = lines.find((l) => /Distribution/.test(l)) as string;
+
+  it("states the belt/pump rule even though the analysis omits it entirely", () => {
+    expect(formatBeltPumpCheck(checkBeltPump(entries))).toEqual([]);
+    expect(belt).toBeDefined();
+  });
+
+  it("gives the real threshold, the real current km, and the real gap", () => {
+    expect(belt).toMatch(/120\s000/);
+    expect(belt).toMatch(/118\s157/);
+    expect(belt).toMatch(/1\s843 km sous le seuil/);
+    expect(belt).toMatch(/NON APPLICABLE/);
+  });
+
+  it("says the absence alone is not an anomaly at this mileage", () => {
+    expect(belt).toMatch(/l'absence seule ne constitue pas une anomalie/i);
+  });
+
+  it("covers every tracked interval rule with its threshold", () => {
+    for (const [label, km] of [["Vidange", /10\s000/], ["Filtre à gasoil", /40\s000/], ["Filtre à air", /30\s000/]] as [string, RegExp][]) {
+      const l = lines.find((x) => x.includes(label));
+      expect(l, label).toBeDefined();
+      expect(l).toMatch(km);
+    }
+  });
+
+  it("reports a TRIGGERED belt/pump rule as such, so the follow-up can concede", () => {
+    const over = [e("2025-01-01", 150_000, "PNEU")];
+    const l = formatRulesReference(computeIntervalChecks(over), checkBeltPump(over)).find((x) =>
+      /Distribution/.test(x)
+    ) as string;
+    expect(l).toMatch(/DÉCLENCHÉE/);
+    expect(l).toMatch(/150\s000/);
   });
 });

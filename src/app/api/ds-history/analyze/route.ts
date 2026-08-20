@@ -45,6 +45,7 @@ import {
   formatIntervalChecks,
   checkBeltPump,
   formatBeltPumpCheck,
+  formatRulesReference,
 } from "@/lib/ai/prompts/maintenanceIntervals";
 
 // Lower than bdd-reformulate's 20/min: each call carries a whole vehicle
@@ -305,6 +306,9 @@ async function handleFollowUp(
           ...formatIntervalChecks(intervalChecks),
           ...formatBeltPumpCheck(beltPumpCheck),
         ],
+        // The rules the analysis was judged against, INCLUDING the ones that
+        // did not fire — same check objects, not a second computation.
+        rulesLines: formatRulesReference(intervalChecks, beltPumpCheck),
         previousAnalysis: followUp.previousAnalysis as DsAnalysis,
         question,
       }),
