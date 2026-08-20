@@ -25,7 +25,11 @@ import { authenticatedCookie } from "./helpers/auth";
 // rather than billing anything.)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PLATE = "39357-B-7";
+// Chosen deliberately: 62 real DS entries split 49 external / 12 internal /
+// 1 unknown across 9 distinct suppliers, with AUTO MECANIQUE IBN ROCHD
+// appearing 8 times — so this plate exercises the internal/external split AND
+// the supplier-recurrence finding against real data, not a synthetic fixture.
+const PLATE = "47024-B-7";
 
 test.describe("DS History — Analyse IA", () => {
   test.skip(
@@ -68,6 +72,10 @@ test.describe("DS History — Analyse IA", () => {
     // The cost badge proves the call went through the tracked path rather than
     // some direct fetch — every callAI() result carries costInfo inline.
     await expect(page.getByText(/MAD/).first()).toBeVisible();
+
+    // The internal/external split is computed client-side and shown before any
+    // call is made, so it must render even without an analysis.
+    await expect(page.getByText(/interne.*externe/)).toBeVisible();
 
     // The String() coercion on part designations exists because real Mongo
     // values do not honour their declared types; a regression there throws in

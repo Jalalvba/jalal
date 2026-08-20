@@ -16,6 +16,7 @@ import { Alert } from "@/components/ui/alert";
 import { CostBadge } from "@/components/fleet/CostBadge";
 import type { CostInfo, DsHistoryItem, ParcItem, CpItem } from "@/types";
 import type { RlRow } from "@/lib/sheets/googleSheetsRl";
+import { classifyRepairOrigin } from "@/lib/ai/prompts/dsAnalysis";
 import type { DsAnalysis, ContractLevel, FindingLevel } from "@/lib/ai/prompts/dsAnalysis";
 
 type AnalyzeResponse =
@@ -65,6 +66,16 @@ export function DsAnalysisCard({
   // a bug even when both values are individually correct.
   const contractEnd = contracts[0]?.date_fin_contrat ?? null;
 
+  // Shown next to the button so the user can see the internal/external split
+  // that is being sent, before spending a call on it.
+  const originCounts = items.reduce(
+    (acc, it) => {
+      acc[classifyRepairOrigin(it.fournisseur, it.techniciens).origin]++;
+      return acc;
+    },
+    { interne: 0, externe: 0, inconnu: 0 }
+  );
+
   async function runAnalysis() {
     setLoading(true);
     setError("");
@@ -85,6 +96,12 @@ export function DsAnalysisCard({
             date: it.date_ds,
             km: it.km,
             description: it.description == null ? undefined : String(it.description),
+            // Internal vs external. The rule lives in the prompt module so it
+            // is unit-testable; it reads fournisseur plus the
+            // "Fournisseur Externe" technicien sentinel, which is the only way
+            // to catch the ~10k production records that are external with no
+            // supplier recorded.
+            ...classifyRepairOrigin(it.fournisseur, it.techniciens),
             // designation_consommation is the strongest signal in this data —
             // descriptions are frequently "pb" or ".".
             //
@@ -136,6 +153,9 @@ export function DsAnalysisCard({
           </Button>
           <span className="text-xs text-muted-foreground">
             {items.length} intervention{items.length > 1 ? "s" : ""}
+            {originCounts.externe > 0 || originCounts.interne > 0
+              ? ` (${originCounts.interne} interne${originCounts.interne > 1 ? "s" : ""} · ${originCounts.externe} externe${originCounts.externe > 1 ? "s" : ""}${originCounts.inconnu > 0 ? ` · ${originCounts.inconnu} inconnu${originCounts.inconnu > 1 ? "s" : ""}` : ""})`
+              : ""}
             {contractEnd
               ? ` · contrat → ${new Date(contractEnd).toLocaleDateString("fr-FR")}`
               : " · contrat inconnu"}
