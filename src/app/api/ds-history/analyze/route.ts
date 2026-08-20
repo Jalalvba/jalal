@@ -20,15 +20,21 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
 import { callAI, AiCallError, type AiErrorKind } from "@/lib/ai";
-import { log } from "@/lib/http/logger";
+import { log, serializeError } from "@/lib/http/logger";
 import {
   buildDsAnalysisPrompt,
   computeContractStatus,
   isDsAnalysisShape,
+  dsAnalysisShapeError,
   ungroundedDates,
   ungroundedSuppliers,
+  ungroundedDatesInText,
   canonicalizeSuppliers,
   DS_ANALYSIS_SYSTEM_PROMPT,
+  DS_FOLLOWUP_SYSTEM_PROMPT,
+  buildFollowUpPrompt,
+  isDsAnalysisShape as isPriorAnalysisShape,
+  MAX_FOLLOW_UP_LENGTH,
   MAX_ENTRIES,
   type DsAnalysis,
   type DsAnalysisInput,
@@ -46,6 +52,11 @@ import {
 // not something sitting next to every row on a list page.
 const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60 * 1000;
+// Separate, tighter bucket. A follow-up costs MORE than the analysis it
+// challenges (it re-sends the payload AND the previous analysis), so sharing
+// the analysis budget would let repeated challenges crowd out real analyses.
+// 5/min is generous for a human typing questions.
+const FOLLOWUP_RATE_LIMIT = 5;
 const DEFAULT_MODEL = "gemini-flash-lite-latest";
 const REQUEST_TIMEOUT_MS = 30_000;
 // Raised from 900 after live testing: a 50-entry vehicle with three interval
@@ -121,9 +132,6 @@ function parseInput(body: unknown): DsAnalysisInput | string {
 }
 
 export async function POST(request: Request) {
-  const limited = await rateLimitOrNull(request, "ds-history-analysis", RATE_LIMIT, RATE_WINDOW_MS);
-  if (limited) return limited;
-
   let body: unknown;
   try {
     body = await request.json();
@@ -131,9 +139,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
   }
 
+  // A follow-up is the same payload plus a question and the analysis being
+  // challenged. Detected before rate limiting so it draws on its own bucket.
+  const raw = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+  const followUpRaw = raw.followUp;
+  const isFollowUp = typeof followUpRaw === "object" && followUpRaw !== null;
+
+  const limited = await rateLimitOrNull(
+    request,
+    isFollowUp ? "ds-history-followup" : "ds-history-analysis",
+    isFollowUp ? FOLLOWUP_RATE_LIMIT : RATE_LIMIT,
+    RATE_WINDOW_MS
+  );
+  if (limited) return limited;
+
   const parsed = parseInput(body);
   if (typeof parsed === "string") {
     return NextResponse.json({ ok: false, error: parsed }, { status: 400 });
+  }
+
+  if (isFollowUp) {
+    return handleFollowUp(parsed, followUpRaw as Record<string, unknown>);
   }
 
   const contractStatus = computeContractStatus(parsed.contractEnd);
@@ -159,9 +185,19 @@ export async function POST(request: Request) {
       temperature: TEMPERATURE,
       timeoutMs: REQUEST_TIMEOUT_MS,
       validate: (t) => {
+        // Logs WHICH field failed. A bare "failed validation" is impossible to
+        // act on when the model is non-deterministic and the schema has ~6
+        // fields plus an array — this names the offender.
         try {
-          return isDsAnalysisShape(JSON.parse(stripFence(t)));
-        } catch {
+          const reason = dsAnalysisShapeError(JSON.parse(stripFence(t)));
+          if (reason) log("warn", "ds-analysis", "Response rejected by shape check", { imm: parsed.imm, reason });
+          return reason === null;
+        } catch (err) {
+          log("warn", "ds-analysis", "Response was not parseable JSON", {
+            imm: parsed.imm,
+            head: t.slice(0, 120),
+            ...serializeError(err),
+          });
           return false;
         }
       },
@@ -225,4 +261,80 @@ export async function POST(request: Request) {
 function stripFence(t: string): string {
   const m = t.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
   return m ? m[1] : t.trim();
+}
+
+
+/**
+ * Answers a question about an analysis already shown, grounded in the exact
+ * same payload. Free text, not JSON — a challenge deserves a sentence, not a
+ * schema — so `validate` here is a non-empty check rather than a shape check.
+ */
+async function handleFollowUp(
+  parsed: DsAnalysisInput,
+  followUp: Record<string, unknown>
+): Promise<NextResponse> {
+  const question = typeof followUp.question === "string" ? followUp.question.trim() : "";
+  if (!question) {
+    return NextResponse.json({ ok: false, error: "La question est vide" }, { status: 400 });
+  }
+  if (question.length > MAX_FOLLOW_UP_LENGTH) {
+    return NextResponse.json(
+      { ok: false, error: `La question dépasse ${MAX_FOLLOW_UP_LENGTH} caractères` },
+      { status: 400 }
+    );
+  }
+  if (!isPriorAnalysisShape(followUp.previousAnalysis)) {
+    return NextResponse.json(
+      { ok: false, error: "Analyse précédente manquante ou invalide" },
+      { status: 400 }
+    );
+  }
+
+  const contractStatus = computeContractStatus(parsed.contractEnd);
+  const intervalChecks = computeIntervalChecks(parsed.entries);
+  const beltPumpCheck = checkBeltPump(parsed.entries);
+
+  try {
+    const { text, costInfo } = await callAI({
+      action: "ds-history-followup",
+      model: DEFAULT_MODEL,
+      prompt: buildFollowUpPrompt({
+        input: parsed,
+        contractStatus,
+        intervalLines: [
+          ...formatIntervalChecks(intervalChecks),
+          ...formatBeltPumpCheck(beltPumpCheck),
+        ],
+        previousAnalysis: followUp.previousAnalysis as DsAnalysis,
+        question,
+      }),
+      systemPrompt: DS_FOLLOWUP_SYSTEM_PROMPT,
+      maxTokens: MAX_OUTPUT_TOKENS,
+      temperature: TEMPERATURE,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      validate: (t) => t.trim().length > 0,
+    });
+
+    // Same grounding standard as the analysis path. Prose cannot have a bad
+    // finding removed from it, so an ungrounded date is surfaced to the reader
+    // instead of being silently served.
+    const badDates = ungroundedDatesInText(text, parsed);
+    let answer = text;
+    if (badDates.length > 0) {
+      log("warn", "ds-analysis", "Follow-up cited dates absent from the source data", {
+        imm: parsed.imm,
+        ungrounded: badDates,
+      });
+      answer =
+        `${text}\n\n⚠ Vérification automatique : cette réponse cite ${badDates.length > 1 ? "des dates absentes" : "une date absente"} des données sources (${badDates.join(", ")}). Recoupez avec les interventions listées ci-dessous avant d'agir.`;
+    }
+
+    return NextResponse.json({ ok: true, answer, question, ungroundedDates: badDates, costInfo });
+  } catch (e) {
+    if (e instanceof AiCallError) {
+      return NextResponse.json({ ok: false, error: ERROR_MESSAGES[e.kind] }, { status: e.status });
+    }
+    log("error", "ds-analysis", "Unexpected follow-up failure", { imm: parsed.imm });
+    return NextResponse.json({ ok: false, error: "Échec de la réponse" }, { status: 500 });
+  }
 }

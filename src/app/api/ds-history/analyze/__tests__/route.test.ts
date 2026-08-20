@@ -193,3 +193,135 @@ describe("POST /api/ds-history/analyze — grounding", () => {
     expect(mockedCallAI.mock.calls[0][0].action).toBe("ds-history-analysis");
   });
 });
+
+
+describe("POST /api/ds-history/analyze — follow-up mode", () => {
+  const PRIOR = {
+    contractFlag: { level: "ok", label: "Contrat valide" },
+    findings: [{ level: "warn", title: "Turbo moteur", detail: "3 remplacements" }],
+    summary: "Récurrence turbo.",
+    insufficientData: false,
+  };
+  const fu = (over: Record<string, unknown> = {}) => ({
+    ...BASE,
+    followUp: { question: "pourquoi tu n'as pas mentionné l'injection", previousAnalysis: PRIOR, ...over },
+  });
+
+  it("answers a challenge with free text, not the analysis JSON shape", async () => {
+    mockedCallAI.mockResolvedValue({
+      text: "Vous avez raison, je ne l'ai pas relevé : les injecteurs apparaissent 3 fois.",
+      costInfo: COST,
+    });
+
+    const res = await POST(req(fu()));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.answer).toMatch(/Vous avez raison/);
+    expect(body.question).toBe("pourquoi tu n'as pas mentionné l'injection");
+    expect(body.analysis).toBeUndefined(); // does NOT re-run the analysis
+  });
+
+  it("bills follow-ups to their own action so their cost is separable", async () => {
+    mockedCallAI.mockResolvedValue({ text: "réponse", costInfo: COST });
+    await POST(req(fu()));
+    expect(mockedCallAI.mock.calls[0][0].action).toBe("ds-history-followup");
+  });
+
+  it("instructs the model to re-examine the data rather than defend itself", async () => {
+    mockedCallAI.mockResolvedValue({ text: "réponse", costInfo: COST });
+    await POST(req(fu()));
+    const sys = mockedCallAI.mock.calls[0][0].systemPrompt!;
+    expect(sys).toMatch(/RÉEXAMINE LES DONNÉES/);
+    expect(sys).toMatch(/Ne te contente pas de justifier ton analyse précédente/);
+  });
+
+  it("carries BOTH the original data and the prior analysis into the prompt", async () => {
+    mockedCallAI.mockResolvedValue({ text: "réponse", costInfo: COST });
+    await POST(req(fu()));
+    const prompt = mockedCallAI.mock.calls[0][0].prompt;
+    expect(prompt).toContain("DONNÉES SOURCES");
+    expect(prompt).toContain("turbo moteur"); // from the source entries
+    expect(prompt).toContain("ANALYSE QUE TU AS PRODUITE");
+    expect(prompt).toContain("Récurrence turbo."); // the prior summary
+    expect(prompt).toContain("QUESTION DE L'UTILISATEUR");
+  });
+
+  it("accepts a follow-up defending a correct original analysis", async () => {
+    mockedCallAI.mockResolvedValue({
+      text: "L'injection n'apparaît qu'une fois (2025-01-15), ce qui ne constitue pas une récurrence.",
+      costInfo: COST,
+    });
+    const body = await (await POST(req(fu()))).json();
+    expect(body.ok).toBe(true);
+    expect(body.answer).toMatch(/ne constitue pas une récurrence/);
+  });
+
+  it("rejects an empty question without calling the model", async () => {
+    const res = await POST(req(fu({ question: "   " })));
+    expect(res.status).toBe(400);
+    expect(mockedCallAI).not.toHaveBeenCalled();
+  });
+
+  it("rejects an over-long question", async () => {
+    const res = await POST(req(fu({ question: "x".repeat(501) })));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/dépasse/);
+  });
+
+  it("rejects a missing or malformed previousAnalysis rather than guessing", async () => {
+    for (const bad of [undefined, null, {}, { findings: [] }, "not an object"]) {
+      vi.clearAllMocks();
+      const res = await POST(req(fu({ previousAnalysis: bad })));
+      expect(res.status).toBe(400);
+      expect(mockedCallAI).not.toHaveBeenCalled();
+    }
+  });
+
+  it("still validates the underlying payload — a follow-up needs real entries", async () => {
+    const res = await POST(req({ ...fu(), entries: [] }));
+    expect(res.status).toBe(400);
+  });
+
+  it("flags a date the follow-up invented, rather than serving it silently", async () => {
+    // Caught live: the model cited "2025-01-04" for an entry actually dated
+    // 2025-02-04 — right part, right km, wrong month. Prose cannot have a bad
+    // finding dropped from it, so the reader is told.
+    mockedCallAI.mockResolvedValue({
+      text: "L'embrayage a été changé le 09/09/2019.",
+      costInfo: COST,
+    });
+    const body = await (await POST(req(fu()))).json();
+
+    expect(body.ok).toBe(true);
+    expect(body.ungroundedDates).toEqual(["09/09/2019"]);
+    expect(body.answer).toMatch(/Vérification automatique/);
+    expect(body.answer).toMatch(/09\/09\/2019/);
+  });
+
+  it("leaves a correctly-grounded answer untouched", async () => {
+    mockedCallAI.mockResolvedValue({
+      text: "Le turbo a été remplacé le 15/01/2025.",
+      costInfo: COST,
+    });
+    const body = await (await POST(req(fu()))).json();
+
+    expect(body.ungroundedDates).toEqual([]);
+    expect(body.answer).not.toMatch(/Vérification automatique/);
+  });
+
+  it("tells the model to verify before conceding", async () => {
+    mockedCallAI.mockResolvedValue({ text: "réponse", costInfo: COST });
+    await POST(req(fu()));
+    const sys = mockedCallAI.mock.calls[0][0].systemPrompt!;
+    expect(sys).toMatch(/VÉRIFIE D'ABORD, CONCÈDE ENSUITE/);
+    expect(sys).toMatch(/Ne commence JAMAIS par « Vous avez raison »/);
+  });
+
+  it("maps AI failures the same way the analysis path does", async () => {
+    mockedCallAI.mockRejectedValue(new AiCallError(504, "timeout"));
+    const res = await POST(req(fu()));
+    expect(res.status).toBe(504);
+    expect((await res.json()).ok).toBe(false);
+  });
+});

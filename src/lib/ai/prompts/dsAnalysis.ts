@@ -167,6 +167,30 @@ const FINDING_LEVELS: FindingLevel[] = ["info", "warn", "critical"];
  * reaches Mongo or the UI. Every field is checked — a partially-valid analysis
  * rendered as complete is worse than an error.
  */
+export function dsAnalysisShapeError(v: unknown): string | null {
+  if (typeof v !== "object" || v === null) return "not an object";
+  const o = v as Record<string, unknown>;
+
+  const cf = o.contractFlag as Record<string, unknown> | undefined;
+  if (!cf || typeof cf !== "object") return "contractFlag missing";
+  if (!CONTRACT_LEVELS.includes(cf.level as ContractLevel)) return `contractFlag.level=${JSON.stringify(cf.level)}`;
+  if (typeof cf.label !== "string" || !cf.label.trim()) return "contractFlag.label empty";
+
+  if (!Array.isArray(o.findings)) return "findings not an array";
+  for (let i = 0; i < o.findings.length; i++) {
+    const f = o.findings[i];
+    if (typeof f !== "object" || f === null) return `findings[${i}] not an object`;
+    const fo = f as Record<string, unknown>;
+    if (!FINDING_LEVELS.includes(fo.level as FindingLevel)) return `findings[${i}].level=${JSON.stringify(fo.level)}`;
+    if (typeof fo.title !== "string" || !fo.title.trim()) return `findings[${i}].title empty`;
+    if (typeof fo.detail !== "string") return `findings[${i}].detail not a string`;
+  }
+
+  if (typeof o.summary !== "string" || !o.summary.trim()) return "summary empty";
+  if (typeof o.insufficientData !== "boolean") return `insufficientData=${JSON.stringify(o.insufficientData)}`;
+  return null;
+}
+
 export function isDsAnalysisShape(v: unknown): v is DsAnalysis {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
@@ -377,4 +401,86 @@ export function buildDsAnalysisPrompt(
     );
   }
   return lines.join("\n");
+}
+
+
+// ── Follow-up / challenge ─────────────────────────────────────────────────
+//
+// Single-shot with the context re-supplied, not a multi-turn conversation:
+// callAI takes `prompt: string` and gemini.ts builds `contents` from it alone.
+// Adding a messages[] array to the provider-agnostic interface to serve one
+// two-turn use case is exactly the speculative abstraction that module was
+// deliberately built without — and the model is stateless either way, so
+// re-supplying the payload gives an identical result.
+
+export const MAX_FOLLOW_UP_LENGTH = 500;
+
+/**
+ * The instruction that matters here is the second one: re-examine the DATA,
+ * do not defend the previous answer. A model asked "why didn't you mention X"
+ * will otherwise produce a fluent justification for whatever it said before,
+ * which is the opposite of useful when the person is right.
+ */
+export const DS_FOLLOWUP_SYSTEM_PROMPT = [
+  "Tu as produit une analyse de l'historique de maintenance d'un véhicule de flotte (AVIS Maroc).",
+  "L'utilisateur te pose une question de suivi, souvent pour contester ou vérifier cette analyse.",
+  "",
+  "RÈGLES — elles priment sur toute autre considération :",
+  "1. RÉEXAMINE LES DONNÉES fournies ci-dessous en fonction de la question. Ne te contente pas de justifier ton analyse précédente : elle peut être incomplète ou erronée.",
+  "2. VÉRIFIE D'ABORD, CONCÈDE ENSUITE. Ne commence JAMAIS par « Vous avez raison » avant d'avoir retrouvé la chose dans les données. Si, après vérification, l'utilisateur a effectivement raison, dis-le simplement puis donne le constat manquant avec le nombre d'occurrences et les dates réelles. Si la vérification ne confirme pas sa remarque, ne concède rien : explique ce que montrent réellement les données.",
+  "3. Si ton analyse était correcte et que la question repose sur un malentendu, explique-le précisément et poliment, en citant les données concernées. Ne sois ni défensif ni complaisant.",
+  "4. Travaille EXCLUSIVEMENT à partir des interventions fournies. N'invente aucune intervention, date, pièce ni panne — ni pour te justifier, ni pour donner raison à l'utilisateur.",
+  "5. Si les données ne permettent pas de trancher, dis-le franchement plutôt que de spéculer.",
+  "6. Recopie les DATES et KILOMÉTRAGES exactement tels qu'ils apparaissent dans les données. Une date approximative ou de mémoire est une erreur : relis la ligne avant de la citer.",
+  "7. Réponds en français, en texte simple (PAS de JSON), de façon concise et factuelle. Deux à six phrases suffisent dans la plupart des cas.",
+].join("\n");
+
+/**
+ * Dates in a free-text answer that appear nowhere in the source.
+ *
+ * The follow-up path returns prose, so a bad finding cannot simply be dropped
+ * the way ungroundedDates() drops one from an analysis. This exists because a
+ * live test caught exactly that failure: the model cited "2025-01-04" for an
+ * entry actually dated 2025-02-04 — right part, right km, wrong month. The
+ * caller appends a visible caveat rather than silently serving it.
+ */
+export function ungroundedDatesInText(text: string, input: DsAnalysisInput): string[] {
+  const allowed = new Set<string>();
+  for (const iso of [
+    ...input.entries.map((e) => e.date),
+    ...input.replacements.map((r) => r.date),
+    input.contractEnd,
+  ]) {
+    if (iso) for (const v of dateVariants(iso)) allowed.add(v);
+  }
+  const found = text.match(DATE_RE) ?? [];
+  return [...new Set(found.filter((d) => !allowed.has(d)))];
+}
+
+/** Builds the follow-up turn: original data + what was answered + the question. */
+export function buildFollowUpPrompt(params: {
+  input: DsAnalysisInput;
+  contractStatus: ReturnType<typeof computeContractStatus>;
+  intervalLines: readonly string[];
+  previousAnalysis: DsAnalysis;
+  question: string;
+}): string {
+  const { input, contractStatus, intervalLines, previousAnalysis, question } = params;
+
+  const prior = [
+    `Statut du contrat : ${previousAnalysis.contractFlag.label}`,
+    ...previousAnalysis.findings.map((f) => `- [${f.level}] ${f.title} : ${f.detail}`),
+    `Résumé : ${previousAnalysis.summary}`,
+  ].join("\n");
+
+  return [
+    "=== DONNÉES SOURCES (identiques à celles de l'analyse) ===",
+    buildDsAnalysisPrompt(input, contractStatus, intervalLines),
+    "",
+    "=== ANALYSE QUE TU AS PRODUITE ===",
+    prior,
+    "",
+    "=== QUESTION DE L'UTILISATEUR ===",
+    question,
+  ].join("\n");
 }
