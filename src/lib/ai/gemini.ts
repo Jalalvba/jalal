@@ -10,7 +10,7 @@
 import { log, serializeError } from "@/lib/http/logger";
 import { computeCallCost, detectAliasDrift } from "@/lib/ai/pricing";
 import { claimFreeTierSlot, recordUsage, getRemainingCredit } from "@/lib/ai/usage";
-import { GeminiCallError, type CostInfo, type GeminiCallParams } from "@/lib/ai/types";
+import { AiCallError, type AiCallParams, type AiResult, type CostInfo } from "@/lib/ai/types";
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 
@@ -18,24 +18,28 @@ const DEFAULT_TIMEOUT_MS = 20_000;
  * Returns the model's text alongside the cost breakdown for that same call, so
  * a route can pass costInfo straight into its own JSON response and the UI can
  * show it in the same round trip — no polling, no separate log fetch.
+ *
+ * Translating AiCallParams' neutral names into Gemini's wire names happens
+ * here and nowhere else: systemPrompt -> systemInstruction, maxTokens ->
+ * generationConfig.maxOutputTokens. That mapping is the reason callers do not
+ * carry Gemini vocabulary.
  */
-export async function callGeminiWithTracking(
-  params: GeminiCallParams
-): Promise<{ result: string; costInfo: CostInfo }> {
+export async function callGemini(params: AiCallParams): Promise<AiResult> {
   const {
     action,
     model,
     prompt,
-    systemInstruction,
-    maxOutputTokens,
+    systemPrompt,
+    maxTokens,
     temperature,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    validate,
   } = params;
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.error(`[${action}] GEMINI_API_KEY is not set`);
-    throw new GeminiCallError(500, "unconfigured");
+    throw new AiCallError(500, "unconfigured");
   }
 
   // Claimed before the request so concurrent calls can't both think they're the
@@ -53,11 +57,11 @@ export async function callGeminiWithTracking(
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          ...(systemInstruction
-            ? { systemInstruction: { parts: [{ text: systemInstruction }] } }
+          ...(systemPrompt
+            ? { systemInstruction: { parts: [{ text: systemPrompt }] } }
             : {}),
           generationConfig: {
-            ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+            ...(maxTokens !== undefined ? { maxOutputTokens: maxTokens } : {}),
             ...(temperature !== undefined ? { temperature } : {}),
           },
         }),
@@ -71,16 +75,16 @@ export async function callGeminiWithTracking(
       // detail we don't want to promise as a stable client contract.
       const rawText = await response.text().catch(() => "");
       console.error(`[${action}] Gemini API returned ${response.status}: ${rawText}`);
-      if (response.status === 429) throw new GeminiCallError(429, "rate-limited");
-      if (response.status >= 500) throw new GeminiCallError(502, "upstream");
-      throw new GeminiCallError(500, "upstream");
+      if (response.status === 429) throw new AiCallError(429, "rate-limited");
+      if (response.status >= 500) throw new AiCallError(502, "upstream");
+      throw new AiCallError(500, "upstream");
     }
 
     const data = await response.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (typeof text !== "string" || !text.trim()) {
       console.error(`[${action}] Unexpected Gemini response shape:`, JSON.stringify(data));
-      throw new GeminiCallError(500, "bad-response");
+      throw new AiCallError(500, "bad-response");
     }
 
     // Token usage field names verified 2026-08-16 against
@@ -135,15 +139,27 @@ export async function callGeminiWithTracking(
     // Read after recording so the figure already reflects this call.
     const remainingCreditUsd = await getRemainingCredit();
 
-    return { result: text.trim(), costInfo: { ...partial, remainingCreditUsd } };
+    const finalText = text.trim();
+
+    // Caller-supplied validation runs AFTER the response arrives, because
+    // Gemini's responseSchema steers generation rather than constraining the
+    // decoder — see AiCallParams.validate. Deliberately placed after
+    // recordUsage: the call was made and billed whether or not the output is
+    // usable, so refusing to record it would understate real spend.
+    if (validate && !validate(finalText)) {
+      log("error", "gemini", "Response failed caller validation", { action, model });
+      throw new AiCallError(500, "bad-response");
+    }
+
+    return { text: finalText, costInfo: { ...partial, remainingCreditUsd } };
   } catch (e) {
-    if (e instanceof GeminiCallError) throw e;
+    if (e instanceof AiCallError) throw e;
     if (e instanceof Error && e.name === "AbortError") {
       log("error", "gemini", "Gemini request timed out", { action, timeoutMs });
-      throw new GeminiCallError(504, "timeout");
+      throw new AiCallError(504, "timeout");
     }
     log("error", "gemini", "Gemini request failed", { action, ...serializeError(e) });
-    throw new GeminiCallError(500, "upstream");
+    throw new AiCallError(500, "upstream");
   } finally {
     clearTimeout(timeout);
   }

@@ -21,7 +21,7 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
-import { callGeminiWithTracking, GeminiCallError } from "@/lib/ai";
+import { callAI, AiCallError, type AiErrorKind } from "@/lib/ai";
 import type { ReformulateCommentRequest } from "@/types";
 
 const RATE_LIMIT = 20;
@@ -71,7 +71,7 @@ function buildUserTurn(comment: string, context: ReformulateCommentRequest["cont
 
 // Client-facing French messages per failure kind. The wrapper logs the raw
 // upstream detail server-side; none of it is echoed to the client.
-const ERROR_MESSAGES: Record<GeminiCallError["kind"], string> = {
+const ERROR_MESSAGES: Record<AiErrorKind, string> = {
   unconfigured: "La reformulation n'est pas configurée",
   "rate-limited": "Reformulation rate-limitée en amont. Réessayez dans un instant.",
   upstream: "Échec de la reformulation",
@@ -107,23 +107,23 @@ export async function POST(request: Request) {
   const userTurn = buildUserTurn(comment, body.context);
 
   try {
-    // All Gemini access goes through callGeminiWithTracking — never fetch the
-    // API directly from a route, or the call escapes cost tracking entirely.
-    const { result, costInfo } = await callGeminiWithTracking({
+    // All AI access goes through callAI — never fetch a model API directly
+    // from a route, or the call escapes cost tracking entirely.
+    const { text, costInfo } = await callAI({
       action: "bdd-reformulate",
       model: DEFAULT_MODEL,
       prompt: userTurn,
-      systemInstruction: SYSTEM_INSTRUCTION,
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      systemPrompt: SYSTEM_INSTRUCTION,
+      maxTokens: MAX_OUTPUT_TOKENS,
       temperature: TEMPERATURE,
       timeoutMs: REQUEST_TIMEOUT_MS,
     });
 
     // costInfo is passed straight through so the client gets the cost in the
     // same round trip as the suggestion.
-    return NextResponse.json({ ok: true, reformulated: result, costInfo });
+    return NextResponse.json({ ok: true, reformulated: text, costInfo });
   } catch (e) {
-    if (e instanceof GeminiCallError) {
+    if (e instanceof AiCallError) {
       return NextResponse.json({ ok: false, error: ERROR_MESSAGES[e.kind] }, { status: e.status });
     }
     console.error("[bdd/reformulate-comment] Unexpected failure:", e);
