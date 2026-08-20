@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+// Imported from its own file, not via the re-export in prompts/dsAnalysis.ts —
+// these assertions must read the real source of the prompt text.
+import { DS_ANALYSIS_SYSTEM_PROMPT } from "@/lib/ai/dsAnalysis/prompt";
+import { DS_FOLLOWUP_SYSTEM_PROMPT } from "@/lib/ai/dsAnalysis/followUpPrompt";
 import {
-  DS_ANALYSIS_SYSTEM_PROMPT,
   classifyRepairOrigin,
   canonicalizeSuppliers,
   ungroundedSuppliers,
@@ -375,5 +378,16 @@ describe("DS_ANALYSIS_SYSTEM_PROMPT — the three mandatory axes", () => {
   it("uses a 2-occurrence threshold for parts, looser than suppliers' 3", () => {
     expect(DS_ANALYSIS_SYSTEM_PROMPT).toMatch(/2 fois ou plus/);
     expect(DS_ANALYSIS_SYSTEM_PROMPT).toMatch(/3 fois ou plus/);
+  });
+});
+
+// The re-export in prompts/dsAnalysis.ts exists only so existing import sites
+// keep working. If it ever drifts from the real file, every prompt assertion
+// above would still pass while the API received something else.
+describe("prompt re-exports stay identical to their source files", () => {
+  it("re-exports the very same strings", async () => {
+    const viaBarrel = await import("@/lib/ai/prompts/dsAnalysis");
+    expect(viaBarrel.DS_ANALYSIS_SYSTEM_PROMPT).toBe(DS_ANALYSIS_SYSTEM_PROMPT);
+    expect(viaBarrel.DS_FOLLOWUP_SYSTEM_PROMPT).toBe(DS_FOLLOWUP_SYSTEM_PROMPT);
   });
 });
