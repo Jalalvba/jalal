@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DS_ANALYSIS_SYSTEM_PROMPT,
   classifyRepairOrigin,
   canonicalizeSuppliers,
   ungroundedSuppliers,
@@ -325,5 +326,54 @@ describe("buildDsAnalysisPrompt — origin markers (rule 8)", () => {
     expect(p).toContain("| externe: STAR PNEUMATIQUE");
     expect(p).toContain("| externe (non nommé)");
     expect(p).toContain("| inconnu");
+  });
+});
+
+
+describe("DS_ANALYSIS_SYSTEM_PROMPT — the three mandatory axes", () => {
+  // These assertions exist because part-recurrence detection REGRESSED once
+  // already: it was the only axis with no "actively search" mandate, while
+  // rule 9 mandated supplier recurrence and rule 14 explicitly ranked
+  // recurrences below interval checks. Measured on 47024-B-7, three runs
+  // produced 2, 0 and 1 part-recurrence findings despite the data containing
+  // injectors 6x, embrayage 3x and moyeu 2x. After the restructure: 4, 3, 3.
+
+  it("states all three axes as independent and non-optional", () => {
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toContain("TROIS AXES");
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toMatch(/AXE 1 —.*[Ii]ntervalle/);
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toMatch(/AXE 2 —.*[Rr]écurrences de pièces/);
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toMatch(/AXE 3 —.*[Rr]écurrences de prestataires/);
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toContain("Aucun n'est optionnel");
+  });
+
+  it("mandates an ACTIVE search for part recurrence, not merely how to phrase one", () => {
+    // The distinction that caused the regression: rules 2 and 3 describe the
+    // FORMAT of a recurrence finding; neither asks for one to exist.
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toMatch(/RECHERCHE ACTIVEMENT les récurrences de pièces/);
+  });
+
+  it("keeps the same active mandate for supplier recurrence", () => {
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toMatch(/RECHERCHE ACTIVEMENT les récurrences par prestataire/);
+  });
+
+  it("instructs grouping of spelling variants into one finding", () => {
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toContain("REGROUPE les variantes");
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toContain("TARAGE INJECTEUR");
+  });
+
+  it("no longer ranks interval checks ABOVE recurrences", () => {
+    // The exact wording that demoted axis 2.
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).not.toContain("AVANT les récurrences");
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toContain("GARANTIE DE PLACE, PAS DE PRIORITÉ ENTRE AXES");
+  });
+
+  it("allows 10 findings, not 6 — the cap was the mechanical cause of crowding", () => {
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toMatch(/jusqu'à 10 éléments/);
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).not.toMatch(/0 à 6 éléments/);
+  });
+
+  it("uses a 2-occurrence threshold for parts, looser than suppliers' 3", () => {
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toMatch(/2 fois ou plus/);
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).toMatch(/3 fois ou plus/);
   });
 });
