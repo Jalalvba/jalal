@@ -81,6 +81,23 @@ export async function callGemini(params: AiCallParams): Promise<AiResult> {
     }
 
     const data = await response.json();
+
+    // Truncation is otherwise INVISIBLE: a response cut off at maxTokens comes
+    // back HTTP 200 with valid-looking-but-incomplete text, which then fails
+    // JSON.parse in a caller's validate() and surfaces as an opaque
+    // "bad-response". Found live — three consecutive calls returned exactly
+    // 896 output tokens against a 900 cap. Logged loudly so the next
+    // occurrence names its own cause.
+    const finishReason = data?.candidates?.[0]?.finishReason;
+    if (finishReason === "MAX_TOKENS") {
+      log("error", "gemini", "Response truncated at maxTokens — raise the caller's limit", {
+        action,
+        model,
+        maxTokens,
+      });
+      throw new AiCallError(500, "bad-response");
+    }
+
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (typeof text !== "string" || !text.trim()) {
       console.error(`[${action}] Unexpected Gemini response shape:`, JSON.stringify(data));

@@ -139,6 +139,29 @@ describe("callAI — error handling", () => {
     await expect(callAI(BASE)).rejects.toMatchObject({ kind: "timeout", status: 504 });
   });
 
+  it("detects a response truncated at maxTokens instead of failing opaquely", async () => {
+    // Found live: three consecutive calls returned exactly 896 output tokens
+    // against a 900 cap. Gemini answers HTTP 200 with valid-looking but
+    // incomplete text, which then fails a caller's JSON.parse and surfaces as
+    // an unexplained "bad-response". finishReason is the only signal.
+    mockFetch(() => ({
+      ok: true,
+      json: async () => ({
+        candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: '{"partial":' }] } }],
+        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 900 },
+      }),
+    }));
+    await expect(callAI(BASE)).rejects.toMatchObject({ kind: "bad-response", status: 500 });
+  });
+
+  it("does not treat a normal STOP finishReason as truncation", async () => {
+    mockFetch(() => ({
+      ok: true,
+      json: async () => geminiOk("fine", { candidates: [{ finishReason: "STOP", content: { parts: [{ text: "fine" }] } }] }),
+    }));
+    await expect(callAI(BASE)).resolves.toMatchObject({ text: "fine" });
+  });
+
   it("rejects an empty or missing text part as bad-response", async () => {
     mockFetch(() => ({ ok: true, json: async () => geminiOk("   ") }));
     await expect(callAI(BASE)).rejects.toMatchObject({ kind: "bad-response", status: 500 });

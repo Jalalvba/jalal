@@ -48,7 +48,11 @@ const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60 * 1000;
 const DEFAULT_MODEL = "gemini-flash-lite-latest";
 const REQUEST_TIMEOUT_MS = 30_000;
-const MAX_OUTPUT_TOKENS = 900;
+// Raised from 900 after live testing: a 50-entry vehicle with three interval
+// checks, the belt/pump check and six findings hit exactly 896/900 three times
+// running, truncating the JSON mid-object. Highest observed legitimate use is
+// ~900, so this leaves real headroom rather than shaving the limit.
+const MAX_OUTPUT_TOKENS = 1_800;
 const TEMPERATURE = 0.2;
 
 // Hard ceiling on the client-supplied payload, independent of MAX_ENTRIES
@@ -135,7 +139,8 @@ export async function POST(request: Request) {
   const contractStatus = computeContractStatus(parsed.contractEnd);
   // Computed here, never asked of the model — same rule as the contract date.
   const intervalChecks = computeIntervalChecks(parsed.entries);
-  const beltPumpCheck = checkBeltPump(parsed.entries, parsed.contractEnd);
+  // Mileage-only: this check no longer reads date_fin_contrat.
+  const beltPumpCheck = checkBeltPump(parsed.entries);
   const prompt = buildDsAnalysisPrompt(parsed, contractStatus, [
     ...formatIntervalChecks(intervalChecks),
     ...formatBeltPumpCheck(beltPumpCheck),
