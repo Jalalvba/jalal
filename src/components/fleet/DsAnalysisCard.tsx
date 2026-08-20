@@ -259,7 +259,7 @@ export function DsAnalysisCard({
                       </span>
                       <div className="text-xs text-muted-foreground">
                         {result.beltPumpCheck.status === "never" &&
-                          `Jamais enregistré — hors contrat depuis ${result.beltPumpCheck.monthsPastContract} mois, ${result.beltPumpCheck.currentKm?.toLocaleString("fr-FR")} km`}
+                          `Jamais enregistré — ${result.beltPumpCheck.currentKm?.toLocaleString("fr-FR")} km (seuil ${result.beltPumpCheck.thresholdKm.toLocaleString("fr-FR")} km)`}
                         {result.beltPumpCheck.status === "ok" &&
                           `Effectué le ${result.beltPumpCheck.lastServiceDate?.slice(0, 10)}${result.beltPumpCheck.lastServiceKm ? ` à ${result.beltPumpCheck.lastServiceKm.toLocaleString("fr-FR")} km` : ""}`}
                         {result.beltPumpCheck.status === "skipped" && result.beltPumpCheck.note}
