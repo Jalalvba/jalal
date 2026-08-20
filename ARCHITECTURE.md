@@ -94,6 +94,72 @@ and only ever read here — plus two small app-owned collections
 
 ---
 
+## Deployment: aliases and protection (dashboard-only state)
+
+**None of this lives in the repo.** `vercel.json` carries only
+`{"regions": ["cdg1"]}`; deployment protection has no `vercel.json`
+representation at all, so it exists solely as Vercel dashboard state and can
+change without any commit recording it. That is why it is written down here.
+
+**`https://jalal-five.vercel.app` is the URL actually in use** — confirmed with
+the project owner on 2026-08-20. Use it for any manual check against
+production.
+
+The project has four live URLs, and they deliberately do **not** behave alike:
+
+| URL | Vercel classification | Behaviour |
+|---|---|---|
+| `jalal-five.vercel.app` | custom domain | **public** — the working URL |
+| `jalal-avis.vercel.app` | generated project alias | 302 → `vercel.com/sso-api` |
+| `jalal-git-main-avis.vercel.app` | generated branch alias | 302 → `vercel.com/sso-api` |
+| `jalal-<hash>-avis.vercel.app` | generated deployment URL | 302 → `vercel.com/sso-api` |
+
+One project-level setting produces all of it — there is no per-domain rule:
+
+```
+ssoProtection:      { enabled: true, deploymentType: "all_except_custom_domains" }
+passwordProtection: { enabled: false }
+trustedIps:         { enabled: false }
+```
+
+`all_except_custom_domains` is Vercel's **default** posture, not a deliberate
+past choice anyone recorded: generated URLs stay behind Vercel Authentication,
+the registered custom domain stays reachable. Verified live on all four URLs,
+2026-08-20.
+
+**Reviewed and kept as-is on 2026-08-20** (the split was noticed during an
+unrelated deployment check and investigated on its own). The reasoning:
+
+- This repo is **public on GitHub**, and generated deployment URLs leak into
+  build logs and GitHub deployment statuses. Leaving them behind SSO keeps live
+  fleet data off URLs a stranger can find. That is the only part of this doing
+  real work today.
+- Extending SSO to the custom domain was rejected: it would gate the daily-use
+  URL behind a second login for no gain, and would become a hard blocker the
+  first time a colleague needs access.
+- Removing SSO entirely was rejected: it would drop a free outer layer to solve
+  a problem nobody has.
+
+**The app's own gate is unaffected either way.** `src/proxy.ts` is the real
+auth boundary on every URL, and
+[`src/lib/auth/googleOAuth.ts`](./src/lib/auth/googleOAuth.ts)'s
+`AUTHORIZED_EMAIL` admits exactly one address — so Vercel SSO is not what keeps
+strangers out, and turning it off would not let anyone new in. The usual
+"SSO locks out non-Vercel staff" objection does not apply here: nobody outside
+that single address can log in regardless.
+
+**If a second user is ever added**, revisit this — a colleague would then need
+both an `AUTHORIZED_EMAIL` change (code, per
+[`AGENTS.md`](./AGENTS.md) rule 5) and, on any generated URL, a Vercel team
+seat. On `jalal-five.vercel.app` they would need only the former.
+
+**Web Analytics is off** and runtime logs record deployment/branch/path/status
+but **no Host header**, so which alias a given request arrived on is not
+recoverable from telemetry. That is why the working URL is stated above rather
+than inferred.
+
+---
+
 ## Decisions that look like bugs but are not
 
 Collected here because each has been "fixed" or nearly-fixed by someone reading
@@ -114,6 +180,7 @@ the code without the context.
 | Rate limiting fails **open** | An outage should remove the ceiling, not the app | [cross-cutting](./docs/cross-cutting.md#7-auth-session-rate-limiting) |
 | The import token travels as a query param | `~/import` has no header-auth path; cross-repo fix, audit M7 | [fleet-data-import](./docs/fleet-data-import.md#23-the-token-tradeoff--accepted-not-overlooked) |
 | Single hardcoded auth email, no User model | Deliberate design decision, not a gap | [AGENTS.md](./AGENTS.md) rule 5 |
+| Two production URLs behave differently — one public, one 302s to SSO | One default project setting (`all_except_custom_domains`); reviewed and kept | [Deployment](#deployment-aliases-and-protection-dashboard-only-state) |
 
 ---
 
