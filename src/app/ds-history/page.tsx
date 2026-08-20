@@ -42,7 +42,7 @@ import { ZONE_COLORS } from "@/config/zones";
 import { buildPlateVariants } from "@/lib/utils/plateVariants";
 import type { RlRow, RlReunionRow } from "@/lib/sheets/googleSheetsRl";
 import { DsAnalysisCard } from "@/components/fleet/DsAnalysisCard";
-import { mergeVehicleIdentity, type VehicleIdentity } from "@/lib/vehicle/identity";
+import { mergeVehicleIdentity, identityFromImmOnly, type VehicleIdentity } from "@/lib/vehicle/identity";
 import type { ImportRow } from "@/lib/sheets/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/utils/format";
 import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
@@ -155,7 +155,7 @@ function displayLineValue(line: Line, key: keyof Line): string {
 
 async function downloadPdf(
   data: DsApiResponse,
-  vehicle: ParcItem,
+  vehicle: VehicleIdentity,
   contracts: CpItem[],
   visibleCardFields: Set<keyof DsHistoryItem>,
   visibleLineFields: Set<keyof Line>,
@@ -207,7 +207,7 @@ async function downloadPdf(
 
 async function downloadDocx(
   data: DsApiResponse,
-  vehicle: ParcItem,
+  vehicle: VehicleIdentity,
   contracts: CpItem[],
   visibleCardFields: Set<keyof DsHistoryItem>,
   visibleLineFields: Set<keyof Line>,
@@ -1028,13 +1028,13 @@ export default function Home() {
 
   function handlePdf() {
     if (!data) return;
-    const v = vehicle ?? ({ imm: data.imm } as ParcItem);
+    const v = identity ?? identityFromImmOnly(data.imm);
     downloadPdf(data, v, contracts, visibleCardFields, visibleLineFields, setExportingPdf);
   }
 
   function handleDocx() {
     if (!data) return;
-    const v = vehicle ?? ({ imm: data.imm } as ParcItem);
+    const v = identity ?? identityFromImmOnly(data.imm);
     downloadDocx(data, v, contracts, visibleCardFields, visibleLineFields, setExportingDocx);
   }
 
@@ -1158,7 +1158,7 @@ export default function Home() {
             <DsAnalysisCard
               imm={data.imm || imm}
               items={data.items}
-              vehicle={vehicle}
+              vehicle={identity}
               contracts={contracts}
               rlRows={rlRows}
             />

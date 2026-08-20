@@ -14,12 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { CostBadge } from "@/components/fleet/CostBadge";
-import type { CostInfo, DsHistoryItem, ParcItem, CpItem } from "@/types";
+import type { CostInfo, DsHistoryItem, CpItem } from "@/types";
 import type { RlRow } from "@/lib/sheets/googleSheetsRl";
 import { classifyRepairOrigin } from "@/lib/ai/prompts/dsAnalysis";
 import type { DsAnalysis, ContractLevel, FindingLevel } from "@/lib/ai/prompts/dsAnalysis";
 import type { IntervalCheck, BeltPumpCheck } from "@/lib/ai/prompts/maintenanceIntervals";
 import type { OilGradeCheck } from "@/lib/ai/prompts/oilGrade";
+import type { VehicleIdentity } from "@/lib/vehicle/identity";
 
 type FollowUpExchange = { question: string; answer: string };
 
@@ -91,7 +92,7 @@ export function DsAnalysisCard({
 }: {
   imm: string;
   items: DsHistoryItem[];
-  vehicle: ParcItem | null;
+  vehicle: VehicleIdentity | null;
   contracts: CpItem[];
   rlRows: RlRow[];
 }) {

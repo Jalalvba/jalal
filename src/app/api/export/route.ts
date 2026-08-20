@@ -55,8 +55,27 @@ function getLineValue(line: Line, key: string): string {
   return String(v).trim() || "—";
 }
 
-function getVehicleValue(vehicle: ParcItem | null | undefined, key: string): string {
+/**
+ * The identity block's heading names its real source. A cp-only vehicle used
+ * to be labelled "(parc)" while showing cp data, which is the same mislabel
+ * the card carried before mergeVehicleIdentity().
+ */
+export function vehicleSectionHeading(vehicle: ParcItem | null | undefined): string {
+  const label = (vehicle as { sourceLabel?: string } | null | undefined)?.sourceLabel;
+  return label && label !== "—"
+    ? `Véhicule — Données fixes (${label})`
+    : "Véhicule — Données fixes (parc)";
+}
+
+/** Exported for unit testing — the "non disponible" rule is the part worth pinning. */
+export function getVehicleValue(vehicle: ParcItem | null | undefined, key: string): string {
   if (!vehicle) return "—";
+  // Mirrors VehicleCard: a field no SOURCE can answer (cp-only identity, which
+  // carries no client/vehicle_state/tenant) is not the same as a field left
+  // blank in a parc record that exists. Rendering both as "—" would make the
+  // export quietly disagree with the card the user just looked at.
+  const unavailable = (vehicle as { unavailableKeys?: readonly string[] }).unavailableKeys;
+  if (unavailable?.includes(key)) return "non disponible";
   const v = (vehicle as Record<string, unknown>)[key];
   if (v == null) return "—";
   if (key === "mce_date") return fmtDate(v as string);
@@ -238,7 +257,7 @@ async function generateExport(req: Request): Promise<NextResponse> {
     };
 
     // ── Parc ──
-    secHead("Véhicule — Données fixes (parc)");
+    secHead(vehicleSectionHeading(vehicle));
     mandParcF.forEach(f => kvRow(f.label, getVehicleValue(vehicle, f.key)));
 
     // ── CP contracts ──
@@ -581,7 +600,7 @@ async function generateExport(req: Request): Promise<NextResponse> {
   );
 
   // Vehicle section — split into mandatory (always shown) + details
-  children.push(sectionHeading("Véhicule — Données fixes (parc)"));
+  children.push(sectionHeading(vehicleSectionHeading(vehicle)));
 
   // Only mandatory parc fields in export
   const mandatoryParcFields = vehicleMetaFields.filter(f => (parcMandatoryKeys ?? []).includes(f.key));

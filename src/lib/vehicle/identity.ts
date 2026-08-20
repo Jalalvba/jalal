@@ -46,8 +46,20 @@ import type { CpItem, ParcItem } from "@/types";
 /** Which collection(s) actually backed this identity. */
 export type VehicleIdentitySource = "parc+cp" | "parc" | "cp";
 
-/** Labels of the card fields that only `parc` can fill. */
-export const PARC_ONLY_LABELS = ["Client", "Etat véhicule", "Locataire"] as const;
+/**
+ * The fields only `parc` can fill, as key AND label from one definition —
+ * the card renders by label, the exports resolve by ParcItem key, and a
+ * divergence between the two would make one surface silently disagree with
+ * the other about what is missing.
+ */
+export const PARC_ONLY_FIELDS = [
+  { key: "client", label: "Client" },
+  { key: "vehicle_state", label: "Etat véhicule" },
+  { key: "tenant", label: "Locataire" },
+] as const;
+
+export const PARC_ONLY_LABELS = PARC_ONLY_FIELDS.map((f) => f.label) as readonly string[];
+export const PARC_ONLY_KEYS = PARC_ONLY_FIELDS.map((f) => f.key) as readonly string[];
 
 export type VehicleIdentity = {
   source: VehicleIdentitySource;
@@ -71,6 +83,12 @@ export type VehicleIdentity = {
    * is simply blank in an existing parc record.
    */
   unavailable: readonly string[];
+  /**
+   * The same fields as `unavailable`, keyed rather than labelled — the PDF and
+   * DOCX exports resolve vehicle values by ParcItem key, so they need the key
+   * form to render "non disponible" where the card does.
+   */
+  unavailableKeys: readonly string[];
 };
 
 const clean = (v?: string | null): string | undefined => {
@@ -109,6 +127,7 @@ export function mergeVehicleIdentity(
       vehicle_state: clean(parc.vehicle_state),
       tenant: clean(parc.tenant),
       unavailable: [],
+      unavailableKeys: [],
     };
   }
 
@@ -125,5 +144,20 @@ export function mergeVehicleIdentity(
     mce_date: clean(cp!.mce_date),
     location_type: clean(cp!.type_location),
     unavailable: PARC_ONLY_LABELS,
+    unavailableKeys: PARC_ONLY_KEYS,
   };
+}
+
+/**
+ * The degenerate identity for a plate neither collection knows: the plate
+ * itself and nothing else. Exports still produce a document in that case (the
+ * DS history is the point of the export, not the identity block), so they need
+ * something to render rather than refusing.
+ *
+ * `unavailableKeys` is empty on purpose: nothing here is missing because a
+ * SOURCE could not answer it — there is simply no record at all, which the
+ * export renders as "—" for every field, the same as before this change.
+ */
+export function identityFromImmOnly(imm: string): VehicleIdentity {
+  return { source: "parc", sourceLabel: "—", imm, unavailable: [], unavailableKeys: [] };
 }

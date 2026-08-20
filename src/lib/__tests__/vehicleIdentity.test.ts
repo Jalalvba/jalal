@@ -1,18 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { mergeVehicleIdentity, PARC_ONLY_LABELS } from "@/lib/vehicle/identity";
+import {
+  mergeVehicleIdentity, identityFromImmOnly,
+  PARC_ONLY_LABELS, PARC_ONLY_KEYS, PARC_ONLY_FIELDS,
+} from "@/lib/vehicle/identity";
 import type { CpItem, ParcItem } from "@/types";
 
-// Shapes taken from real API responses observed in the browser.
+// Shapes taken from real API responses observed in the browser; the VIN and
+// the gestionnaire name are replaced with synthetic equivalents of the same
+// shape — the field layout is what these fixtures pin, not the values, and an
+// identifiable employee name does not belong in git history. The plates are
+// kept real so a failure here can be re-checked against live data directly.
 const PARC: ParcItem = {
-  imm: "44329-B-7", ww: "051583WW", vin: "6FPPXXMJ2PNT05941",
+  imm: "44329-B-7", ww: "051583WW", vin: "VF1TESTVIN0000002",
   brand: "FORD", model: "Ranger", vehicle_state: "En parc",
   location_type: "LLD", tenant: "GE VERNOVA", mce_date: "2023-01-10T00:00:00.000Z",
   client: "GE VERNOVA INTERNATIONAL LLC - MOROCCO BRANCH",
 };
 // 11734-T-1: the real plate that triggered this — cp has it, parc does not.
 const CP: CpItem = {
-  gestionnaire: "Aouad Mohammed Jaouad", ww: "358227WW", imm: "11734-T-1",
-  vin: "WAUZZZF49RN006632", marque: "AUDI", model: "A4",
+  gestionnaire: "Gestionnaire Test", ww: "358227WW", imm: "11734-T-1",
+  vin: "VF1TESTVIN0000001", marque: "AUDI", model: "A4",
   version: "AUDI A4 Premium 2,0L Tdi 163 S-Tronic Automatique Diesel",
   type_location: "Véhicule neuf", mce_date: "2024-04-25T00:00:00.000Z",
   date_debut_contrat: "2024-04-29T00:00:00.000Z",
@@ -31,7 +38,7 @@ describe("mergeVehicleIdentity — the empty-parc path", () => {
     const id = mergeVehicleIdentity(null, [CP])!;
     expect(id.imm).toBe("11734-T-1");
     expect(id.ww).toBe("358227WW");
-    expect(id.vin).toBe("WAUZZZF49RN006632");
+    expect(id.vin).toBe("VF1TESTVIN0000001");
     expect(id.brand).toBe("AUDI");
     expect(id.model).toBe("A4");
     expect(id.location_type).toBe("Véhicule neuf");
@@ -74,7 +81,7 @@ describe("mergeVehicleIdentity — unchanged behaviour when parc exists", () => 
     const id = mergeVehicleIdentity(PARC, [CP])!;
     expect(id.brand).toBe("FORD");   // not AUDI
     expect(id.model).toBe("Ranger"); // not A4
-    expect(id.vin).toBe("6FPPXXMJ2PNT05941");
+    expect(id.vin).toBe("VF1TESTVIN0000002");
     expect(id.imm).toBe("44329-B-7");
   });
 
@@ -82,7 +89,7 @@ describe("mergeVehicleIdentity — unchanged behaviour when parc exists", () => 
     const sparse: ParcItem = { imm: "44329-B-7" };
     const id = mergeVehicleIdentity(sparse, [CP])!;
     expect(id.brand).toBe("AUDI");           // filled from cp
-    expect(id.vin).toBe("WAUZZZF49RN006632");
+    expect(id.vin).toBe("VF1TESTVIN0000001");
     expect(id.imm).toBe("44329-B-7");        // parc still wins where present
     // Still a parc-backed identity, so nothing is reported unavailable.
     expect(id.unavailable).toEqual([]);
@@ -104,5 +111,72 @@ describe("mergeVehicleIdentity — unchanged behaviour when parc exists", () => 
     const second: CpItem = { ...CP, imm: "OTHER", marque: "RENAULT" };
     const id = mergeVehicleIdentity(null, [CP, second])!;
     expect(id.brand).toBe("AUDI");
+  });
+});
+
+
+// ── Keys and labels must describe the SAME fields ─────────────────────────
+//
+// The card renders by label, the exports resolve by ParcItem key. If these two
+// projections ever drift, one surface says a field is unavailable while the
+// other renders "—" for it, and nothing fails loudly.
+describe("PARC_ONLY_FIELDS — one definition, two projections", () => {
+  it("derives labels and keys from the same list, in the same order", () => {
+    expect(PARC_ONLY_LABELS).toEqual(PARC_ONLY_FIELDS.map((f) => f.label));
+    expect(PARC_ONLY_KEYS).toEqual(PARC_ONLY_FIELDS.map((f) => f.key));
+    expect(PARC_ONLY_LABELS).toHaveLength(PARC_ONLY_KEYS.length);
+  });
+
+  it("names exactly the fields that are undefined on a cp-only identity", () => {
+    const id = mergeVehicleIdentity(null, [CP])!;
+    for (const key of PARC_ONLY_KEYS) {
+      expect(id[key as "client" | "vehicle_state" | "tenant"]).toBeUndefined();
+    }
+    expect(id.unavailableKeys).toEqual(PARC_ONLY_KEYS);
+  });
+
+  it("reports nothing unavailable when parc backs the identity", () => {
+    expect(mergeVehicleIdentity(PARC, [CP])!.unavailableKeys).toEqual([]);
+    expect(mergeVehicleIdentity(PARC, [])!.unavailableKeys).toEqual([]);
+  });
+});
+
+describe("identityFromImmOnly — the export fallback", () => {
+  it("carries the plate and claims nothing else", () => {
+    const id = identityFromImmOnly("99999-A-1");
+    expect(id.imm).toBe("99999-A-1");
+    expect(id.brand).toBeUndefined();
+    expect(id.client).toBeUndefined();
+  });
+
+  it("reports NOTHING as unavailable — no record at all is not a missing source", () => {
+    // Every field renders "—" as it did before this change, rather than
+    // claiming three specific fields were lost to a missing parc record.
+    const id = identityFromImmOnly("99999-A-1");
+    expect(id.unavailableKeys).toEqual([]);
+    expect(id.unavailable).toEqual([]);
+  });
+});
+
+// ── What the exports and the AI payload actually read off the identity ────
+describe("identity supplies what the export and AI payload consume", () => {
+  it("exposes every ParcItem key the export resolves, for a cp-only vehicle", () => {
+    // PARC_MANDATORY + PARC_EXTRA in ds-history/page.tsx.
+    const id = mergeVehicleIdentity(null, [CP])! as unknown as Record<string, unknown>;
+    for (const key of ["imm", "ww", "vin", "brand", "model", "mce_date", "location_type"]) {
+      expect(id[key], key).toBeTruthy();
+    }
+  });
+
+  it("gives the AI payload a real brand and model where parc had none", () => {
+    // Before this change the payload sent {brand: undefined, model: undefined}
+    // for all 3,202 cp-only plates, so the prompt had no vehicle context.
+    const id = mergeVehicleIdentity(null, [CP])!;
+    const payload = { brand: id.brand, model: id.model, state: id.vehicle_state };
+    expect(payload).toEqual({ brand: "AUDI", model: "A4", state: undefined });
+  });
+
+  it("leaves state undefined rather than inventing one — prompt omits the line", () => {
+    expect(mergeVehicleIdentity(null, [CP])!.vehicle_state).toBeUndefined();
   });
 });
