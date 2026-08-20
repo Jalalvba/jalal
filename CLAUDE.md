@@ -234,7 +234,7 @@ a stale snapshot.
 
 ## 8. Where to find more detail
 
-- **[`ARCHITECTURE.md`](./ARCHITECTURE.md)** — index to [`docs/`](./docs), the per-feature current-state reference: what each feature does, **why** it was built that way, what it explicitly is *not* meant to do, and its known limitations. Deepest coverage of Suivi RL's filters, the BDD PDF/Excel exports, the two Gemini routes, config-driven options, and the `~/import` proxy. Also carries the running list of decisions-that-look-like-bugs and open defects.
+- **[`ARCHITECTURE.md`](./ARCHITECTURE.md)** — index to [`docs/`](./docs), the per-feature current-state reference: what each feature does, **why** it was built that way, what it explicitly is *not* meant to do, and its known limitations. Deepest coverage of Suivi RL's filters, the BDD PDF/Excel exports, the Gemini route and its cost tracker, config-driven options, and the `~/import` proxy. Also carries the running list of decisions-that-look-like-bugs and open defects.
 - **[`AGENTS.md`](./AGENTS.md)** — mandatory cross-assistant rules, imported at the top of this file.
 - **[`GEMINI.md`](./GEMINI.md)** — the equivalent entry point for Gemini CLI / Antigravity sessions.
 - **[`PROJECT_HISTORY.md`](./PROJECT_HISTORY.md)** — full commit-by-commit feature timeline and reasoning.

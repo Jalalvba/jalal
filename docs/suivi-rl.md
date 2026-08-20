@@ -336,7 +336,7 @@ a `⚠ Introuvable` badge ([`page.tsx:259`](../src/app/suivi-rl/page.tsx#L259)).
 > `EMPLACEMENT_INTROUVABLE` ([`src/types/index.ts:323`](../src/types/index.ts#L323)) exists
 > so there is *one* place to update, not to remove the fragility. Same caveat
 > applies to the five `ETAT_*` constants. See
-> [`config-options.md`](./config-options.md#5-known-limitations).
+> [`config-options.md`](./config-options.md#7-known-limitations).
 
 ### 8.4 ETAT badge colours
 

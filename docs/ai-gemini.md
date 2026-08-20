@@ -5,7 +5,7 @@
 · cost tracking: [`src/lib/gemini/costTracker.ts`](../src/lib/gemini/costTracker.ts)
 · client: [`src/hooks/useBddRows.ts:98`](../src/hooks/useBddRows.ts#L98) and
 `ReformulateCommentButton` in
-[`src/app/suivi-rl/page.tsx:408`](../src/app/suivi-rl/page.tsx#L408)
+[`src/app/suivi-rl/page.tsx:410`](../src/app/suivi-rl/page.tsx#L410)
 
 > **This page used to document two routes.** `/api/generate-email` was a
 > second, headless Gemini route that nothing in the repo ever called; it was
@@ -17,9 +17,18 @@
 
 ## 1. Shared design
 
-Both routes are hand-rolled `fetch` calls against Gemini's REST API. **No SDK,
-no AI-framework dependency** — `package.json` carries no `@google/generative-ai`
-or similar. Two ~150-line routes did not justify a dependency.
+Gemini access is a hand-rolled `fetch` against the REST API. **No SDK, no
+AI-framework dependency** — `package.json` carries no `@google/generative-ai`
+or similar.
+
+The route does **not** issue that `fetch` itself. Since `221b1a9` every call
+goes through `callGeminiWithTracking()` in
+[`src/lib/gemini/costTracker.ts:389`](../src/lib/gemini/costTracker.ts#L389),
+which owns the request, the API key, the timeout, and the cost bookkeeping
+(§8.6). The route's own comment states the rule:
+*"All Gemini access goes through callGeminiWithTracking — never fetch the API
+directly from a route, or the call escapes cost tracking entirely."*
+([`route.ts:110`](../src/app/api/bdd/reformulate-comment/route.ts#L110))
 
 ```
 POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
@@ -99,15 +108,20 @@ model.)
 
 ## 3. `GEMINI_API_KEY` handling
 
-Read from `process.env` **inside the request handler**, never at module scope:
+Read from `process.env` **inside the call**, never at module scope — and since
+`221b1a9` that read lives in the wrapper, not the route
+([`costTracker.ts:375`](../src/lib/gemini/costTracker.ts#L375)):
 
 ```ts
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
-  console.error("[bdd-reformulate] GEMINI_API_KEY is not set");
-  return NextResponse.json({ ok: false, error: "Comment reformulation is not configured" }, { status: 500 });
+  console.error(`[${action}] GEMINI_API_KEY is not set`);
+  throw new GeminiCallError(500, "unconfigured");
 }
 ```
+
+The route never sees the key. It catches `GeminiCallError` and maps
+`kind: "unconfigured"` to its own French message (§5).
 
 **Why not module scope:** `src/lib/sheets/googleSheetsBdd.ts` throws at import time on a
 missing `GOOGLE_SHEETS_ID` — appropriate for a variable the whole app needs.
@@ -130,7 +144,7 @@ Clients only ever see the fixed messages in §5.
 
 ### 4.1 The six context fields
 
-`ReformulateCommentContext` ([`src/types/index.ts:768-775`](../src/types/index.ts#L768)) —
+`ReformulateCommentContext` ([`src/types/index.ts:762-769`](../src/types/index.ts#L762)) —
 all optional:
 
 | Key | BDD field | Sent as |
@@ -156,7 +170,7 @@ exports, but it describes where the vehicle sits, not what the comment says.
 
 ### 4.2 The system instruction — verbatim
 
-[`reformulate-comment/route.ts:20`](../src/app/api/bdd/reformulate-comment/route.ts#L20):
+[`reformulate-comment/route.ts:34`](../src/app/api/bdd/reformulate-comment/route.ts#L34):
 
 ```
 You are reformulating a short internal fleet-maintenance comment (Commentaire)
@@ -184,7 +198,7 @@ disambiguation input, not content to merge in.
 
 ### 4.3 Blank-context handling — `buildUserTurn()`
 
-[`route.ts:38`](../src/app/api/bdd/reformulate-comment/route.ts#L38):
+[`route.ts:52`](../src/app/api/bdd/reformulate-comment/route.ts#L52):
 
 ```ts
 const contextLine = pairs
@@ -223,13 +237,13 @@ Commentaire original: vehicule en panne moteur attente piece
 
 | Condition | Status | `reformulate-comment` |
 |---|---|---|
-| Rate limited (ours) | 429 | (via `rateLimitOrNull`) |
+| Rate limited (ours) | 429 | `Trop de requêtes. Réessayez dans {n}s.` (via `rateLimitOrNull`, + `Retry-After`) |
 | Bad JSON | 400 | `Invalid JSON body` |
 | Empty input | 400 | `comment is required` |
 | Over length | 400 | `comment exceeds 1000 characters` |
-| Missing API key | 500 | `Comment reformulation is not configured` |
+| Missing API key | 500 | `La reformulation n'est pas configurée` |
 | Gemini 429 | **429** | `Reformulation rate-limitée en amont. Réessayez dans un instant.` |
-| Gemini ≥ 500 | **502** | `Service de reformulation temporairement indisponible.` |
+| Gemini ≥ 500 | **502** | `Échec de la reformulation` |
 | Gemini 4xx (other) | 500 | `Échec de la reformulation` |
 | Timeout (20 s) | **504** | `La reformulation a expiré. Réessayez.` |
 | Unexpected shape | 500 | `Échec de la reformulation` |
@@ -250,7 +264,7 @@ inconsistency.)
 
 ## 6. Review-before-save UX
 
-`ReformulateCommentButton` — [`page.tsx:408`](../src/app/suivi-rl/page.tsx#L408).
+`ReformulateCommentButton` — [`page.tsx:410`](../src/app/suivi-rl/page.tsx#L410).
 
 ```
 ✨ click
@@ -274,9 +288,9 @@ inconsistency.)
 > Gemini and returns a string. Nothing is persisted unless the user presses
 > Confirmer.
 
-Stated three times in the code — the route header (`:5-7`), the hook JSDoc
+Stated three times in the code — the route header (`:1-3`), the hook JSDoc
 ([`useBddRows.ts:93`](../src/hooks/useBddRows.ts#L93)), and the component
-(`page.tsx:404-407`) — because it is the property that makes the rolling-model-alias
+(`page.tsx:405-409`) — because it is the property that makes the rolling-model-alias
 risk (§2.2) acceptable.
 
 Specific decisions:
@@ -285,7 +299,7 @@ Specific decisions:
   manual edit. No parallel write path exists, so allowlist enforcement,
   `verifyRowIdentity()`, optimistic update, and the success toast all apply
   unchanged.
-- **The suggestion is editable before saving** (`<textarea>`, `:492-498`). The
+- **The suggestion is editable before saving** (`<textarea>`, `:498`). The
   user can accept, tweak, or rewrite. It is a starting point, not a verdict.
 - **The dialog opens *before* the request resolves** — feedback is immediate,
   with `"Génération…"` while pending.
@@ -335,8 +349,18 @@ Kept deliberately when it went: the alias-over-snapshot rationale (moved into
    (`6a82a3e`), so an outage removes the ceiling on upstream Gemini calls.
 5. **20 s timeout is not enforced upstream.** `AbortController` abandons our
    request; Gemini may still bill the completion.
-6. **No token accounting or cost logging.** Nothing records how many calls or
-   tokens were spent. On the free tier this is invisible until quota is hit.
+6. **Cost tracking exists** (since `221b1a9`) — this entry previously claimed
+   it did not. `callGeminiWithTracking()` records every call to the
+   `gemini_usage` collection (timestamp, action, model, `served_model`,
+   `priced_as`, `alias_drift`, input/output/total tokens, tier, `cost_usd`,
+   `cost_mad`) plus a JSON-lines copy on stdout, and folds it into per-model
+   running totals in `gemini_usage_totals`. `thoughtsTokenCount` is added to
+   output tokens because it bills at the output rate. Remaining prepaid credit
+   is *derived* from the totals, never stored. The real limits: `PRICING` is a
+   hand-maintained table with **no time dimension** — the `gemini-3-7-flash`
+   promotional entry must be bumped on **2027-01-01** or every call through it
+   is costed at half price — and there is no cached-token pricing, since the
+   table carries text in/out rates only.
 7. **Context is a flat `k=v` line, not structured.** A `Commentaire` containing
    `Contexte:` or `Commentaire original:` could confuse turn boundaries. No
    escaping is applied — low risk given the 1000-char cap and human review, but

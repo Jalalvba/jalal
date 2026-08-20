@@ -59,7 +59,7 @@ surface the thrown message. Rendering is `sonner` via
 > [`ai-gemini.md` §6](./ai-gemini.md#6-review-before-save-ux).
 >
 > **The one inconsistency:** the BDD export helpers use a native `alert()`
-> instead. Flagged in [`bdd-exports.md` §7](./bdd-exports.md#7-client-side--appsuivi-rlpagetsx).
+> instead. Flagged in [`bdd-exports.md` §7](./bdd-exports.md#7-client-side--srcappsuivi-rlpagetsx).
 
 The same commit added `aria-label`s to every icon-only button.
 
