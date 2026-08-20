@@ -111,3 +111,37 @@ export function servicesInEntry(parts: readonly unknown[]): Set<ServiceType> {
   for (const p of parts) for (const s of detectServices(p)) all.add(s);
   return all;
 }
+
+
+// ── Regulatory inspection (Visite Technique) ──────────────────────────────
+
+/**
+ * A "Visite Technique" is the Moroccan regulatory roadworthiness inspection —
+ * a legal check, not a maintenance service. Its km value is routinely entered
+ * late and not synced to the real odometer at the time of the visit, which
+ * makes these readings actively misleading for interval arithmetic.
+ *
+ * Measured: excluding VT entries from the km sequence takes the share of
+ * vehicles with a clean, non-decreasing odometer from 72.5% to 81.3% (35 of
+ * 400 sampled vehicles fixed outright) and removes about a third of all
+ * backward steps. On 44329-B-7 — the vehicle that surfaced this — it removes
+ * the single backward step entirely: a VT logged 130,000 km, and the next real
+ * entry read 118,157.
+ *
+ * The pattern is deliberately typo-tolerant, because the real data is: VISITE
+ * TECHNIQUE, VIISTE TECHNIQUE (110 rows), VIISITE, VISIITE, VSITE, TECHNQIUE,
+ * TECHNQUE, TECHEIQUE, TECHNIQIUE, TECHNIUQE, "VISITE VTECHNIQUE". Validated
+ * against every TECH-containing row in production: 3,877 classified as VT,
+ * and the non-VT rows it must NOT catch ("TECH. = RACHID …", "RéVISION:
+ * OTHMANE TECHNICIEN") are all correctly rejected.
+ */
+const VT_PATTERN = /(V[I]{0,2}S[I]{0,2}TE|CONTR[ÔO]?LE)\s*V?TECH|DEFAUTS?\s*VT\b/i;
+
+/**
+ * VT appears in the DS-level `description` far more often than in the part
+ * designations (3,702 vs 1,063), so both are checked.
+ */
+export function isTechnicalInspection(description: unknown, parts: readonly unknown[]): boolean {
+  const text = normalize(String(description ?? "") + " " + parts.map((p) => String(p ?? "")).join(" "));
+  return VT_PATTERN.test(text);
+}

@@ -16,7 +16,7 @@
 // stated reason rather than a number it cannot stand behind.
 
 import type { ServiceType } from "@/lib/ai/prompts/serviceTypes";
-import { servicesInEntry } from "@/lib/ai/prompts/serviceTypes";
+import { servicesInEntry, isTechnicalInspection } from "@/lib/ai/prompts/serviceTypes";
 
 /** Fixed thresholds. There is no per-model interval data in this project. */
 export const INTERVALS: Partial<Record<ServiceType, number>> = {
@@ -40,6 +40,8 @@ export type IntervalCheck = {
   label: string;
   intervalKm: number;
   status: IntervalStatus;
+  /** Real readings dropped to obtain a coherent run — always named, never silent. */
+  excludedReadings?: KmReading[];
   /** km at the most recent service of this type. */
   lastKm?: number;
   lastDate?: string;
@@ -52,7 +54,26 @@ export type IntervalCheck = {
 };
 
 /** One DS entry, as the analysis payload carries it. */
-export type IntervalEntry = { date?: string; km?: number; parts: readonly unknown[] };
+export type IntervalEntry = {
+  date?: string;
+  km?: number;
+  /** Needed to spot a Visite Technique — VT is named here far more often than in parts. */
+  description?: string;
+  parts: readonly unknown[];
+};
+
+/** A real reading actually present in the source, never interpolated. */
+export type KmReading = { date?: string; km: number };
+
+/**
+ * Entries whose km can be trusted for arithmetic: everything except the
+ * regulatory inspection, whose mileage is routinely back-dated. Excluded from
+ * KM MATH ONLY — VT entries still appear in the history the model sees and in
+ * every UI/export that displays km.
+ */
+export function usableKmEntries(entries: readonly IntervalEntry[]): IntervalEntry[] {
+  return entries.filter((e) => !isTechnicalInspection(e.description, e.parts));
+}
 
 /** Mongo stores km as int, string, and double — coerce, don't trust the type. */
 function toKm(v: unknown): number | null {
@@ -69,11 +90,38 @@ function toKm(v: unknown): number | null {
  */
 export function currentKmOf(entries: readonly IntervalEntry[]): number | null {
   let max: number | null = null;
-  for (const e of entries) {
+  for (const e of usableKmEntries(entries)) {
     const k = toKm(e.km);
     if (k !== null && (max === null || k > max)) max = k;
   }
   return max;
+}
+
+/**
+ * Greedy forward scan keeping a non-decreasing run: keep the first reading,
+ * then keep each later one only if it is not below the last kept. Everything
+ * dropped is returned so it can be named in the finding.
+ *
+ * This is the "one more attempt before giving up" step. It uses only readings
+ * that genuinely exist — nothing is interpolated, averaged, or corrected into
+ * a value that was never recorded. If the FIRST reading is itself the inflated
+ * outlier, this correctly collapses to a single kept reading and the caller
+ * gives up, which is the desired behaviour rather than a rescued wrong answer.
+ */
+export function longestCleanRun(readings: readonly KmReading[]): {
+  kept: KmReading[];
+  excluded: KmReading[];
+} {
+  const kept: KmReading[] = [];
+  const excluded: KmReading[] = [];
+  for (const r of readings) {
+    if (kept.length === 0 || r.km >= kept[kept.length - 1].km - KM_REGRESSION_TOLERANCE) {
+      kept.push(r);
+    } else {
+      excluded.push(r);
+    }
+  }
+  return { kept, excluded };
 }
 
 /**
@@ -133,6 +181,10 @@ export function checkInterval(
     return { ...base, status: "unknown", note: "Aucun intervalle défini pour ce service." };
   }
 
+  // Step 0: drop Visite Technique entries. Their mileage is back-dated, and
+  // they caused about a third of all observed backward steps.
+  const usable = usableKmEntries(entries);
+
   const currentKm = currentKmOf(entries);
   if (currentKm === null) {
     return { ...base, status: "unknown", note: "Aucun relevé kilométrique exploitable." };
@@ -140,7 +192,7 @@ export function checkInterval(
 
   // Latest entry (by date) that actually performed this service.
   const performed: { km: number; date?: string }[] = [];
-  for (const e of entries) {
+  for (const e of usable) {
     if (!servicesInEntry(e.parts).has(service)) continue;
     const km = toKm(e.km);
     if (km !== null) performed.push({ km, date: e.date });
@@ -152,39 +204,66 @@ export function checkInterval(
   }
 
   const last = performed[performed.length - 1];
+  const since = String(last.date ?? "");
 
-  // Only the window since that service needs to be trustworthy.
-  if (hasIncoherentKmSequence(entries, String(last.date ?? ""))) {
+  // The window that actually matters: readings from that service onward. A bad
+  // reading from two years and forty entries ago must not block a calculation
+  // that only needs the last three.
+  const window: KmReading[] = [];
+  for (const e of usable) {
+    const km = toKm(e.km);
+    if (km === null) continue;
+    if (String(e.date ?? "") < since) continue;
+    window.push({ date: e.date, km });
+  }
+  window.sort((a, b) => String(a.date ?? "").localeCompare(String(b.date ?? "")));
+
+  const finish = (
+    readings: readonly KmReading[],
+    excluded: KmReading[]
+  ): IntervalCheck => {
+    const effectiveCurrent = Math.max(...readings.map((r) => r.km));
+    const kmSince = effectiveCurrent - last.km;
+    const overdue = kmSince > intervalKm;
     return {
       ...base,
-      status: "unknown",
+      status: overdue ? "overdue" : "ok",
       lastKm: last.km,
       lastDate: last.date,
-      currentKm,
-      note: "Relevés kilométriques incohérents depuis cette intervention (compteur en recul) — écart non calculable.",
+      currentKm: effectiveCurrent,
+      kmSince,
+      ...(overdue ? { overdueByKm: kmSince - intervalKm } : {}),
+      ...(excluded.length > 0 ? { excludedReadings: excluded } : {}),
     };
+  };
+
+  // Step 1: if the window is already coherent, compute normally.
+  if (!hasIncoherentKmSequence(usable, since)) {
+    return finish(window, []);
   }
 
-  // currentKm is the max over ALL entries, which can exceed the max within the
-  // window; recompute it inside the window so the gap describes the same span
-  // the coherence check just validated.
-  const windowMax = currentKmOf(
-    entries.filter((e) => String(e.date ?? "") >= String(last.date ?? ""))
-  );
-  const effectiveCurrent = windowMax ?? currentKm;
-  const kmSince = effectiveCurrent - last.km;
+  // Step 2: one more attempt — keep the longest non-decreasing run of REAL
+  // readings within the window and compute against that, naming everything
+  // dropped. Nothing is interpolated or corrected.
+  const { kept, excluded } = longestCleanRun(window);
+  if (kept.length >= 2) {
+    return finish(kept, excluded);
+  }
 
-  const overdue = kmSince > intervalKm;
+  // Step 3: genuinely unrecoverable. Say specifically why.
   return {
     ...base,
-    status: overdue ? "overdue" : "ok",
+    status: "unknown",
     lastKm: last.km,
     lastDate: last.date,
-    currentKm: effectiveCurrent,
-    kmSince,
-    ...(overdue ? { overdueByKm: kmSince - intervalKm } : {}),
+    currentKm,
+    ...(excluded.length > 0 ? { excludedReadings: excluded } : {}),
+    note:
+      "Relevés en recul à chaque point de la fenêtre depuis cette intervention — " +
+      "aucun segment cohérent exploitable, écart non calculable.",
   };
 }
+
 
 /** Rules 1, 3 and 4 — the three unambiguous fixed-interval checks. */
 export const CHECKED_SERVICES: ServiceType[] = ["vidange", "filtre_gasoil", "filtre_air"];
@@ -213,33 +292,34 @@ export function formatIntervalChecks(checks: readonly IntervalCheck[]): string[]
 
 // ── Rule 2: timing belt / water pump ──────────────────────────────────────
 //
-// NOT a "km since last service" check like the three above. There is no
-// per-model interval data anywhere in this project (kb_specs / part_families
-// exist in no collection, no database on the cluster, and nowhere in git
-// history), so "overdue by X km" is not a statement this data can support.
+// NOT an interval check. There is no per-model interval data in this project
+// (kb_specs / part_families exist in no collection, no database on the
+// cluster, and nowhere in git history), so "overdue by X km" is not a
+// statement this data supports.
 //
-// What it CAN support: this vehicle is well past its contract, has high
-// mileage, and has no timing-belt or water-pump service on record at all.
+// MILEAGE ONLY. The original spec also required the vehicle to be >6 months
+// past its contract end; that condition was removed on real-world feedback —
+// a high-mileage vehicle that has never had a timing belt or water pump is a
+// real risk whether its contract is active, ending, or long over. This check
+// no longer reads date_fin_contrat at all.
 
-const BELT_PUMP_MONTHS_PAST_CONTRACT = 6;
 const BELT_PUMP_KM_THRESHOLD = 120_000;
 const BELT_PUMP_SERVICES: ServiceType[] = ["distribution", "pompe_eau"];
 
 export type BeltPumpStatus =
-  /** No contract end date — the check cannot run, and says so. */
+  /** Current km could not be established — the check cannot run, and says so. */
   | "skipped"
-  /** In scope and never recorded. The flag. */
+  /** Over the threshold and never recorded. The flag. */
   | "never"
   /** A service is on record. Shown, matching the other checks' positive state. */
   | "ok"
-  /** Not old enough past contract, or not enough km. Deliberately silent. */
+  /** Under the km threshold. Deliberately silent. */
   | "not_applicable";
 
 export type BeltPumpCheck = {
   label: string;
   status: BeltPumpStatus;
-  contractEnd?: string;
-  monthsPastContract?: number;
+  thresholdKm: number;
   currentKm?: number;
   lastServiceDate?: string;
   lastServiceKm?: number;
@@ -247,83 +327,50 @@ export type BeltPumpCheck = {
   note?: string;
 };
 
-/** Whole calendar months elapsed, not days/30 — a month is not 30.44 days. */
-function monthsBetween(from: Date, to: Date): number {
-  let m = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
-  if (to.getDate() < from.getDate()) m -= 1;
-  return m;
-}
-
 /**
- * Rule 2. Reuses the same service matcher, the same contract-end field and the
- * same odometer helper as the other checks — no second way of reading any of
- * them.
- *
- * Note on km: this uses the highest recorded reading. Given ~45% of vehicles
- * carry at least one backward step, a single inflated reading could in
- * principle push a vehicle over 120,000. The flag is conjunctive — it also
- * needs >6 months past contract AND no service ever recorded — so a lone bad
- * reading cannot produce a false flag on its own, and the finding cites the
- * reading so it can be checked.
+ * Rule 2, mileage-only. Reuses the same service matcher and the same odometer
+ * helper as the other checks — including the Visite Technique exclusion, so an
+ * inflated VT reading cannot push a vehicle over the threshold on its own.
  */
-export function checkBeltPump(
-  entries: readonly IntervalEntry[],
-  contractEnd: string | null,
-  now: Date = new Date()
-): BeltPumpCheck {
+export function checkBeltPump(entries: readonly IntervalEntry[]): BeltPumpCheck {
   const label = "Distribution / pompe à eau";
-
-  if (!contractEnd) {
-    return {
-      label,
-      status: "skipped",
-      note: "Date de fin de contrat indisponible — contrôle non effectué.",
-    };
-  }
-  const end = new Date(contractEnd);
-  if (Number.isNaN(end.getTime())) {
-    return {
-      label,
-      status: "skipped",
-      note: "Date de fin de contrat illisible — contrôle non effectué.",
-    };
-  }
+  const base = { label, thresholdKm: BELT_PUMP_KM_THRESHOLD };
 
   const currentKm = currentKmOf(entries) ?? undefined;
 
-  // Latest recorded belt-or-pump service, if any.
+  // Latest recorded belt-or-pump service, if any. VT entries are irrelevant
+  // here but excluded anyway for consistency with the km used above.
   let last: { km: number | null; date?: string } | null = null;
-  for (const e of entries) {
+  for (const e of usableKmEntries(entries)) {
     const svc = servicesInEntry(e.parts);
-    if (!BELT_PUMP_SERVICES.some((s) => svc.has(s))) continue;
+    if (!BELT_PUMP_SERVICES.some((sv) => svc.has(sv))) continue;
     const d = String(e.date ?? "");
     if (!last || d > String(last.date ?? "")) last = { km: toKm(e.km), date: e.date };
   }
 
-  const monthsPastContract = monthsBetween(end, now);
-
   if (last) {
     return {
-      label,
+      ...base,
       status: "ok",
-      contractEnd,
-      monthsPastContract,
       currentKm,
       lastServiceDate: last.date,
       ...(last.km !== null ? { lastServiceKm: last.km } : {}),
     };
   }
 
-  const inScope =
-    monthsPastContract > BELT_PUMP_MONTHS_PAST_CONTRACT &&
-    currentKm !== undefined &&
-    currentKm > BELT_PUMP_KM_THRESHOLD;
-
-  if (!inScope) {
-    return { label, status: "not_applicable", contractEnd, monthsPastContract, currentKm };
+  if (currentKm === undefined) {
+    return {
+      ...base,
+      status: "skipped",
+      note: "Kilométrage actuel indéterminable — contrôle non effectué.",
+    };
   }
 
-  return { label, status: "never", contractEnd, monthsPastContract, currentKm };
+  if (currentKm <= BELT_PUMP_KM_THRESHOLD) {
+    return { ...base, status: "not_applicable", currentKm };
+  }
+
+  return { ...base, status: "never", currentKm };
 }
 
 /** Prompt line for rule 2. Empty when not applicable — silence by design. */
@@ -334,7 +381,7 @@ export function formatBeltPumpCheck(c: BeltPumpCheck): string[] {
       return [`- ${c.label} : NON VÉRIFIÉ — ${c.note}`];
     case "never":
       return [
-        `- ${c.label} : JAMAIS ENREGISTRÉ alors que le véhicule est hors contrat depuis ${c.monthsPastContract} mois (fin de contrat ${fr(c.contractEnd)}) et affiche ${c.currentKm?.toLocaleString("fr-FR")} km (seuil ${BELT_PUMP_KM_THRESHOLD.toLocaleString("fr-FR")} km).`,
+        `- ${c.label} : JAMAIS ENREGISTRÉ alors que le véhicule affiche ${c.currentKm?.toLocaleString("fr-FR")} km (seuil ${c.thresholdKm.toLocaleString("fr-FR")} km).`,
       ];
     case "ok":
       return [

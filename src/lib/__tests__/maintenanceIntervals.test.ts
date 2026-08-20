@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  usableKmEntries,
+  longestCleanRun,
   checkBeltPump,
   formatBeltPumpCheck,
   checkInterval,
@@ -64,7 +66,7 @@ describe("checkInterval — rules 1, 3, 4", () => {
       e("2025-06-01", 120_000, "PNEU"),
     ]);
     expect(r.status).toBe("unknown");
-    expect(r.note).toMatch(/incohérents/);
+    expect(r.note).toMatch(/aucun segment cohérent/i);
     expect(r.kmSince).toBeUndefined();
     expect(r.overdueByKm).toBeUndefined();
   });
@@ -89,7 +91,7 @@ describe("checkInterval — rules 1, 3, 4", () => {
       e("2025-06-01", 120_000, "PNEU"),
     ]);
     expect(r.status).toBe("unknown");
-    expect(r.note).toMatch(/incohérents/);
+    expect(r.note).toMatch(/aucun segment cohérent/i);
   });
 
   it("returns unknown when no km reading is usable at all", () => {
@@ -151,10 +153,8 @@ describe("computeIntervalChecks / formatIntervalChecks", () => {
 });
 
 
-describe("checkBeltPump — rule 2", () => {
-  const NOW = new Date("2026-08-20T12:00:00.000Z");
-  // Real spellings, already validated against production in serviceTypes.test.ts —
-  // reused here rather than inventing new synthetic part names.
+describe("checkBeltPump — rule 2, mileage-only", () => {
+  // Real spellings, already validated against production in serviceTypes.test.ts.
   const BELT = "CHANGEMENT KIT DE DISTRIBUTION";
   const PUMP = "POMPE A EAU";
   const OTHER = "COURROIE ALTERNATEUR"; // a real trap: NOT the timing belt
@@ -165,93 +165,189 @@ describe("checkBeltPump — rule 2", () => {
     ...extra,
   ];
 
-  it("is SKIPPED, not flagged and not cleared, when the contract date is missing", () => {
-    const r = checkBeltPump(highKm(), null, NOW);
-    expect(r.status).toBe("skipped");
-    expect(r.note).toMatch(/indisponible/i);
-  });
-
-  it("is SKIPPED when the contract date is unparseable", () => {
-    expect(checkBeltPump(highKm(), "not-a-date", NOW).status).toBe("skipped");
-  });
-
-  it("FLAGS >6 months past contract, >120,000 km, never recorded", () => {
-    const r = checkBeltPump(highKm(), "2025-01-15T00:00:00.000Z", NOW);
+  it("FLAGS over 120,000 km with no belt or pump ever recorded", () => {
+    const r = checkBeltPump(highKm());
     expect(r.status).toBe("never");
-    expect(r.monthsPastContract).toBe(19);
     expect(r.currentKm).toBe(150_000);
+    expect(r.thresholdKm).toBe(120_000);
+  });
+
+  it("fires regardless of contract status — it no longer reads the contract at all", () => {
+    // The signature takes no contract argument; this pins that.
+    expect(checkBeltPump.length).toBe(1);
   });
 
   it("does NOT flag when a timing-belt service exists", () => {
-    const r = checkBeltPump(highKm(e("2024-03-01", 130_000, BELT)), "2025-01-15T00:00:00.000Z", NOW);
+    const r = checkBeltPump(highKm(e("2024-03-01", 130_000, BELT)));
     expect(r.status).toBe("ok");
     expect(r.lastServiceDate).toBe("2024-03-01");
     expect(r.lastServiceKm).toBe(130_000);
   });
 
   it("accepts a water-pump service as satisfying the check", () => {
-    const r = checkBeltPump(highKm(e("2024-03-01", 130_000, PUMP)), "2025-01-15T00:00:00.000Z", NOW);
-    expect(r.status).toBe("ok");
+    expect(checkBeltPump(highKm(e("2024-03-01", 130_000, PUMP))).status).toBe("ok");
   });
 
   it("is not satisfied by an ALTERNATOR belt — a different part entirely", () => {
-    const r = checkBeltPump(highKm(e("2024-03-01", 130_000, OTHER)), "2025-01-15T00:00:00.000Z", NOW);
-    expect(r.status).toBe("never");
-  });
-
-  it("is NOT APPLICABLE (silent) at exactly 6 months past contract", () => {
-    // Boundary: the rule says MORE than 6 months.
-    const r = checkBeltPump(highKm(), "2026-02-20T00:00:00.000Z", NOW);
-    expect(r.monthsPastContract).toBe(6);
-    expect(r.status).toBe("not_applicable");
-  });
-
-  it("is NOT APPLICABLE (silent) while still inside the contract", () => {
-    expect(checkBeltPump(highKm(), "2027-01-01T00:00:00.000Z", NOW).status).toBe("not_applicable");
-  });
-
-  it("is NOT APPLICABLE (silent) below the 120,000 km threshold", () => {
-    const low = [e("2023-01-01", 60_000, "PNEU"), e("2025-06-01", 119_000, "PNEU")];
-    const r = checkBeltPump(low, "2025-01-15T00:00:00.000Z", NOW);
-    expect(r.status).toBe("not_applicable");
-    expect(r.currentKm).toBe(119_000);
-  });
-
-  it("uses whole calendar months, not days/30", () => {
-    // 2026-02-20 -> 2026-08-20 is exactly 6 months, not 6.1 from day-division.
-    expect(checkBeltPump(highKm(), "2026-02-20T00:00:00.000Z", NOW).monthsPastContract).toBe(6);
-    // One day earlier is a full 6 months plus a day, still 6 whole months.
-    expect(checkBeltPump(highKm(), "2026-02-19T00:00:00.000Z", NOW).monthsPastContract).toBe(6);
+    expect(checkBeltPump(highKm(e("2024-03-01", 130_000, OTHER))).status).toBe("never");
   });
 
   it("credits a belt changed inside a combined line", () => {
-    const r = checkBeltPump(
-      highKm(e("2024-03-01", 130_000, "KIT DISTRIB+POMPE EAU+JOINT CULASSE")),
-      "2025-01-15T00:00:00.000Z",
-      NOW
-    );
+    const r = checkBeltPump(highKm(e("2024-03-01", 130_000, "KIT DISTRIB+POMPE EAU+JOINT CULASSE")));
     expect(r.status).toBe("ok");
+  });
+
+  it("is NOT APPLICABLE (silent) at or below the threshold", () => {
+    const low = [e("2023-01-01", 60_000, "PNEU"), e("2025-06-01", 120_000, "PNEU")];
+    const r = checkBeltPump(low);
+    expect(r.status).toBe("not_applicable");
+    expect(r.currentKm).toBe(120_000); // strict: exactly 120,000 does not flag
+  });
+
+  it("is SKIPPED — not flagged, not cleared — when km cannot be established", () => {
+    const r = checkBeltPump([e("2025-01-01", 0, "PNEU")]);
+    expect(r.status).toBe("skipped");
+    expect(r.note).toMatch(/indéterminable/i);
+  });
+
+  it("ignores an inflated Visite Technique reading when deciding the threshold", () => {
+    // A VT alone must not push a vehicle over 120,000.
+    const r = checkBeltPump([
+      { date: "2025-01-01", km: 90_000, parts: ["PNEU"] },
+      { date: "2025-03-01", km: 130_000, description: "visite technique", parts: [] },
+    ]);
+    expect(r.status).toBe("not_applicable");
+    expect(r.currentKm).toBe(90_000);
   });
 });
 
 describe("formatBeltPumpCheck", () => {
-  const NOW = new Date("2026-08-20T12:00:00.000Z");
   const highKm = [e("2023-01-01", 100_000, "PNEU"), e("2025-06-01", 150_000, "PNEU")];
 
   it("renders NOTHING when not applicable — silence is the design", () => {
-    expect(formatBeltPumpCheck(checkBeltPump(highKm, "2027-01-01T00:00:00.000Z", NOW))).toEqual([]);
+    expect(formatBeltPumpCheck(checkBeltPump([e("a", 50_000, "PNEU")]))).toEqual([]);
   });
 
-  it("states plainly that the check could not run when the date is missing", () => {
-    const [line] = formatBeltPumpCheck(checkBeltPump(highKm, null, NOW));
+  it("states plainly that the check could not run when km is unusable", () => {
+    const [line] = formatBeltPumpCheck(checkBeltPump([e("a", 0, "PNEU")]));
     expect(line).toMatch(/NON VÉRIFIÉ/);
   });
 
-  it("cites the months, contract date and km on a flag", () => {
-    const [line] = formatBeltPumpCheck(checkBeltPump(highKm, "2025-01-15T00:00:00.000Z", NOW));
+  it("cites the km and threshold on a flag, and does not mention the contract", () => {
+    const [line] = formatBeltPumpCheck(checkBeltPump(highKm));
     expect(line).toMatch(/JAMAIS ENREGISTRÉ/);
-    expect(line).toMatch(/19 mois/);
-    expect(line).toMatch(/15\/01\/2025/);
     expect(line).toMatch(/150\s000 km/u);
+    expect(line).toMatch(/120\s000 km/u);
+    expect(line).not.toMatch(/contrat/i);
+  });
+});
+
+describe("Visite Technique exclusion — the root cause of most backward steps", () => {
+  // 44329-B-7's real pattern, abridged: a VT logged 130,000 km, then the next
+  // genuine entry read 118,157. That single VT was its ONLY backward step.
+  const real44329: IntervalEntry[] = [
+    { date: "2024-12-15", km: 106_980, description: "fh+fa", parts: ["FILTRE A HUILE", "FILTRE A AIR"] },
+    { date: "2025-03-30", km: 130_000, description: "viisite tech", parts: ["SERVICE VISITE TECHNIQUE"] },
+    { date: "2025-05-04", km: 118_157, description: "v simple", parts: ["VIDANGE 1:HUILE+FILTRE H+MO"] },
+  ];
+
+  it("drops the VT entry from km math while leaving everything else", () => {
+    const usable = usableKmEntries(real44329);
+    expect(usable).toHaveLength(2);
+    expect(usable.map((e) => e.km)).toEqual([106_980, 118_157]);
+  });
+
+  it("recognises the real typo spellings, not just the correct one", () => {
+    for (const d of [
+      "VISITE TECHNIQUE",
+      "VIISTE TECHNIQUE", // 110 real rows
+      "VIISITE TECHNIQUE",
+      "VISIITE TECHNIQUE",
+      "VSITE TECHNIQUE",
+      "VISITE TECHNQIUE",
+      "viisite tech",
+      "VISITE VTECHNIQUE",
+    ]) {
+      expect(usableKmEntries([{ date: "d", km: 1, description: d, parts: [] }])).toHaveLength(0);
+    }
+  });
+
+  it("does NOT drop a genuine service whose text merely contains 'TECH'", () => {
+    // Real rows: "TECH. = RACHID HUILE 5W30 + FH", "RéVISION: OTHMANE TECHNICIEN".
+    for (const d of ["TECH. = RACHID HUILE 5W30 + FH", "RéVISION: OTHMANE TECHNICIEN"]) {
+      expect(usableKmEntries([{ date: "d", km: 1, description: d, parts: [] }])).toHaveLength(1);
+    }
+  });
+
+  it("44329-B-7 now yields a real answer where it previously said Indéterminé", () => {
+    const r = checkInterval("vidange", real44329);
+    // The 2025-05-04 vidange is the last one, so the gap is measured from it.
+    expect(r.status).not.toBe("unknown");
+    expect(r.lastKm).toBe(118_157);
+    expect(r.currentKm).toBe(118_157);
+  });
+
+  it("computes the air-filter gap on 44329-B-7 across the VT, which used to block it", () => {
+    const r = checkInterval("filtre_air", real44329);
+    expect(r.status).not.toBe("unknown");
+    expect(r.lastKm).toBe(106_980); // the fh+fa entry
+    expect(r.currentKm).toBe(118_157); // NOT the VT's inflated 130,000
+    expect(r.kmSince).toBe(11_177);
+  });
+});
+
+describe("longestCleanRun — the fallback, for genuine non-VT bad readings", () => {
+  const r = (km: number, date: string): KmReadingT => ({ km, date });
+  type KmReadingT = { km: number; date: string };
+
+  it("keeps a non-decreasing run and names what it dropped", () => {
+    const out = longestCleanRun([r(100_000, "a"), r(60_000, "b"), r(110_000, "c")]);
+    expect(out.kept.map((x) => x.km)).toEqual([100_000, 110_000]);
+    expect(out.excluded.map((x) => x.km)).toEqual([60_000]);
+  });
+
+  it("tolerates sub-threshold noise rather than dropping it", () => {
+    const out = longestCleanRun([r(100_000, "a"), r(99_900, "b"), r(101_000, "c")]);
+    expect(out.excluded).toEqual([]);
+  });
+
+  it("collapses to one reading when the FIRST value is the inflated outlier", () => {
+    // The desired failure: this must NOT rescue a wrong answer.
+    const out = longestCleanRun([r(200_000, "a"), r(100_000, "b"), r(105_000, "c")]);
+    expect(out.kept).toHaveLength(1);
+  });
+});
+
+describe("checkInterval — tiered guard", () => {
+  it("computes despite a bad reading OUTSIDE the relevant window", () => {
+    const r = checkInterval("vidange", [
+      { date: "2022-01-01", km: 200_000, parts: ["PNEU"] }, // bad, long before
+      { date: "2022-06-01", km: 40_000, parts: ["PNEU"] },
+      { date: "2025-01-01", km: 100_000, parts: ["VIDANGE 1:HUILE+FILTRE H+MO"] },
+      { date: "2025-09-01", km: 118_500, parts: ["PNEU"] },
+    ]);
+    expect(r.status).toBe("overdue");
+    expect(r.excludedReadings).toBeUndefined();
+  });
+
+  it("falls back to the clean run INSIDE the window and names the excluded readings", () => {
+    const r = checkInterval("vidange", [
+      { date: "2025-01-01", km: 100_000, parts: ["VIDANGE 1:HUILE+FILTRE H+MO"] },
+      { date: "2025-04-01", km: 40_000, parts: ["PNEU"] }, // genuine bad reading
+      { date: "2025-09-01", km: 125_000, parts: ["PNEU"] },
+    ]);
+    expect(r.status).toBe("overdue");
+    expect(r.kmSince).toBe(25_000);
+    expect(r.excludedReadings).toEqual([{ date: "2025-04-01", km: 40_000 }]);
+  });
+
+  it("still refuses, with a SPECIFIC reason, when no clean segment exists", () => {
+    const r = checkInterval("vidange", [
+      { date: "2025-01-01", km: 150_000, parts: ["VIDANGE 1:HUILE+FILTRE H+MO"] },
+      { date: "2025-06-01", km: 120_000, parts: ["PNEU"] },
+    ]);
+    expect(r.status).toBe("unknown");
+    expect(r.note).toMatch(/aucun segment cohérent/i);
+    expect(r.note).not.toMatch(/^Relevés kilométriques incohérents\.$/);
   });
 });
