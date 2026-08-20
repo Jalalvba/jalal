@@ -20,6 +20,12 @@ import { classifyRepairOrigin } from "@/lib/ai/prompts/dsAnalysis";
 import type { DsAnalysis, ContractLevel, FindingLevel } from "@/lib/ai/prompts/dsAnalysis";
 import type { IntervalCheck, BeltPumpCheck } from "@/lib/ai/prompts/maintenanceIntervals";
 
+type FollowUpExchange = { question: string; answer: string };
+
+type FollowUpResponse =
+  | { ok: true; answer: string; question: string; ungroundedDates: string[]; costInfo: CostInfo }
+  | { ok: false; error: string };
+
 type AnalyzeResponse =
   | {
       ok: true;
@@ -84,6 +90,12 @@ export function DsAnalysisCard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Extract<AnalyzeResponse, { ok: true }> | null>(null);
+  // Appended, never replaced — the point is a visible record of
+  // analysis -> question -> answer, not a question silently overwriting it.
+  const [exchanges, setExchanges] = useState<FollowUpExchange[]>([]);
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState("");
 
   // contracts[0], matching VehicleCard directly above this one (page.tsx:263).
   // Picking a different row — e.g. the first WITH a date — would flag one
@@ -101,47 +113,65 @@ export function DsAnalysisCard({
     { interne: 0, externe: 0, inconnu: 0 }
   );
 
-  async function runAnalysis() {
-    setLoading(true);
-    setError("");
-    setResult(null);
+  function buildPayload() {
+    return {
+      imm,
+      contractEnd,
+      vehicle: { brand: vehicle?.brand, model: vehicle?.model, state: vehicle?.vehicle_state },
+      replacements: rlRows.map((r) => ({ date: r["Date"], motif: r["Motif"] })),
+      entries: items.map((it) => ({
+        date: it.date_ds,
+        km: it.km,
+        description: it.description == null ? undefined : String(it.description),
+        ...classifyRepairOrigin(it.fournisseur, it.techniciens),
+        parts: (it.lines ?? [])
+          .map((l) => String(l.designation_consommation ?? ""))
+          .filter((p) => p.trim()),
+      })),
+    };
+  }
+
+  async function askFollowUp() {
+    const q = question.trim();
+    if (!q || !result) return;
+    setAsking(true);
+    setAskError("");
     try {
       const res = await fetch("/api/ds-history/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // The SAME payload the analysis used, plus the analysis being
+        // challenged — the answer must be grounded in identical data.
         body: JSON.stringify({
-          imm,
-          contractEnd,
-          vehicle: { brand: vehicle?.brand, model: vehicle?.model, state: vehicle?.vehicle_state },
-          // The RL sheet is the vehicle-REPLACEMENT log; a plate appearing
-          // there with a motif is a real health signal, and is already why
-          // this page tints the vehicle card red.
-          replacements: rlRows.map((r) => ({ date: r["Date"], motif: r["Motif"] })),
-          entries: items.map((it) => ({
-            date: it.date_ds,
-            km: it.km,
-            description: it.description == null ? undefined : String(it.description),
-            // Internal vs external. The rule lives in the prompt module so it
-            // is unit-testable; it reads fournisseur plus the
-            // "Fournisseur Externe" technicien sentinel, which is the only way
-            // to catch the ~10k production records that are external with no
-            // supplier recorded.
-            ...classifyRepairOrigin(it.fournisseur, it.techniciens),
-            // designation_consommation is the strongest signal in this data —
-            // descriptions are frequently "pb" or ".".
-            //
-            // String()-coerced rather than trusting the declared `string |
-            // undefined`: these values come straight from Mongo and are not
-            // guaranteed to match their type (a real DS line carries
-            // qte: "2" as a string, and BDD's modele arrives as a raw number —
-            // the footgun 77f9eef fixed in the PDF export). Calling .trim() on
-            // a number throws, which would break the button before it ever
-            // reached the network.
-            parts: (it.lines ?? [])
-              .map((l) => String(l.designation_consommation ?? ""))
-              .filter((p) => p.trim()),
-          })),
+          ...buildPayload(),
+          followUp: { question: q, previousAnalysis: result.analysis },
         }),
+      });
+      const json = (await res.json()) as FollowUpResponse;
+      if (!json.ok) {
+        setAskError(json.error);
+        return;
+      }
+      setExchanges((prev) => [...prev, { question: json.question, answer: json.answer }]);
+      setQuestion("");
+    } catch {
+      setAskError("Échec de la question — vérifiez la connexion.");
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  async function runAnalysis() {
+    setLoading(true);
+    setError("");
+    setResult(null);
+    setExchanges([]);
+    setAskError("");
+    try {
+      const res = await fetch("/api/ds-history/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload()),
       });
       const json = (await res.json()) as AnalyzeResponse;
       if (!json.ok) {
@@ -310,6 +340,60 @@ export function DsAnalysisCard({
               Analyse générée par IA à partir des interventions listées ci-dessous — vérifiez avant
               de décider.
             </p>
+
+            {/* Question -> answer record. Appended below the analysis, never
+                replacing it, so the trail stays visible. */}
+            {exchanges.length > 0 && (
+              <div className="space-y-2 border-t border-border pt-3">
+                {exchanges.map((x, i) => (
+                  <div key={i} className="rounded-lg border border-border">
+                    <div className="border-b border-border px-3 py-1.5 text-xs font-medium text-card-foreground">
+                      <span className="text-muted-foreground">Q — </span>
+                      {x.question}
+                    </div>
+                    <p className="whitespace-pre-wrap px-3 py-2 text-sm text-card-foreground">
+                      {x.answer}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Only after an analysis exists — there is nothing to challenge before. */}
+            <div className="border-t border-border pt-3">
+              <label
+                htmlFor="ds-followup"
+                className="text-micro font-medium uppercase tracking-wide text-muted-foreground"
+              >
+                Une question sur cette analyse ?
+              </label>
+              <div className="mt-1 flex gap-2">
+                <input
+                  id="ds-followup"
+                  type="text"
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !asking && question.trim()) {
+                      e.preventDefault();
+                      askFollowUp();
+                    }
+                  }}
+                  maxLength={500}
+                  placeholder="ex : pourquoi tu n'as pas mentionné la récurrence sur l'embrayage ?"
+                  className="h-9 flex-1 rounded-lg border border-border bg-input px-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-zinc-500 focus:outline-none"
+                />
+                <Button
+                  type="button"
+                  onClick={askFollowUp}
+                  disabled={asking || !question.trim()}
+                  className="h-9"
+                >
+                  {asking ? "…" : "Demander"}
+                </Button>
+              </div>
+              {askError && <Alert className="mt-2 text-xs">{askError}</Alert>}
+            </div>
           </div>
         )}
       </div>

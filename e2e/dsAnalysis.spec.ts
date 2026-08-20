@@ -84,6 +84,16 @@ test.describe("DS History — Analyse IA", () => {
     // label, once inside the model's summary prose.
     await expect(page.getByText("Filtre à gasoil", { exact: true }).first()).toBeVisible();
 
+    // Follow-up input appears only once an analysis exists.
+    const ask = page.getByPlaceholder(/pourquoi tu n'as pas/);
+    await expect(ask).toBeVisible();
+    await ask.fill("combien d'interventions externes ?");
+    await page.getByRole("button", { name: "Demander" }).click();
+
+    // The exchange is APPENDED — the original analysis must still be there.
+    await expect(page.getByText(/^Q — /)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText("Résumé")).toBeVisible();
+
     // The String() coercion on part designations exists because real Mongo
     // values do not honour their declared types; a regression there throws in
     // the click handler rather than failing a request.
