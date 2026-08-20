@@ -315,9 +315,16 @@ export function DsAnalysisCard({
                         {result.oilGradeCheck.label}
                       </span>
                       <div className="text-xs text-muted-foreground">
-                        {`Passé au ${result.oilGradeCheck.establishedGrade} le ${result.oilGradeCheck.establishedAt?.date?.slice(0, 10)}, puis ${result.oilGradeCheck.regressions
+                        {/* Leads with the pre-computed unique list, then the
+                            chronology as supporting evidence. Both come from
+                            oilGradeCheck.uniqueGrades / .regressions, so this
+                            row and the AI finding cannot disagree. */}
+                        <span className="font-medium text-card-foreground">
+                          {`Grades utilisés : ${result.oilGradeCheck.uniqueGrades.join(", ")} (${result.oilGradeCheck.uniqueGrades.length} grades différents)`}
+                        </span>
+                        {` — passé au ${result.oilGradeCheck.establishedGrade} le ${result.oilGradeCheck.establishedAt?.date?.slice(0, 10)}, puis ${result.oilGradeCheck.regressions
                           .map((r) => `${r.grade} le ${r.date?.slice(0, 10)}`)
-                          .join(", ")} — grade constructeur inconnu de l'application, à vérifier.`}
+                          .join(", ")}. Grade constructeur inconnu de l'application, à vérifier.`}
                       </div>
                     </div>
                   </div>

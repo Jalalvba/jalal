@@ -157,3 +157,103 @@ describe("formatOilGradeCheck — silent unless it fired, and never asserts faul
     expect(ESTABLISHED_GRADE).toBe("5W30");
   });
 });
+
+
+// ── uniqueGrades: the distinct set, led with and never recomputed ──────────
+describe("uniqueGrades — deduplicated, normalised, and consistent with the detail", () => {
+  it("collapses format variants of the SAME grade instead of inflating the count", () => {
+    // "5W-30" and "5w30" are the same oil. If canonicalisation were skipped,
+    // this would report 3 distinct grades instead of 2.
+    const r = checkOilGrade([
+      e("2024-01-01", 100_000, "Huile moteur 5W30 Fut"),
+      e("2024-06-01", 110_000, "Huile moteur 5W-30 5L"),
+      e("2024-09-01", 115_000, "Vidange 1:Huile+Filtre H+MO+5l 5w30"),
+      e("2025-01-01", 120_000, "Huile moteur 10W40 1L"),
+    ]);
+    expect(r.status).toBe("regression");
+    expect(r.uniqueGrades).toEqual(["5W30", "10W40"]);
+    expect(r.uniqueGrades).toHaveLength(2);
+  });
+
+  it("lists the established grade first, then each later one in order", () => {
+    const r = checkOilGrade([
+      e("2024-10-08", 20_469, "Huile moteur 5W30 Fut"),
+      e("2024-12-24", 30_427, "Huile moteur 5W40 FUT"),
+      e("2026-02-05", 82_171, "Huile moteur 0W20 5L"),
+      e("2026-05-22", 93_842, "Huile moteur 0W30 5L"),
+    ]);
+    expect(r.uniqueGrades).toEqual(["5W30", "5W40", "0W20", "0W30"]);
+  });
+
+  it("deduplicates a grade that recurs across several later services", () => {
+    const r = checkOilGrade([
+      e("2024-01-01", 100_000, "Huile moteur 5W30 Fut"),
+      e("2024-06-01", 110_000, "Huile moteur 10W40 1L"),
+      e("2025-01-01", 120_000, "Huile moteur 10W40 Fut"),
+    ]);
+    expect(r.regressions).toHaveLength(2);      // two occurrences
+    expect(r.uniqueGrades).toEqual(["5W30", "10W40"]); // one distinct grade after
+  });
+
+  it("cannot disagree with the chronological detail — same source, both places", () => {
+    const r = checkOilGrade([
+      e("2024-10-08", 20_469, "Huile moteur 5W30 Fut"),
+      e("2024-12-24", 30_427, "Huile moteur 5W40 FUT"),
+      e("2026-02-05", 82_171, "Huile moteur 0W20 5L"),
+      e("2026-05-22", 93_842, "Huile moteur 0W30 5L"),
+    ]);
+    // Every grade named in the detail must appear in the summary set...
+    const cited = new Set([r.establishedAt!.grade, ...r.regressions.map((x) => x.grade)]);
+    expect(new Set(r.uniqueGrades)).toEqual(cited);
+    // ...and the set must carry nothing the detail does not cite.
+    expect(r.uniqueGrades.length).toBe(cited.size);
+  });
+
+  it("excludes pre-switchover grades — the fleet migration stays out of the count", () => {
+    // 10W40 before the move to 5W30 is the fleet's own migration, not a finding.
+    const r = checkOilGrade([
+      e("2022-01-04", 22_806, "Huile moteur 10W40 FUT"),
+      e("2024-03-13", 121_956, "Huile moteur 5W30 Fut"),
+      e("2025-03-17", 211_925, "Huile moteur 5W40 FUT"),
+    ]);
+    expect(r.uniqueGrades).toEqual(["5W30", "5W40"]);
+    expect(r.uniqueGrades).not.toContain("10W40");
+  });
+
+  it("is empty for every non-firing status", () => {
+    for (const entries of [
+      [e("2022-01-04", 22_806, "Huile moteur 10W40 FUT")],            // not_applicable
+      [e("2025-01-01", 1000, "Vidange 1:Huile+Filtre H+MO")],          // unknown
+      [e("2024-01-01", 100_000, "Huile moteur 5W30 Fut")],             // ok
+    ]) {
+      expect(checkOilGrade(entries).uniqueGrades).toEqual([]);
+    }
+  });
+});
+
+describe("formatOilGradeCheck — leads with the unique set", () => {
+  const r = checkOilGrade([
+    e("2024-10-08", 20_469, "Huile moteur 5W30 Fut"),
+    e("2024-12-24", 30_427, "Huile moteur 5W40 FUT"),
+    e("2026-02-05", 82_171, "Huile moteur 0W20 5L"),
+    e("2026-05-22", 93_842, "Huile moteur 0W30 5L"),
+  ]);
+  const [line] = formatOilGradeCheck(r);
+
+  it("states the distinct grades and their count before any date", () => {
+    expect(line).toContain("Grades utilisés : 5W30, 5W40, 0W20, 0W30 (4 grades différents)");
+    expect(line.indexOf("Grades utilisés")).toBeLessThan(line.indexOf("2024-10-08"));
+  });
+
+  it("keeps the chronological detail as supporting evidence, not a replacement", () => {
+    expect(line).toContain("2024-12-24");
+    expect(line).toContain("2026-05-22");
+    expect(line).toMatch(/93\s842/);
+  });
+
+  it("the count in the lead matches the grades actually listed after it", () => {
+    const n = Number(line.match(/\((\d+) grades différents\)/)![1]);
+    expect(n).toBe(r.uniqueGrades.length);
+    for (const g of r.uniqueGrades) expect(line).toContain(g);
+  });
+});

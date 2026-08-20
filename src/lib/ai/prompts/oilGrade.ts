@@ -141,6 +141,22 @@ export type OilGradeCheck = {
   establishedAt?: OilGradeOccurrence;
   /** Later services that used something else. */
   regressions: OilGradeOccurrence[];
+  /**
+   * The distinct grades this finding is about, in order of first appearance —
+   * the established grade followed by each different one that came after.
+   *
+   * Derived from EXACTLY the occurrences cited below (establishedAt +
+   * regressions), never recomputed from the raw entries, so the count and the
+   * chronological detail cannot disagree. Values are already canonical
+   * (canonicalGrade normalises "5W-30"/"5w30" to "5W30" at extraction), so
+   * one grade written two ways cannot inflate the count.
+   *
+   * Deliberately does NOT include grades used BEFORE the vehicle moved to the
+   * established grade: those pre-switchover values are the fleet migration
+   * this check exists to ignore, and listing them here would smuggle that
+   * noise back into the finding.
+   */
+  uniqueGrades: string[];
   /** Services whose DS carried two grades at once — named, never resolved. */
   ambiguous: { date?: string; grades: string[] }[];
   /** How many services had a readable grade, out of how many were examined. */
@@ -176,6 +192,7 @@ export function checkOilGrade(entries: readonly IntervalEntry[]): OilGradeCheck 
   const common = {
     ...base,
     regressions: [] as OilGradeOccurrence[],
+    uniqueGrades: [] as string[],
     ambiguous,
     gradedCount: known.length,
     examinedCount: entries.length,
@@ -200,11 +217,21 @@ export function checkOilGrade(entries: readonly IntervalEntry[]): OilGradeCheck 
     .filter((x) => x.g.grade !== ESTABLISHED_GRADE)
     .map((x) => ({ date: x.date, km: x.km, grade: x.g.grade }));
 
+  // Built from the cited occurrences themselves — see uniqueGrades' doc. Only
+  // populated when there is actually a finding to lead with: on "ok" the
+  // vehicle never left its grade, so there is no set of grades to compare, and
+  // returning [one grade] there would read as a finding that does not exist.
+  const uniqueGrades =
+    regressions.length > 0
+      ? [...new Set([establishedAt.grade, ...regressions.map((r) => r.grade)])]
+      : [];
+
   return {
     ...common,
     status: regressions.length > 0 ? "regression" : "ok",
     establishedAt,
     regressions,
+    uniqueGrades,
   };
 }
 
@@ -219,7 +246,9 @@ export function formatOilGradeCheck(c: OilGradeCheck): string[] {
     `${o.date?.slice(0, 10) ?? "date inconnue"}${o.km != null ? ` à ${o.km.toLocaleString("fr-FR")} km` : ""}`;
   const list = c.regressions.map((r) => `${r.grade} le ${at(r)}`).join(", ");
   return [
-    `- ${c.label} : RETOUR EN ARRIÈRE — ce véhicule est passé au ${c.establishedGrade} le ${at(c.establishedAt!)}, ` +
+    `- ${c.label} : RETOUR EN ARRIÈRE — Grades utilisés : ${c.uniqueGrades.join(", ")} ` +
+      `(${c.uniqueGrades.length} grades différents). ` +
+      `Détail : ce véhicule est passé au ${c.establishedGrade} le ${at(c.establishedAt!)}, ` +
       `puis ${c.regressions.length === 1 ? "une intervention ultérieure a utilisé" : `${c.regressions.length} interventions ultérieures ont utilisé`} un autre grade : ${list}. ` +
       `Le grade prescrit par le constructeur n'est pas connu de cette application : signaler l'écart, sans affirmer lequel est correct.`,
   ];

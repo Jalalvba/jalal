@@ -466,7 +466,7 @@ export function formatRulesReference(
     const cov = `${oil.gradedCount} intervention(s) sur ${oil.examinedCount} portent un grade lisible`;
     switch (oil.status) {
       case "regression":
-        lines.push(`${oHead} Statut calculé : DÉCLENCHÉE — passage au ${oil.establishedGrade} le ${oil.establishedAt?.date?.slice(0, 10) ?? "?"}, puis ${oil.regressions.length} intervention(s) avec un autre grade. ${cov}.`);
+        lines.push(`${oHead} Statut calculé : DÉCLENCHÉE — grades utilisés : ${oil.uniqueGrades.join(", ")} (${oil.uniqueGrades.length} grades différents). Passage au ${oil.establishedGrade} le ${oil.establishedAt?.date?.slice(0, 10) ?? "?"}, puis ${oil.regressions.length} intervention(s) avec un autre grade. ${cov}.`);
         break;
       case "ok":
         lines.push(`${oHead} Statut calculé : RESPECTÉE — depuis le passage au ${oil.establishedGrade} le ${oil.establishedAt?.date?.slice(0, 10) ?? "?"}, aucune intervention ultérieure n'a utilisé un autre grade. ${cov}.`);
