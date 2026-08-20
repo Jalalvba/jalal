@@ -41,6 +41,7 @@ import { ZoneBadges } from "@/components/fleet/ZoneBadges";
 import { ZONE_COLORS } from "@/config/zones";
 import { buildPlateVariants } from "@/lib/utils/plateVariants";
 import type { RlRow, RlReunionRow } from "@/lib/sheets/googleSheetsRl";
+import { DsAnalysisCard } from "@/components/fleet/DsAnalysisCard";
 import type { ImportRow } from "@/lib/sheets/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/utils/format";
 import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
@@ -1133,6 +1134,20 @@ export default function Home() {
 
         {/* Vehicle metadata (from parc) */}
         {vehicle && !loading && <div className="mt-4"><VehicleCard parc={vehicle} contracts={contracts} hasRl={rlRows.length > 0} /></div>}
+
+        {/* AI health analysis — costs nothing until the user clicks. Placed
+            above the DS entries it analyses, below the vehicle identity. */}
+        {data && data.items.length > 0 && !loading && (
+          <div className="mt-3">
+            <DsAnalysisCard
+              imm={data.imm || imm}
+              items={data.items}
+              vehicle={vehicle}
+              contracts={contracts}
+              rlRows={rlRows}
+            />
+          </div>
+        )}
         {(bddRows.length > 0 || rlRows.length > 0 || importRows.length > 0) && !loading && <div className="mt-3"><SheetCard bddRows={bddRows} rlRows={rlRows} rlReunionRows={rlReunionRows} importRows={importRows} /></div>}
 
         {/* Results */}
