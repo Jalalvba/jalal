@@ -133,6 +133,63 @@ any finding citing a date absent from the source. The whole finding is dropped,
 not just the date: a recurrence claim stripped of its invented evidence is an
 unsupported claim, not a weaker one.
 
+### Internal vs external repairs
+
+Each entry sent to the model is marked `interne`, `externe: <nom>`,
+`externe (non nommé)` or `inconnu`. **The rule is not "fournisseur is empty
+means internal"** — production carries an explicit sentinel:
+
+```
+externe  fournisseur named, OR technicien === "Fournisseur Externe"
+interne  neither, but a real technicien name is present
+inconnu  neither
+```
+
+`"Fournisseur Externe"` is the **single most common `technicien` value in the
+whole `ds` collection** (48,834 occurrences, ahead of every real human name),
+and **10,277 of those carry no `fournisseur` at all**. A rule keyed only on
+`fournisseur` would file every one of them as in-house work. Verified against
+production 2026-08-20; measured across 102,336 DS: **40.5% externe, 50.9%
+interne, 8.6% inconnu**.
+
+`inconnu` is surfaced as itself, never defaulted to internal — prompt rule 10
+tells the model not to draw conclusions from it. The card shows the split next
+to the button ("62 interventions (12 internes · 49 externes · 1 inconnu)") so
+the user sees what is being sent before spending a call.
+
+**Two fields evaluated and deliberately rejected:**
+
+- **`entite_nom`** holds only 7 values, all AVIS sites (`Garage Ain Sebaa`
+  183k, `Entité Siège`, `Garage Tanger`, …). It says *where* a DS was raised,
+  not *who* did the work — external repairs are routinely logged against an
+  AVIS garage, so using it would classify most external work as internal.
+- **`bc.fournisseurs`** is the *parts* supplier on a purchase order, a
+  different question from who performed the repair.
+
+**Supplier names are canonicalised in code, not by instruction.** Measured: 179
+raw distinct names collapse to 178 — exactly one real collision
+(`EQUIPEMENT MOYEN ATLAS ASSALAMA` vs `Equipement moyen atlas assalama`).
+Nearly a no-op, and done in code *precisely because* it is: telling a model to
+treat "near-identical names" as the same supplier invites it to merge genuinely
+different ones, a worse failure than the problem being solved.
+
+**Supplier recurrence is asked for explicitly.** Rule 9's first draft described
+how to *cite* a supplier recurrence but never asked for one — and a live run on
+`47024-B-7` duly returned only part-based findings, missing a supplier present
+8 times. It now instructs an active search at the same level as part
+recurrence, with a 3-occurrence threshold. Worth remembering: describing a
+format is not the same as requesting the content.
+
+**A third guard, `ungroundedSuppliers()`**, mirrors `ungroundedDates()` on the
+same principle — is this literal present in what we sent? It checks candidate
+names against the **entire** payload, not just the supplier list, because
+descriptions here are upper-case too (`PB MOTEUR`, `4 PNEUS`) and a model
+quoting one verbatim would otherwise be accused of inventing a garage.
+
+Cost impact, measured on the same vehicle with and without the fields:
+**4,832 → 5,111 input tokens (+5.8%)**. No change to rate limit, timeout or
+model.
+
 **Nothing is persisted.** The analysis is advisory output from a
 non-deterministic model and would go stale the moment a new DS entry lands;
 `gemini_usage` already records that the call happened and what it cost, under

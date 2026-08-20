@@ -382,6 +382,7 @@ consumer of `callAI`. It is the first to use the `validate` hook.
 | `temperature` | 0.3 | **0.2** |
 | Timeout | 20 s | **30 s** |
 | `validate` | not used | **yes** — JSON shape check |
+| Grounding guards | none | **3** — shape, dates, supplier names |
 | Output | plain text | structured JSON, rendered as fields |
 
 **Why the lower rate limit:** each call carries a whole vehicle history rather
