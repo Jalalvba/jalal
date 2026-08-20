@@ -930,16 +930,30 @@ change on the next `pnpm dev`.
   crashes on startup — `TypeError: Cannot read properties of undefined
   (reading 'Cjs')` at `@typescript-eslint/typescript-estree`'s
   `create-program/shared.js` — exiting 2 without linting a single file. No
-  compatible release exists on any tag: `typescript-eslint@latest` (8.67.0)
-  and `@canary` (8.67.1-alpha.22) both peer `typescript: ">=4.8.4 <6.1.0"`,
-  and it arrives transitively via `eslint-config-next`, so it is not a
-  version this repo can pin its way out of. Since
+  compatible release exists on any tag. Since
   [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) gates `pnpm lint`
   on every push to `main`, landing TS 7 would red the build. The rejected
   workarounds — running TS 5.9 for ESLint and TS 7 for `tsc`, or dropping
-  lint from CI — were both judged worse than waiting for upstream. Retry
-  when `typescript-eslint` ships TS 7 support; that is the single gating
-  item, and the upgrade should then be a clean dependency bump.
+  lint from CI — were both judged worse than waiting for upstream.
+
+  **Last rechecked 2026-08-20** (same day as the first attempt, so the lack
+  of movement is expected rather than informative — leave a real gap before
+  the next one). Still blocked, nothing changed:
+
+  | Checked | Version | `typescript` peer range |
+  |---|---|---|
+  | `typescript-eslint@latest` | 8.67.0 | `>=4.8.4 <6.1.0` |
+  | `typescript-eslint@canary` | 8.67.1-alpha.24 | `>=4.8.4 <6.1.0` |
+  | `@typescript-eslint/parser@latest` | 8.67.0 | `>=4.8.4 <6.1.0` |
+  | `eslint-config-next@latest` | 16.3.1 (= installed) | — |
+  | `typescript@latest` | 7.0.2 (unchanged) | — |
+
+  **There are two gates, not one.** Even once `typescript-eslint` ships TS 7
+  support — presumably as a v9 — `eslint-config-next@16.3.1` declares
+  `"typescript-eslint": "^8.46.0"`, a caret range locked to 8.x, so it could
+  not resolve a v9 without its own release. So the retry signal is *both* a
+  TS-7-compatible `typescript-eslint` **and** an `eslint-config-next` that
+  depends on it. Checking only the former will look unblocked when it is not.
 - **Unindexed case-insensitive regex on non-prefix queries.**
   `src/app/api/article/route.ts` still builds `$regex` filters with
   `$options: "i"` against `Description article`/`Marque`/`Modele` (input is
