@@ -37,6 +37,8 @@ import {
 import {
   computeIntervalChecks,
   formatIntervalChecks,
+  checkBeltPump,
+  formatBeltPumpCheck,
 } from "@/lib/ai/prompts/maintenanceIntervals";
 
 // Lower than bdd-reformulate's 20/min: each call carries a whole vehicle
@@ -133,7 +135,11 @@ export async function POST(request: Request) {
   const contractStatus = computeContractStatus(parsed.contractEnd);
   // Computed here, never asked of the model — same rule as the contract date.
   const intervalChecks = computeIntervalChecks(parsed.entries);
-  const prompt = buildDsAnalysisPrompt(parsed, contractStatus, formatIntervalChecks(intervalChecks));
+  const beltPumpCheck = checkBeltPump(parsed.entries, parsed.contractEnd);
+  const prompt = buildDsAnalysisPrompt(parsed, contractStatus, [
+    ...formatIntervalChecks(intervalChecks),
+    ...formatBeltPumpCheck(beltPumpCheck),
+  ]);
 
   try {
     // validate runs inside callAI, after the response arrives — Gemini's
@@ -195,6 +201,7 @@ export async function POST(request: Request) {
       ok: true,
       analysis,
       intervalChecks,
+      beltPumpCheck,
       truncated: parsed.entries.length > MAX_ENTRIES,
       analysedCount: Math.min(parsed.entries.length, MAX_ENTRIES),
       totalCount: parsed.entries.length,

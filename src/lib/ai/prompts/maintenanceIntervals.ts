@@ -209,3 +209,138 @@ export function formatIntervalChecks(checks: readonly IntervalCheck[]): string[]
     }
   });
 }
+
+
+// ── Rule 2: timing belt / water pump ──────────────────────────────────────
+//
+// NOT a "km since last service" check like the three above. There is no
+// per-model interval data anywhere in this project (kb_specs / part_families
+// exist in no collection, no database on the cluster, and nowhere in git
+// history), so "overdue by X km" is not a statement this data can support.
+//
+// What it CAN support: this vehicle is well past its contract, has high
+// mileage, and has no timing-belt or water-pump service on record at all.
+
+const BELT_PUMP_MONTHS_PAST_CONTRACT = 6;
+const BELT_PUMP_KM_THRESHOLD = 120_000;
+const BELT_PUMP_SERVICES: ServiceType[] = ["distribution", "pompe_eau"];
+
+export type BeltPumpStatus =
+  /** No contract end date — the check cannot run, and says so. */
+  | "skipped"
+  /** In scope and never recorded. The flag. */
+  | "never"
+  /** A service is on record. Shown, matching the other checks' positive state. */
+  | "ok"
+  /** Not old enough past contract, or not enough km. Deliberately silent. */
+  | "not_applicable";
+
+export type BeltPumpCheck = {
+  label: string;
+  status: BeltPumpStatus;
+  contractEnd?: string;
+  monthsPastContract?: number;
+  currentKm?: number;
+  lastServiceDate?: string;
+  lastServiceKm?: number;
+  /** Always set for "skipped"; explains why. */
+  note?: string;
+};
+
+/** Whole calendar months elapsed, not days/30 — a month is not 30.44 days. */
+function monthsBetween(from: Date, to: Date): number {
+  let m = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+  if (to.getDate() < from.getDate()) m -= 1;
+  return m;
+}
+
+/**
+ * Rule 2. Reuses the same service matcher, the same contract-end field and the
+ * same odometer helper as the other checks — no second way of reading any of
+ * them.
+ *
+ * Note on km: this uses the highest recorded reading. Given ~45% of vehicles
+ * carry at least one backward step, a single inflated reading could in
+ * principle push a vehicle over 120,000. The flag is conjunctive — it also
+ * needs >6 months past contract AND no service ever recorded — so a lone bad
+ * reading cannot produce a false flag on its own, and the finding cites the
+ * reading so it can be checked.
+ */
+export function checkBeltPump(
+  entries: readonly IntervalEntry[],
+  contractEnd: string | null,
+  now: Date = new Date()
+): BeltPumpCheck {
+  const label = "Distribution / pompe à eau";
+
+  if (!contractEnd) {
+    return {
+      label,
+      status: "skipped",
+      note: "Date de fin de contrat indisponible — contrôle non effectué.",
+    };
+  }
+  const end = new Date(contractEnd);
+  if (Number.isNaN(end.getTime())) {
+    return {
+      label,
+      status: "skipped",
+      note: "Date de fin de contrat illisible — contrôle non effectué.",
+    };
+  }
+
+  const currentKm = currentKmOf(entries) ?? undefined;
+
+  // Latest recorded belt-or-pump service, if any.
+  let last: { km: number | null; date?: string } | null = null;
+  for (const e of entries) {
+    const svc = servicesInEntry(e.parts);
+    if (!BELT_PUMP_SERVICES.some((s) => svc.has(s))) continue;
+    const d = String(e.date ?? "");
+    if (!last || d > String(last.date ?? "")) last = { km: toKm(e.km), date: e.date };
+  }
+
+  const monthsPastContract = monthsBetween(end, now);
+
+  if (last) {
+    return {
+      label,
+      status: "ok",
+      contractEnd,
+      monthsPastContract,
+      currentKm,
+      lastServiceDate: last.date,
+      ...(last.km !== null ? { lastServiceKm: last.km } : {}),
+    };
+  }
+
+  const inScope =
+    monthsPastContract > BELT_PUMP_MONTHS_PAST_CONTRACT &&
+    currentKm !== undefined &&
+    currentKm > BELT_PUMP_KM_THRESHOLD;
+
+  if (!inScope) {
+    return { label, status: "not_applicable", contractEnd, monthsPastContract, currentKm };
+  }
+
+  return { label, status: "never", contractEnd, monthsPastContract, currentKm };
+}
+
+/** Prompt line for rule 2. Empty when not applicable — silence by design. */
+export function formatBeltPumpCheck(c: BeltPumpCheck): string[] {
+  const fr = (iso?: string) => (iso ? new Date(iso).toLocaleDateString("fr-FR") : "?");
+  switch (c.status) {
+    case "skipped":
+      return [`- ${c.label} : NON VÉRIFIÉ — ${c.note}`];
+    case "never":
+      return [
+        `- ${c.label} : JAMAIS ENREGISTRÉ alors que le véhicule est hors contrat depuis ${c.monthsPastContract} mois (fin de contrat ${fr(c.contractEnd)}) et affiche ${c.currentKm?.toLocaleString("fr-FR")} km (seuil ${BELT_PUMP_KM_THRESHOLD.toLocaleString("fr-FR")} km).`,
+      ];
+    case "ok":
+      return [
+        `- ${c.label} : DÉJÀ EFFECTUÉ le ${fr(c.lastServiceDate)}${c.lastServiceKm ? ` à ${c.lastServiceKm.toLocaleString("fr-FR")} km` : ""}.`,
+      ];
+    default:
+      return [];
+  }
+}

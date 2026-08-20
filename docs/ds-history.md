@@ -241,11 +241,52 @@ Live example, `28220-B-7`: computed `Filtre à gasoil overdue +61,463 km, last
 numbers rather than recalculating. Cost 4,940 input tokens; the computed block
 is ~4 lines regardless of history size.
 
-**Rule 2 (kit de distribution / pompe à eau) is not implemented.** Its
-confirmed spec, for the follow-up: flag when the vehicle is **>6 months past
-`date_fin_contrat`** AND has **>120,000 km** AND has **no** recorded
-distribution/water-pump service; **skip the check entirely and say so** when
-`date_fin_contrat` is missing.
+#### Rule 2 — kit de distribution / pompe à eau
+
+**Not an interval check.** There is no per-model interval data, so "overdue by
+X km" is not a statement this data supports. What it does support: *never
+recorded, on a vehicle well past contract with high mileage*.
+
+Flags when **>6 months past `date_fin_contrat`** AND **>120,000 km** AND **no**
+distribution-or-water-pump service anywhere in the history. Reuses the same
+matcher, the same `date_fin_contrat` field and the same odometer helper as the
+other checks — no second way of reading any of them.
+
+**Four states, and the third is the point:**
+
+| State | Rendered | Meaning |
+|---|---|---|
+| `skipped` | **Non vérifié** badge | `date_fin_contrat` missing — the check could not run. Deliberately distinct from both compliant and non-compliant; it neither flags nor clears. |
+| `never` | **Jamais** badge | In scope and never recorded. The flag. |
+| `ok` | **Effectué** badge | A service is on record, with its date and km. |
+| `not_applicable` | **nothing at all** | Inside contract, ≤6 months past, or ≤120,000 km. Silent by design — printing "does not apply" on every in-contract vehicle would be pure noise, and unlike the other three this check genuinely does not apply. |
+
+Months are whole calendar months, not days ÷ 30, and the boundary is strict:
+exactly 6 months past contract is *not* in scope.
+
+Km uses the highest recorded reading. Given ~45% of vehicles carry a backward
+step, one inflated reading could in principle cross 120,000 — but the flag is
+**conjunctive** (also needs >6 months past contract AND no service ever), so a
+lone bad reading cannot produce a false flag by itself, and the finding cites
+the reading so it can be checked.
+
+**Prompt rule 14 exists because of a repeat failure.** Rule 13 described how to
+treat the computed check but never asked for a finding, and the first live run
+on `25705-B-7` computed `never` correctly while the model reported tyre and
+supplier recurrences instead and omitted it entirely. This is the *second* time
+that exact mistake has been made here (the first was supplier recurrence): **a
+prompt that describes a format does not request the content.** Rule 14 now
+requires any DÉPASSÉ / JAMAIS ENREGISTRÉ / NON VÉRIFIÉ check to get a dedicated
+finding, ahead of part or supplier recurrences.
+
+Live-verified on `25705-B-7` (39 entries, 352,000 km, contract ended
+2023-06-23): computed `never / 37 months / 352,000 km`, and after rule 14 the
+model returned it as the **first, `critical`** finding, restating those exact
+numbers. Cost impact +101 input tokens (3,692 → 3,793, +2.7%).
+
+Note the `skipped` state is guaranteed by the **UI row**, not by the model — the
+model does not reliably narrate "could not check", and forcing it to on every
+vehicle without a contract date would add noise.
 
 **Nothing is persisted.** The analysis is advisory output from a
 non-deterministic model and would go stale the moment a new DS entry lands;

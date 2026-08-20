@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkBeltPump,
+  formatBeltPumpCheck,
   checkInterval,
   currentKmOf,
   computeIntervalChecks,
@@ -145,5 +147,111 @@ describe("computeIntervalChecks / formatIntervalChecks", () => {
   it("states the reason when a check is indeterminate", () => {
     const lines = formatIntervalChecks(computeIntervalChecks([e("2025-01-01", 0, "PNEU")]));
     expect(lines.every((l) => l.includes("INDÉTERMINÉ"))).toBe(true);
+  });
+});
+
+
+describe("checkBeltPump — rule 2", () => {
+  const NOW = new Date("2026-08-20T12:00:00.000Z");
+  // Real spellings, already validated against production in serviceTypes.test.ts —
+  // reused here rather than inventing new synthetic part names.
+  const BELT = "CHANGEMENT KIT DE DISTRIBUTION";
+  const PUMP = "POMPE A EAU";
+  const OTHER = "COURROIE ALTERNATEUR"; // a real trap: NOT the timing belt
+
+  const highKm = (...extra: IntervalEntry[]): IntervalEntry[] => [
+    e("2023-01-01", 100_000, "PNEU"),
+    e("2025-06-01", 150_000, "PLAQUETTE FREIN"),
+    ...extra,
+  ];
+
+  it("is SKIPPED, not flagged and not cleared, when the contract date is missing", () => {
+    const r = checkBeltPump(highKm(), null, NOW);
+    expect(r.status).toBe("skipped");
+    expect(r.note).toMatch(/indisponible/i);
+  });
+
+  it("is SKIPPED when the contract date is unparseable", () => {
+    expect(checkBeltPump(highKm(), "not-a-date", NOW).status).toBe("skipped");
+  });
+
+  it("FLAGS >6 months past contract, >120,000 km, never recorded", () => {
+    const r = checkBeltPump(highKm(), "2025-01-15T00:00:00.000Z", NOW);
+    expect(r.status).toBe("never");
+    expect(r.monthsPastContract).toBe(19);
+    expect(r.currentKm).toBe(150_000);
+  });
+
+  it("does NOT flag when a timing-belt service exists", () => {
+    const r = checkBeltPump(highKm(e("2024-03-01", 130_000, BELT)), "2025-01-15T00:00:00.000Z", NOW);
+    expect(r.status).toBe("ok");
+    expect(r.lastServiceDate).toBe("2024-03-01");
+    expect(r.lastServiceKm).toBe(130_000);
+  });
+
+  it("accepts a water-pump service as satisfying the check", () => {
+    const r = checkBeltPump(highKm(e("2024-03-01", 130_000, PUMP)), "2025-01-15T00:00:00.000Z", NOW);
+    expect(r.status).toBe("ok");
+  });
+
+  it("is not satisfied by an ALTERNATOR belt — a different part entirely", () => {
+    const r = checkBeltPump(highKm(e("2024-03-01", 130_000, OTHER)), "2025-01-15T00:00:00.000Z", NOW);
+    expect(r.status).toBe("never");
+  });
+
+  it("is NOT APPLICABLE (silent) at exactly 6 months past contract", () => {
+    // Boundary: the rule says MORE than 6 months.
+    const r = checkBeltPump(highKm(), "2026-02-20T00:00:00.000Z", NOW);
+    expect(r.monthsPastContract).toBe(6);
+    expect(r.status).toBe("not_applicable");
+  });
+
+  it("is NOT APPLICABLE (silent) while still inside the contract", () => {
+    expect(checkBeltPump(highKm(), "2027-01-01T00:00:00.000Z", NOW).status).toBe("not_applicable");
+  });
+
+  it("is NOT APPLICABLE (silent) below the 120,000 km threshold", () => {
+    const low = [e("2023-01-01", 60_000, "PNEU"), e("2025-06-01", 119_000, "PNEU")];
+    const r = checkBeltPump(low, "2025-01-15T00:00:00.000Z", NOW);
+    expect(r.status).toBe("not_applicable");
+    expect(r.currentKm).toBe(119_000);
+  });
+
+  it("uses whole calendar months, not days/30", () => {
+    // 2026-02-20 -> 2026-08-20 is exactly 6 months, not 6.1 from day-division.
+    expect(checkBeltPump(highKm(), "2026-02-20T00:00:00.000Z", NOW).monthsPastContract).toBe(6);
+    // One day earlier is a full 6 months plus a day, still 6 whole months.
+    expect(checkBeltPump(highKm(), "2026-02-19T00:00:00.000Z", NOW).monthsPastContract).toBe(6);
+  });
+
+  it("credits a belt changed inside a combined line", () => {
+    const r = checkBeltPump(
+      highKm(e("2024-03-01", 130_000, "KIT DISTRIB+POMPE EAU+JOINT CULASSE")),
+      "2025-01-15T00:00:00.000Z",
+      NOW
+    );
+    expect(r.status).toBe("ok");
+  });
+});
+
+describe("formatBeltPumpCheck", () => {
+  const NOW = new Date("2026-08-20T12:00:00.000Z");
+  const highKm = [e("2023-01-01", 100_000, "PNEU"), e("2025-06-01", 150_000, "PNEU")];
+
+  it("renders NOTHING when not applicable — silence is the design", () => {
+    expect(formatBeltPumpCheck(checkBeltPump(highKm, "2027-01-01T00:00:00.000Z", NOW))).toEqual([]);
+  });
+
+  it("states plainly that the check could not run when the date is missing", () => {
+    const [line] = formatBeltPumpCheck(checkBeltPump(highKm, null, NOW));
+    expect(line).toMatch(/NON VÉRIFIÉ/);
+  });
+
+  it("cites the months, contract date and km on a flag", () => {
+    const [line] = formatBeltPumpCheck(checkBeltPump(highKm, "2025-01-15T00:00:00.000Z", NOW));
+    expect(line).toMatch(/JAMAIS ENREGISTRÉ/);
+    expect(line).toMatch(/19 mois/);
+    expect(line).toMatch(/15\/01\/2025/);
+    expect(line).toMatch(/150\s000 km/u);
   });
 });

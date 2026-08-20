@@ -18,13 +18,14 @@ import type { CostInfo, DsHistoryItem, ParcItem, CpItem } from "@/types";
 import type { RlRow } from "@/lib/sheets/googleSheetsRl";
 import { classifyRepairOrigin } from "@/lib/ai/prompts/dsAnalysis";
 import type { DsAnalysis, ContractLevel, FindingLevel } from "@/lib/ai/prompts/dsAnalysis";
-import type { IntervalCheck } from "@/lib/ai/prompts/maintenanceIntervals";
+import type { IntervalCheck, BeltPumpCheck } from "@/lib/ai/prompts/maintenanceIntervals";
 
 type AnalyzeResponse =
   | {
       ok: true;
       analysis: DsAnalysis;
       intervalChecks: IntervalCheck[];
+      beltPumpCheck: BeltPumpCheck;
       truncated: boolean;
       analysedCount: number;
       totalCount: number;
@@ -47,6 +48,18 @@ const INTERVAL_STYLE: Record<
   overdue: { variant: "error", label: "Dépassé" },
   never: { variant: "warning", label: "Jamais" },
   unknown: { variant: "neutral", label: "Indéterminé" },
+};
+
+// Three distinct visible states — skipped is NOT the same as compliant, and
+// neither is the same as flagged. "not_applicable" renders nothing at all:
+// saying "does not apply" on every in-contract vehicle would be pure noise.
+const BELT_PUMP_STYLE: Record<
+  Exclude<BeltPumpCheck["status"], "not_applicable">,
+  { variant: "success" | "warning" | "error" | "neutral"; label: string }
+> = {
+  ok: { variant: "success", label: "Effectué" },
+  never: { variant: "error", label: "Jamais" },
+  skipped: { variant: "neutral", label: "Non vérifié" },
 };
 
 const FINDING_STYLE: Record<FindingLevel, { variant: "success" | "warning" | "error" | "neutral"; label: string }> = {
@@ -232,6 +245,28 @@ export function DsAnalysisCard({
                     </li>
                   ))}
                 </ul>
+                {result.beltPumpCheck.status !== "not_applicable" && (
+                  <div className="flex items-start gap-2 border-t border-border px-3 py-2">
+                    <Badge
+                      variant={BELT_PUMP_STYLE[result.beltPumpCheck.status].variant}
+                      className="shrink-0"
+                    >
+                      {BELT_PUMP_STYLE[result.beltPumpCheck.status].label}
+                    </Badge>
+                    <div className="min-w-0 text-sm">
+                      <span className="font-medium text-card-foreground">
+                        {result.beltPumpCheck.label}
+                      </span>
+                      <div className="text-xs text-muted-foreground">
+                        {result.beltPumpCheck.status === "never" &&
+                          `Jamais enregistré — hors contrat depuis ${result.beltPumpCheck.monthsPastContract} mois, ${result.beltPumpCheck.currentKm?.toLocaleString("fr-FR")} km`}
+                        {result.beltPumpCheck.status === "ok" &&
+                          `Effectué le ${result.beltPumpCheck.lastServiceDate?.slice(0, 10)}${result.beltPumpCheck.lastServiceKm ? ` à ${result.beltPumpCheck.lastServiceKm.toLocaleString("fr-FR")} km` : ""}`}
+                        {result.beltPumpCheck.status === "skipped" && result.beltPumpCheck.note}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

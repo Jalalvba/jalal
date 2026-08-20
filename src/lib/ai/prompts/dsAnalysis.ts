@@ -308,6 +308,8 @@ export const DS_ANALYSIS_SYSTEM_PROMPT = [
   "10. « inconnu » signifie que la donnée est absente : ne le comptabilise ni comme interne ni comme externe, et n'en tire aucune conclusion.",
   "11. Les contrôles d'intervalle d'entretien (vidange, filtre à air, filtre à gasoil) te sont fournis DÉJÀ CALCULÉS. Ne refais AUCUN calcul kilométrique ou de date toi-même : ne soustrais pas, ne compare pas, ne déduis pas un dépassement. Reprends uniquement les faits fournis et cite les kilométrages et dates tels qu'ils apparaissent.",
   "12. Un contrôle marqué INDÉTERMINÉ signifie que les données ne permettent pas de conclure (relevés incohérents ou absents) : dis-le explicitement et n'invente pas d'estimation. Un contrôle DÉPASSÉ ou JAMAIS ENREGISTRÉ mérite un constat dédié.",
+  "13. Le contrôle distribution / pompe à eau t'est également fourni déjà calculé. Ne calcule ni les mois écoulés depuis la fin du contrat, ni le franchissement du seuil kilométrique. S'il est marqué NON VÉRIFIÉ (date de fin de contrat absente), dis clairement que le contrôle n'a pas pu être fait — ne conclus ni à la conformité ni à la non-conformité.",
+  "14. PRIORITÉ DES CONSTATS : tout contrôle d'entretien marqué DÉPASSÉ, JAMAIS ENREGISTRÉ ou NON VÉRIFIÉ DOIT faire l'objet d'un constat dédié, AVANT les récurrences de pièces ou de prestataires. Un kit de distribution jamais enregistré sur un véhicule à fort kilométrage hors contrat est plus important qu'une récurrence de pneumatiques : ne l'omets pas au profit de constats moins critiques.",
   "",
   "Champs attendus :",
   '- contractFlag: { level: "ok"|"warn"|"expired"|"unknown", label: string } — reprends le statut fourni.',
