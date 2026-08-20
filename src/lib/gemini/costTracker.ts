@@ -22,6 +22,7 @@
 // already establishes the atomic-$inc pattern used below.
 
 import { getCollection } from "@/lib/mongo/client";
+import { log, serializeError } from "@/lib/http/logger";
 
 // ── Pricing ────────────────────────────────────────────────────────────────
 // USD per 1M tokens, paid tier, text in/out. Verified 2026-08-16 against
@@ -207,7 +208,11 @@ async function claimFreeTierSlot(model: string): Promise<boolean> {
     );
     return (doc?.count ?? Number.MAX_SAFE_INTEGER) <= limit;
   } catch (e) {
-    console.error(`[gemini-cost] Mongo unreachable for quota ${key}:${day}, assuming paid`, e);
+    log("error", "gemini-cost", "Mongo unreachable for quota check, assuming paid tier", {
+      key,
+      day,
+      ...serializeError(e),
+    });
     return false;
   }
 }

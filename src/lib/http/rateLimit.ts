@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo/client";
+import { log, serializeError } from "@/lib/http/logger";
 
 // Fixed-window rate limiter backed by MongoDB — Vercel's serverless model
 // (even under Fluid Compute, which reuses warm instances but gives no
@@ -65,7 +66,7 @@ export async function checkRateLimit(
       { upsert: true, returnDocument: "after" }
     );
   } catch (e) {
-    console.error(`checkRateLimit: Mongo unreachable for ${key}, failing open`, e);
+    log("error", "rate-limit", "Mongo unreachable, failing open", { key, ...serializeError(e) });
     return { allowed: true, retryAfterSeconds: 0 };
   }
 

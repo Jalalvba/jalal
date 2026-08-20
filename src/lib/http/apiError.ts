@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { log, serializeError } from "@/lib/http/logger";
 
 /**
  * Throw this (or a subclass, e.g. RowIdentityError in googleSheetsClient.ts)
@@ -34,6 +35,12 @@ export function toErrorResponse(
   if (e instanceof ApiError) {
     return NextResponse.json({ ok: false, error: e.message, ...extra }, { status: e.status });
   }
-  console.error(fallback, e);
+  // Structured because this one line is the error path for 39 of the 46 API
+  // routes — it was previously `console.error(fallback, e)`, which put the
+  // client-facing fallback string and a raw Error into free text with no
+  // queryable fields. NOTE: the route/method are still missing; adding them
+  // means threading the Request through toErrorResponse()'s signature, which
+  // would touch every call site. Deferred deliberately.
+  log("error", "api", fallback, serializeError(e));
   return NextResponse.json({ ok: false, error: fallback, ...extra }, { status });
 }
