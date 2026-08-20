@@ -11,13 +11,95 @@ export const MAX_ENTRIES = 80;
 
 // ── Input (built client-side from data the page already holds) ─────────────
 
+/** Who actually did the repair. "inconnu" is a real answer, not a default. */
+export type RepairOrigin = "interne" | "externe" | "inconnu";
+
 export type DsAnalysisEntry = {
   date?: string;
   km?: number;
   description?: string;
   /** designation_consommation values from the DS lines — the strongest signal. */
   parts: string[];
+  origin: RepairOrigin;
+  /** Canonical supplier name. Absent when externe-but-unnamed, or not externe. */
+  supplier?: string;
 };
+
+// ── Internal vs external classification ───────────────────────────────────
+
+/**
+ * The literal `technicien` value AVIS uses to mean "this was done outside".
+ * It is the single most common technicien value in the whole ds collection
+ * (48,834 occurrences, ahead of every real human name), and 10,277 of those
+ * carry NO fournisseur — so a rule based on "fournisseur is empty" alone would
+ * file all 10,277 as in-house work. Verified against production 2026-08-20.
+ */
+export const EXTERNAL_TECHNICIAN_SENTINEL = "Fournisseur Externe";
+
+/**
+ * Classifies one DS entry.
+ *
+ *   externe  fournisseur named, OR technicien is the sentinel above
+ *   interne  neither, but a real technicien name is present
+ *   inconnu  neither — the data does not say, and we do not guess
+ *
+ * Measured across 102,336 DS: 40.5% externe, 50.9% interne, 8.6% inconnu.
+ *
+ * `entite_nom` is deliberately NOT consulted: it holds only 7 values, all AVIS
+ * sites (Garage Ain Sebaa, Entité Siège, ...), so it says WHERE a DS was
+ * raised, not WHO did the work — an external repair is routinely logged
+ * against an AVIS garage.
+ */
+export function classifyRepairOrigin(
+  fournisseur: unknown,
+  techniciens: unknown
+): { origin: RepairOrigin; supplier?: string } {
+  // String()-coerced: these come from Mongo and do not honour their declared
+  // types — the same footgun 77f9eef fixed in the PDF export.
+  const supplier = String(fournisseur ?? "").trim();
+  const techs = Array.isArray(techniciens) ? techniciens.map((t) => String(t ?? "").trim()) : [];
+
+  if (supplier) return { origin: "externe", supplier };
+  if (techs.some((t) => t.toLowerCase() === EXTERNAL_TECHNICIAN_SENTINEL.toLowerCase())) {
+    return { origin: "externe" }; // external, but the supplier was never recorded
+  }
+  if (techs.some((t) => t.length > 0)) return { origin: "interne" };
+  return { origin: "inconnu" };
+}
+
+/**
+ * Collapses spelling variants of one supplier onto a single display name.
+ *
+ * Measured: 179 raw distinct names normalise to 178 — exactly one real
+ * collision ("EQUIPEMENT MOYEN ATLAS ASSALAMA" vs "Equipement moyen atlas
+ * assalama"). Nearly a no-op, and done in code precisely because it is:
+ * instructing the model to treat "near-identical names" as the same supplier
+ * would invite it to merge genuinely different ones, which is a worse failure
+ * than the problem being solved.
+ *
+ * The winning spelling is the most frequent raw form, so the model quotes a
+ * name that actually appears in the data (which the supplier guard then
+ * enforces).
+ */
+export function canonicalizeSuppliers(entries: DsAnalysisEntry[]): DsAnalysisEntry[] {
+  const counts = new Map<string, Map<string, number>>();
+  for (const e of entries) {
+    if (!e.supplier) continue;
+    const key = e.supplier.toUpperCase().replace(/\s+/g, " ").trim();
+    const forms = counts.get(key) ?? new Map<string, number>();
+    forms.set(e.supplier, (forms.get(e.supplier) ?? 0) + 1);
+    counts.set(key, forms);
+  }
+  const winner = new Map<string, string>();
+  for (const [key, forms] of counts) {
+    winner.set(key, [...forms.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]);
+  }
+  return entries.map((e) =>
+    e.supplier
+      ? { ...e, supplier: winner.get(e.supplier.toUpperCase().replace(/\s+/g, " ").trim()) ?? e.supplier }
+      : e
+  );
+}
 
 export type DsAnalysisReplacement = { date?: string; motif?: string };
 
@@ -161,6 +243,43 @@ export function ungroundedDates(analysis: DsAnalysis, input: DsAnalysisInput): s
   return [...new Set(found.filter((d) => !allowed.has(d)))];
 }
 
+/**
+ * Rejects supplier-like names the model wrote that appear nowhere in the source.
+ *
+ * The sibling of ungroundedDates(), on the same principle: not "does this look
+ * plausible" but "is this literal actually present in the data we sent". An
+ * invented supplier attached to a recurrence claim reads as authoritative, and
+ * someone deciding whether to stop using a garage would act on it.
+ *
+ * Supplier names in this data are consistently multi-word and upper-case
+ * ("STAR PNEUMATIQUE", "AUTO MECANIQUE IBN ROCHD"), so candidates are runs of
+ * two or more upper-case words. The check then compares against the ENTIRE
+ * source text — supplier names, descriptions and part designations — not just
+ * the supplier list. That matters: descriptions are themselves upper-case
+ * ("PB MOTEUR", "4 PNEUS"), so a model quoting one verbatim would otherwise be
+ * accused of fabricating a supplier.
+ *
+ * Returns the offending literals; empty means nothing was invented.
+ */
+const CAPS_RUN_RE = /\b[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9'().-]{2,}(?:\s+[A-ZÀ-ÖØ-Þ0-9'().-]{2,})+\b/g;
+
+export function ungroundedSuppliers(analysis: DsAnalysis, input: DsAnalysisInput): string[] {
+  const norm = (s: string) => s.toUpperCase().replace(/\s+/g, " ").trim();
+
+  // Everything we actually sent, as one normalized haystack.
+  const haystack = norm(
+    input.entries
+      .flatMap((e) => [e.supplier ?? "", e.description ?? "", ...e.parts])
+      .concat(input.replacements.map((r) => r.motif ?? ""))
+      .join(" | ")
+  );
+
+  const text = analysis.findings.flatMap((f) => [f.title, f.detail]).join(" \n ");
+  const candidates = text.match(CAPS_RUN_RE) ?? [];
+
+  return [...new Set(candidates.map(norm).filter((c) => !haystack.includes(c)))];
+}
+
 // ── The prompt ────────────────────────────────────────────────────────────
 
 /**
@@ -184,6 +303,9 @@ export const DS_ANALYSIS_SYSTEM_PROMPT = [
   "5. Le statut du contrat t'est fourni déjà calculé. Reprends-le, ne le recalcule pas et n'invente aucune date de contrat. Si la date est indisponible, dis-le.",
   "6. Si les données sont trop pauvres pour conclure, mets insufficientData à true et dis-le franchement au lieu de spéculer.",
   "7. Rédige en français, de façon concise et factuelle. Pas de recommandation commerciale, pas de ton alarmiste.",
+  "8. Chaque intervention porte une origine : « interne » (atelier AVIS), « externe: <nom> », « externe (non nommé) » ou « inconnu ». N'invente JAMAIS cette origine et ne la déduis pas d'une description ou d'une pièce.",
+  "9. Pour une récurrence liée à un prestataire externe, cite son nom EXACTEMENT tel qu'il apparaît dans les données, avec le nombre d'interventions et leurs dates. Ne regroupe jamais deux noms de prestataires différents, même s'ils se ressemblent.",
+  "10. « inconnu » signifie que la donnée est absente : ne le comptabilise ni comme interne ni comme externe, et n'en tire aucune conclusion.",
   "",
   "Champs attendus :",
   '- contractFlag: { level: "ok"|"warn"|"expired"|"unknown", label: string } — reprends le statut fourni.',
@@ -191,6 +313,13 @@ export const DS_ANALYSIS_SYSTEM_PROMPT = [
   "- summary: un seul paragraphe court résumant l'état du véhicule.",
   "- insufficientData: true si les données ne permettent pas de conclure.",
 ].join("\n");
+
+/** The origin marker rule 8 refers to, rendered per entry. */
+function originLabel(e: DsAnalysisEntry): string {
+  if (e.origin === "interne") return "interne";
+  if (e.origin === "inconnu") return "inconnu";
+  return e.supplier ? `externe: ${e.supplier}` : "externe (non nommé)";
+}
 
 /** Builds the user turn. Truncation is applied here and stated to the model. */
 export function buildDsAnalysisPrompt(
@@ -222,7 +351,8 @@ export function buildDsAnalysisPrompt(
       `- ${e.date ?? "date inconnue"}` +
         (e.km != null ? ` | ${e.km} km` : "") +
         ` | desc: ${e.description?.trim() || "(vide)"}` +
-        ` | pièces: ${parts || "(aucune)"}`
+        ` | pièces: ${parts || "(aucune)"}` +
+        ` | ${originLabel(e)}`
     );
   }
   return lines.join("\n");

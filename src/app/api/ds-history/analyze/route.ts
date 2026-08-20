@@ -26,10 +26,13 @@ import {
   computeContractStatus,
   isDsAnalysisShape,
   ungroundedDates,
+  ungroundedSuppliers,
+  canonicalizeSuppliers,
   DS_ANALYSIS_SYSTEM_PROMPT,
   MAX_ENTRIES,
   type DsAnalysis,
   type DsAnalysisInput,
+  type RepairOrigin,
 } from "@/lib/ai/prompts/dsAnalysis";
 
 // Lower than bdd-reformulate's 20/min: each call carries a whole vehicle
@@ -70,8 +73,15 @@ function parseInput(body: unknown): DsAnalysisInput | string {
 
   const str = (v: unknown) => (typeof v === "string" ? v.slice(0, MAX_TEXT_FIELD) : undefined);
 
+  const ORIGINS: RepairOrigin[] = ["interne", "externe", "inconnu"];
   const entries = b.entries.map((raw) => {
     const e = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+    // An unrecognised origin degrades to "inconnu" rather than being guessed —
+    // "we don't know" is a real answer here, not a fallback to internal.
+    const origin: RepairOrigin = ORIGINS.includes(e.origin as RepairOrigin)
+      ? (e.origin as RepairOrigin)
+      : "inconnu";
+    const supplier = str(e.supplier)?.trim();
     return {
       date: str(e.date),
       km: typeof e.km === "number" && Number.isFinite(e.km) ? e.km : undefined,
@@ -79,6 +89,9 @@ function parseInput(body: unknown): DsAnalysisInput | string {
       parts: Array.isArray(e.parts)
         ? e.parts.filter((p): p is string => typeof p === "string").map((p) => p.slice(0, 200))
         : [],
+      origin,
+      // A supplier only means anything on an external entry.
+      ...(origin === "externe" && supplier ? { supplier: supplier.slice(0, 200) } : {}),
     };
   });
 
@@ -93,7 +106,7 @@ function parseInput(body: unknown): DsAnalysisInput | string {
       const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
       return { date: str(r.date), motif: str(r.motif) };
     }),
-    entries,
+    entries: canonicalizeSuppliers(entries),
   };
 }
 
@@ -156,6 +169,20 @@ export async function POST(request: Request) {
         analysis.summary =
           "Résumé retiré : il citait des dates absentes des données sources. Consultez les constats ci-dessus.";
       }
+    }
+
+    // Same treatment for invented supplier names — an unsupported claim about
+    // a named garage is the one this feature adds, so it gets the same guard.
+    const badSuppliers = ungroundedSuppliers(analysis, parsed);
+    if (badSuppliers.length > 0) {
+      log("warn", "ds-analysis", "Model emitted supplier-like names absent from the source data", {
+        imm: parsed.imm,
+        ungrounded: badSuppliers,
+      });
+      const norm = (t: string) => t.toUpperCase().replace(/\s+/g, " ");
+      analysis.findings = analysis.findings.filter(
+        (f) => !badSuppliers.some((n) => norm(`${f.title} ${f.detail}`).includes(n))
+      );
     }
 
     return NextResponse.json({
