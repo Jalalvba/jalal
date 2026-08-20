@@ -215,7 +215,29 @@ keywords also carry high-volume false positives — `COURROIE ALTERNATEUR`
 part not the service — so matching on `courroie` alone is ~75% wrong. Validated
 against all **6,098** distinct designations in production.
 
-#### The odometer is not monotonic, and that shaped the design
+#### Visite Technique is the single biggest source of bad km
+
+A **Visite Technique** is the regulatory roadworthiness inspection — a legal
+check, not a service — and its km is routinely entered late rather than read
+off the odometer at the time. Those readings are excluded from **km math only**;
+VT entries still appear in the history the model sees and in every UI and export
+that shows km, and nothing else in the app does interval arithmetic.
+
+Measured over the same 400-vehicle sample: excluding VT takes clean,
+non-decreasing odometers from **72.5% → 81.3%** (35 vehicles fixed outright) and
+removes about a third of all backward steps (**2.26% → 1.55%**).
+
+On **44329-B-7** — the vehicle that surfaced this — the VT is the *only* backward
+step: it logged 130,000 km, and the next genuine entry read 118,157.
+
+The matcher is typo-tolerant because the data is: `VIISTE TECHNIQUE` alone
+appears 110 times, plus `VIISITE`, `VISIITE`, `VSITE`, `TECHNQIUE`, `TECHNQUE`,
+`TECHEIQUE`, `TECHNIQIUE`, `TECHNIUQE`, `VISITE VTECHNIQUE`. Validated against
+every `TECH`-containing row in production — 3,877 classified as VT, and the rows
+it must *not* catch (`TECH. = RACHID …`, `RéVISION: OTHMANE TECHNICIEN`) are all
+rejected.
+
+#### The odometer is still not monotonic, and that shaped the design
 
 Over 400 sampled vehicles with ≥10 DS: only **55.3%** non-decreasing, **44.8%**
 carry at least one backward step, 68 with a drop over 5,000 km (worst
@@ -232,6 +254,32 @@ carry at least one backward step, 68 with a drop over 5,000 km (worst
    depends on. A mistyped reading in 2022 says nothing about the gap since a
    2025 service.
 
+**The guard is tiered, not binary** — VT exclusion only fixes about a third of
+cases, so genuine bad readings remain:
+
+1. Window since the last service is coherent → compute normally.
+2. Otherwise, keep the **longest non-decreasing run of real readings** inside
+   that window and compute against it, returning **every dropped reading with
+   its date and km** so nothing is discarded silently.
+3. Only then refuse — and say specifically why ("relevés en recul à chaque point
+   de la fenêtre, aucun segment cohérent exploitable"), not a generic
+   "incohérent".
+
+Nothing is interpolated, averaged, or corrected into a value that was never
+recorded. If the **first** reading in a window is itself the inflated outlier,
+the clean run collapses to a single reading and the check correctly refuses
+rather than rescuing a wrong answer.
+
+**44329-B-7, before and after:**
+
+| Check | Before | After |
+|---|---|---|
+| Filtre à air | Indéterminé | **ok** — 11,177 km since 2025-12-15 @106,980 |
+| Filtre à gasoil | Indéterminé | **ok** — 30,820 km since 2025-05-12 @87,337 |
+
+`now` is **118,157** — the real reading — not the VT's 130,000. The VT exclusion
+alone was enough here; no fallback exclusions were needed.
+
 Tolerance is 1,000 km, which separates keying noise (most common observed drop:
 −67 km) from odometer swaps. `never` is kept distinct from `overdue` — no
 record at all is a different, often more suspicious statement than a late one.
@@ -247,24 +295,31 @@ is ~4 lines regardless of history size.
 X km" is not a statement this data supports. What it does support: *never
 recorded, on a vehicle well past contract with high mileage*.
 
-Flags when **>6 months past `date_fin_contrat`** AND **>120,000 km** AND **no**
-distribution-or-water-pump service anywhere in the history. Reuses the same
-matcher, the same `date_fin_contrat` field and the same odometer helper as the
-other checks — no second way of reading any of them.
+**Mileage-only.** Flags when the vehicle is over **120,000 km** AND has **no**
+distribution-or-water-pump service anywhere in its history — *whatever the
+contract status*. The original spec also required >6 months past
+`date_fin_contrat`; that condition was **removed** on real-world feedback, since
+a high-mileage vehicle that has never had this service is a real risk whether
+its contract is active, ending, or long over. `checkBeltPump()` no longer reads
+`date_fin_contrat` at all, and a test pins its signature so the dependency
+cannot creep back.
+
+Reuses the same matcher and the same odometer helper as the other checks —
+including the VT exclusion, so an inflated inspection reading cannot push a
+vehicle over the threshold on its own.
 
 **Four states, and the third is the point:**
 
 | State | Rendered | Meaning |
 |---|---|---|
-| `skipped` | **Non vérifié** badge | `date_fin_contrat` missing — the check could not run. Deliberately distinct from both compliant and non-compliant; it neither flags nor clears. |
+| `skipped` | **Non vérifié** badge | Current km could not be established — the check could not run. Deliberately distinct from both compliant and non-compliant; it neither flags nor clears. |
 | `never` | **Jamais** badge | In scope and never recorded. The flag. |
 | `ok` | **Effectué** badge | A service is on record, with its date and km. |
-| `not_applicable` | **nothing at all** | Inside contract, ≤6 months past, or ≤120,000 km. Silent by design — printing "does not apply" on every in-contract vehicle would be pure noise, and unlike the other three this check genuinely does not apply. |
+| `not_applicable` | **nothing at all** | At or below 120,000 km. Silent by design — printing "does not apply" on every low-mileage vehicle would be pure noise, and unlike the other three this check genuinely does not apply. |
 
-Months are whole calendar months, not days ÷ 30, and the boundary is strict:
-exactly 6 months past contract is *not* in scope.
+The km boundary is strict: exactly 120,000 km does *not* flag.
 
-Km uses the highest recorded reading. Given ~45% of vehicles carry a backward
+Km uses the highest recorded reading (VT excluded). Given ~45% of vehicles carry a backward
 step, one inflated reading could in principle cross 120,000 — but the flag is
 **conjunctive** (also needs >6 months past contract AND no service ever), so a
 lone bad reading cannot produce a false flag by itself, and the finding cites
@@ -279,10 +334,19 @@ prompt that describes a format does not request the content.** Rule 14 now
 requires any DÉPASSÉ / JAMAIS ENREGISTRÉ / NON VÉRIFIÉ check to get a dedicated
 finding, ahead of part or supplier recurrences.
 
-Live-verified on `25705-B-7` (39 entries, 352,000 km, contract ended
-2023-06-23): computed `never / 37 months / 352,000 km`, and after rule 14 the
-model returned it as the **first, `critical`** finding, restating those exact
-numbers. Cost impact +101 input tokens (3,692 → 3,793, +2.7%).
+Live-verified after the rewrite on `48070-B-7` (50 entries, **336,349 km**, no
+belt or pump ever): computed `never / 336,349 km / threshold 120,000`, and the
+model returned it as the **first, `critical`** finding — *"Le kit de distribution
+n'a jamais été enregistré alors que le véhicule affiche 336 349 km, dépassant
+largement le seuil de 120 000 km"* — **with no mention of contract status**,
+which is the point of the change.
+
+> **Output-token cap.** This check plus three interval checks and up to six
+> findings pushed one vehicle to 1,040 output tokens. The route's cap was 900,
+> and responses were being silently truncated mid-JSON and surfacing as an
+> opaque "bad-response". The cap is now 1,800, and `callGemini` detects
+> `finishReason === "MAX_TOKENS"` and logs it explicitly rather than letting
+> truncation masquerade as a model quirk.
 
 Note the `skipped` state is guaranteed by the **UI row**, not by the model — the
 model does not reliably narrate "could not check", and forcing it to on every
