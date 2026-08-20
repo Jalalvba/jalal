@@ -352,6 +352,87 @@ Note the `skipped` state is guaranteed by the **UI row**, not by the model — t
 model does not reliably narrate "could not check", and forcing it to on every
 vehicle without a contract date would add noise.
 
+### The three mandatory axes
+
+The prompt opens with an explicit checklist **before** the numbered rules:
+
+```
+  AXE 1 — Conformité des intervalles d'entretien
+  AXE 2 — Récurrences de pièces ou d'organes      ← toujours obligatoire
+  AXE 3 — Récurrences de prestataires externes
+```
+
+**This exists because axis 2 regressed.** It was the feature's original
+capability and the *only* dimension with no "actively search" mandate — rules 2
+and 3 describe how to **phrase** a recurrence, neither asks for one to exist,
+while rule 9 mandated supplier recurrence and rule 14 explicitly ranked
+recurrences *below* interval checks. With a 6-finding cap, the mandated axes ate
+the slots.
+
+Measured on `47024-B-7`, same payload, three consecutive runs each time:
+
+| | part-recurrence findings |
+|---|---|
+| Before | **2, 0, 1** |
+| After | **4, 3, 3** |
+
+The data supports them unambiguously — injectors appear **6 times** across
+variant spellings, embrayage 3, moyeu 2. `moyeu de roue` and `batterie` were
+absent from every run before and are back in all three after.
+
+Rule **2b** mandates the active search (threshold **2+**, looser than suppliers'
+3+, because a component failing twice is already a signal) and requires
+**grouping spelling variants** — `Changement des injecteurs` / `réparation
+injecteurs` / `TARAGE INJECTEUR` are one system, not three findings. Rule 14 is
+now a *slot guarantee*, not a priority ranking. Cap raised **6 → 10**.
+
+> This was the **third** occurrence of the same failure mode in this feature —
+> *a prompt that describes a format does not request the content*. The first two
+> were supplier recurrence and the belt/pump check. If a new axis is ever added,
+> it needs its own imperative mandate, not a description of its output format.
+
+### Follow-up questions
+
+After an analysis, a text input lets someone challenge it — *"pourquoi tu n'as
+pas mentionné la récurrence sur l'embrayage ?"* — and get an answer grounded in
+the **same payload**. Exchanges are **appended** as Q → A blocks; the analysis is
+never replaced.
+
+**Single-shot with context re-supplied, not multi-turn.** `callAI` takes
+`prompt: string` and `gemini.ts` builds `contents` from it alone; adding a
+`messages[]` array to serve one two-turn use case is the speculative abstraction
+that module was deliberately built without. The model is stateless anyway.
+
+Same route, optional `followUp: { question, previousAnalysis }`, detected
+**before** rate limiting so it draws its own bucket: **5/min** (`ds-history-followup`)
+against the analysis's 10/min, because a follow-up re-sends the payload *and*
+the analysis. Billed to its own action so the spend is separable.
+
+**Measured:** 6,040 in / 110–153 out, versus 6,176 / 1,173 for the analysis —
+comparable input, far cheaper output.
+
+Two failures were found by live testing, not review, and both are guarded now:
+
+1. **A wrong date.** The first live answer cited `2025-01-04` for an entry
+   actually dated `2025-02-04` — right part, right km, wrong month. The analysis
+   path had `ungroundedDates()`; this path had nothing.
+   `ungroundedDatesInText()` now applies the same standard. Prose cannot have a
+   bad finding *removed* the way an analysis can, so an ungrounded date is
+   **surfaced to the reader** as an appended caveat and logged.
+2. **Reflexive concession.** Rule 2 supplied the verbatim phrase *"Vous avez
+   raison, je ne l'ai pas relevé"*, and the model opened a *correct rebuttal*
+   with it. Rule 2 is now **"VÉRIFIE D'ABORD, CONCÈDE ENSUITE"** with an explicit
+   ban on conceding before checking.
+
+Both re-verified live afterwards: the same question returns `2025-02-04`
+correctly with `ungroundedDates: []`, and an invalid challenge now opens
+*"Après vérification des données sources, la boîte de vitesses n'apparaît pas
+5 fois"*.
+
+`dsAnalysisShapeError()` also now names **which field** failed the shape check
+rather than returning a bare boolean — a non-deterministic model against a
+six-field schema made "failed validation" impossible to act on.
+
 **Nothing is persisted.** The analysis is advisory output from a
 non-deterministic model and would go stale the moment a new DS entry lands;
 `gemini_usage` already records that the call happened and what it cost, under
