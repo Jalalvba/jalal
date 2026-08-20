@@ -138,10 +138,17 @@ describe("getAllSheetFieldOptionsWithStatus — degraded flag (C2)", () => {
 });
 
 describe("updateFieldOptions — validation", () => {
-  function fakeCollection() {
+  // Dispatches on collection name so the options write and the history
+  // append are separately observable — they are different collections.
+  function fakeCollection(previous: unknown = null) {
     const updateOne = vi.fn().mockResolvedValue({ acknowledged: true });
-    mockedGetCollection.mockResolvedValue({ updateOne } as never);
-    return updateOne;
+    const findOne = vi.fn().mockResolvedValue(previous);
+    const insertOne = vi.fn().mockResolvedValue({ acknowledged: true });
+    mockedGetCollection.mockImplementation(
+      async (name: string) =>
+        (name === "sheetFieldOptionsHistory" ? { insertOne } : { updateOne, findOne }) as never
+    );
+    return { updateOne, findOne, insertOne };
   }
 
   it("rejects an empty options array", async () => {
@@ -169,7 +176,7 @@ describe("updateFieldOptions — validation", () => {
   });
 
   it("a valid write reaches Mongo with the right shape and invalidates the cache", async () => {
-    const updateOne = fakeCollection();
+    const { updateOne } = fakeCollection();
 
     await updateFieldOptions({ key: "EMPLACEMENT_OPTIONS", options: ["ATELIER", "PARKING"] }, "test@example.com");
 
@@ -189,7 +196,7 @@ describe("updateFieldOptions — validation", () => {
   });
 
   it("trims values before storage (I2 — trim-consistency), not just before the duplicate check", async () => {
-    const updateOne = fakeCollection();
+    const { updateOne } = fakeCollection();
 
     // Route-layer trimming (src/app/api/config/options/route.ts) is what
     // actually strips this in production; this asserts updateFieldOptions
@@ -205,6 +212,84 @@ describe("updateFieldOptions — validation", () => {
   });
 });
 
+describe("updateFieldOptions — options history", () => {
+  function fakeCollection(previous: unknown = null) {
+    const updateOne = vi.fn().mockResolvedValue({ acknowledged: true });
+    const findOne = vi.fn().mockResolvedValue(previous);
+    const insertOne = vi.fn().mockResolvedValue({ acknowledged: true });
+    mockedGetCollection.mockImplementation(
+      async (name: string) =>
+        (name === "sheetFieldOptionsHistory" ? { insertOne } : { updateOne, findOne }) as never
+    );
+    return { updateOne, findOne, insertOne };
+  }
+
+  it("captures the outgoing list, which a whole-set replace would otherwise destroy", async () => {
+    const { insertOne } = fakeCollection({
+      _id: "EMPLACEMENT_OPTIONS",
+      key: "EMPLACEMENT_OPTIONS",
+      label: "Emplacement",
+      type: "plain",
+      options: ["ATELIER", "PARKING", "DEPOT"],
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedBy: "someone@example.com",
+    });
+
+    // DEPOT is dropped — the value this whole feature exists to preserve.
+    await updateFieldOptions(
+      { key: "EMPLACEMENT_OPTIONS", options: ["ATELIER", "PARKING"] },
+      "test@example.com"
+    );
+
+    expect(insertOne).toHaveBeenCalledOnce();
+    const row = insertOne.mock.calls[0][0];
+    expect(row.key).toBe("EMPLACEMENT_OPTIONS");
+    expect(row.changedBy).toBe("test@example.com");
+    expect(row.previous.options).toEqual(["ATELIER", "PARKING", "DEPOT"]);
+    expect(row.previous.updatedBy).toBe("someone@example.com");
+    expect(row.next.options).toEqual(["ATELIER", "PARKING"]);
+  });
+
+  it("records previous: null on the first write for a key (nothing was replaced)", async () => {
+    const { insertOne } = fakeCollection(null);
+
+    await updateFieldOptions({ key: "EMPLACEMENT_OPTIONS", options: ["ATELIER"] }, "test@example.com");
+
+    expect(insertOne.mock.calls[0][0].previous).toBeNull();
+  });
+
+  it("a history-append failure does not fail the user's save — the write already landed", async () => {
+    const updateOne = vi.fn().mockResolvedValue({ acknowledged: true });
+    const findOne = vi.fn().mockResolvedValue(null);
+    mockedGetCollection.mockImplementation(async (name: string) => {
+      if (name === "sheetFieldOptionsHistory") throw new Error("MongoNetworkError: history unreachable");
+      return { updateOne, findOne } as never;
+    });
+
+    await expect(
+      updateFieldOptions({ key: "EMPLACEMENT_OPTIONS", options: ["ATELIER"] }, "test@example.com")
+    ).resolves.toBeUndefined();
+
+    expect(updateOne).toHaveBeenCalledOnce();
+    expect(invalidateCache).toHaveBeenCalledWith("sheetFieldOptions:all");
+  });
+
+  it("a failed pre-read degrades to previous: null rather than blocking the save", async () => {
+    const updateOne = vi.fn().mockResolvedValue({ acknowledged: true });
+    const findOne = vi.fn().mockRejectedValue(new Error("MongoNetworkError"));
+    const insertOne = vi.fn().mockResolvedValue({ acknowledged: true });
+    mockedGetCollection.mockImplementation(
+      async (name: string) =>
+        (name === "sheetFieldOptionsHistory" ? { insertOne } : { updateOne, findOne }) as never
+    );
+
+    await updateFieldOptions({ key: "EMPLACEMENT_OPTIONS", options: ["ATELIER"] }, "test@example.com");
+
+    expect(updateOne).toHaveBeenCalledOnce();
+    expect(insertOne.mock.calls[0][0].previous).toBeNull();
+  });
+});
+
 describe("updateFieldOptions — optimistic concurrency (C2)", () => {
   function fakeCollectionWithFilterCheck(behavior: "match" | "conflict") {
     const updateOne = vi.fn().mockImplementation(async () => {
@@ -215,12 +300,17 @@ describe("updateFieldOptions — optimistic concurrency (C2)", () => {
       }
       return { acknowledged: true, matchedCount: 1, upsertedCount: 0 };
     });
-    mockedGetCollection.mockResolvedValue({ updateOne } as never);
-    return updateOne;
+    const findOne = vi.fn().mockResolvedValue(null);
+    const insertOne = vi.fn().mockResolvedValue({ acknowledged: true });
+    mockedGetCollection.mockImplementation(
+      async (name: string) =>
+        (name === "sheetFieldOptionsHistory" ? { insertOne } : { updateOne, findOne }) as never
+    );
+    return { updateOne, insertOne };
   }
 
   it("a write whose expectedUpdatedAt matches the live document succeeds", async () => {
-    const updateOne = fakeCollectionWithFilterCheck("match");
+    const { updateOne } = fakeCollectionWithFilterCheck("match");
 
     await updateFieldOptions(
       { key: "EMPLACEMENT_OPTIONS", options: ["ATELIER"] },
@@ -248,6 +338,20 @@ describe("updateFieldOptions — optimistic concurrency (C2)", () => {
     expect(invalidateCache).not.toHaveBeenCalled();
   });
 
+  it("a rejected (conflicting) write appends NO history row — history records what actually landed", async () => {
+    const { insertOne } = fakeCollectionWithFilterCheck("conflict");
+
+    await expect(
+      updateFieldOptions(
+        { key: "EMPLACEMENT_OPTIONS", options: ["ATELIER"] },
+        "test@example.com",
+        "2026-01-01T00:00:00.000Z"
+      )
+    ).rejects.toBeInstanceOf(OptionsConflictError);
+
+    expect(insertOne).not.toHaveBeenCalled();
+  });
+
   it("expectedUpdatedAt: null (caller believes no document exists yet) also detects a conflict if one now does", async () => {
     fakeCollectionWithFilterCheck("conflict");
 
@@ -258,7 +362,12 @@ describe("updateFieldOptions — optimistic concurrency (C2)", () => {
 
   it("omitting expectedUpdatedAt entirely preserves the old unconditional-overwrite behavior (backward compat)", async () => {
     const updateOne = vi.fn().mockResolvedValue({ acknowledged: true });
-    mockedGetCollection.mockResolvedValue({ updateOne } as never);
+    const findOne = vi.fn().mockResolvedValue(null);
+    const insertOne = vi.fn().mockResolvedValue({ acknowledged: true });
+    mockedGetCollection.mockImplementation(
+      async (name: string) =>
+        (name === "sheetFieldOptionsHistory" ? { insertOne } : { updateOne, findOne }) as never
+    );
 
     await updateFieldOptions({ key: "EMPLACEMENT_OPTIONS", options: ["ATELIER"] }, "test@example.com");
 

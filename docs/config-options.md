@@ -209,6 +209,50 @@ instead of waiting out the 5-minute TTL. The client additionally
 
 ---
 
+### 4.4 History — `sheetFieldOptionsHistory`
+
+Every successful write appends one row to a second collection, because
+`updateFieldOptions()` is a whole-set **replace**: the admin UI always saves a
+full list, so removing one Prestataire destroys the previous list with nothing
+to recover it from. The parent document only ever holds current state
+(`updatedAt`/`updatedBy` describe the latest write, not what came before).
+
+```
+{ key, changedAt, changedBy,
+  previous: { options, updatedAt, updatedBy } | null,   // null = first write
+  next:     { options, updatedAt, updatedBy } }
+```
+
+**Why only here.** Everything else this app mutates lives in the Google Sheet,
+which keeps native per-cell revision history — better than anything we would
+write, since it holds real before/after cell values. These Mongo-backed option
+lists are the one mutable surface with no history at all. That is why this is
+scoped to them rather than built as a general `audit_logs` collection, which
+would duplicate Google's version history for the ~95% case.
+
+Three properties worth keeping:
+
+1. **The pre-image is read before the write**, not derived after it — a
+   replace has already destroyed it by then. Deliberately a separate
+   `findOne()` rather than swapping `updateOne` for
+   `findOneAndUpdate({ returnDocument: "before" })`: the
+   `updateOne` + `upsert` + E11000 combination in §4.2 is the load-bearing
+   concurrency mechanism, and changing the write primitive to save one round
+   trip would put it at risk for no user-visible gain.
+2. **A conflicting write appends nothing.** If someone else wrote in between,
+   the conditional write throws before the append is reached, so history
+   records only what actually landed. Pinned by a test.
+3. **The append never throws.** The user's save has already committed by then;
+   a bookkeeping failure must not turn it into an error. Same rule as
+   `src/lib/gemini/costTracker.ts`'s `recordUsage()`. Failures are logged via
+   `src/lib/http/logger.ts` under scope `sheet-field-options`.
+
+**Not indexed.** The collection grows by one small row per admin edit — a few
+dozen documents at the observed cadence of "once every few weeks" — so a
+collection scan is cheaper than maintaining an index. Revisit if that changes.
+
+---
+
 ## 5. `/admin/config` — the edit gate
 
 [`page.tsx:274`](../src/app/admin/config/page.tsx#L274):

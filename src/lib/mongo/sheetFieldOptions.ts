@@ -1,4 +1,5 @@
 import { getCollection } from "@/lib/mongo/client";
+import { log, serializeError } from "@/lib/http/logger";
 import { withCache, invalidateCache } from "@/lib/sheets/googleSheetsClient";
 import {
   OPTION_KEYS,
@@ -23,6 +24,12 @@ import {
 // hardcoded in src/types/index.ts, deliberately out of scope for this stage.
 
 const COLLECTION = "sheetFieldOptions";
+// Named to sit next to its parent collection rather than snake_case like
+// gemini_usage — this repo's collection naming is genuinely mixed
+// (sheetFieldOptions, rateLimits vs gemini_usage, pipeline_runs), and sorting
+// adjacent to the collection it describes is worth more here than picking a
+// side in that inconsistency.
+const HISTORY_COLLECTION = "sheetFieldOptionsHistory";
 const CACHE_KEY = "sheetFieldOptions:all";
 // Options change on the order of "once every few weeks", same reasoning
 // src/lib/sheets/googleSheetsBdd.ts's 5min header cache already uses — this mirrors
@@ -52,6 +59,58 @@ type ColoredOptionsDoc = {
 };
 
 export type SheetFieldOptionsDoc = PlainOptionsDoc | ColoredOptionsDoc;
+
+/**
+ * One row per successful option-set write.
+ *
+ * Exists because updateFieldOptions() is a whole-set REPLACE: the admin UI
+ * always saves a full list, so deleting one Prestataire destroys the previous
+ * list with no way back. Everything else this app mutates lives in the Google
+ * Sheet, which keeps native per-cell revision history — these Mongo-backed
+ * option lists are the one mutable surface with no history at all, which is
+ * why this is scoped to them and not built as a general audit log.
+ *
+ * `previous` is null on the very first write for a key (nothing was replaced).
+ * Both sides are stored so a single row answers "what did it become" without
+ * joining to its neighbour; the lists are 5-20 short strings, so the
+ * duplication is cheaper than the join.
+ */
+export type SheetFieldOptionsHistoryDoc = {
+  key: OptionKey;
+  changedAt: Date;
+  changedBy: string;
+  previous: { options: string[] | ColoredOption[]; updatedAt: Date; updatedBy: string } | null;
+  next: { options: string[] | ColoredOption[]; updatedAt: Date; updatedBy: string };
+};
+
+/**
+ * Appends one history row. Never throws: the user's option change has already
+ * been committed by the time this runs, and a bookkeeping failure must not
+ * turn a successful save into an error. Mirrors the same rule in
+ * src/lib/gemini/costTracker.ts's recordUsage().
+ */
+async function recordOptionsHistory(
+  previous: SheetFieldOptionsDoc | null,
+  next: SheetFieldOptionsDoc
+): Promise<void> {
+  try {
+    const col = await getCollection<SheetFieldOptionsHistoryDoc>(HISTORY_COLLECTION);
+    await col.insertOne({
+      key: next.key,
+      changedAt: new Date(),
+      changedBy: next.updatedBy,
+      previous: previous
+        ? { options: previous.options, updatedAt: previous.updatedAt, updatedBy: previous.updatedBy }
+        : null,
+      next: { options: next.options, updatedAt: next.updatedAt, updatedBy: next.updatedBy },
+    });
+  } catch (e) {
+    log("error", "sheet-field-options", "Failed to append options history row", {
+      key: next.key,
+      ...serializeError(e),
+    });
+  }
+}
 
 function isColoredKey(key: OptionKey): boolean {
   return (COLORED_OPTION_KEYS as readonly OptionKey[]).includes(key);
@@ -233,9 +292,22 @@ export async function updateFieldOptions(
 
   const col = await getCollection<SheetFieldOptionsDoc>(COLLECTION);
 
+  // Read the outgoing document BEFORE overwriting it — a whole-set replace
+  // destroys it otherwise, which is the entire gap the history collection
+  // exists to close. Deliberately a separate read rather than swapping
+  // updateOne() for findOneAndUpdate({ returnDocument: "before" }): the
+  // updateOne + upsert + E11000 combination below is the load-bearing
+  // optimistic-concurrency mechanism, and changing the write primitive to
+  // save one round trip would put that at risk for no user-visible gain.
+  // The read-then-write race is already covered where it matters — if
+  // someone else writes in between, the conditional write fails with E11000
+  // and no history row is appended at all.
+  const previous = await col.findOne({ _id: input.key }).catch(() => null);
+
   if (expectedUpdatedAt === undefined) {
     // No concurrency check requested — old unconditional-replace behavior.
     await col.updateOne({ _id: input.key }, { $set: doc }, { upsert: true });
+    await recordOptionsHistory(previous, doc);
     invalidateCache(CACHE_KEY);
     return;
   }
@@ -265,5 +337,6 @@ export async function updateFieldOptions(
     }
     throw e;
   }
+  await recordOptionsHistory(previous, doc);
   invalidateCache(CACHE_KEY);
 }
