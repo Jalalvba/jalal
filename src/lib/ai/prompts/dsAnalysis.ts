@@ -306,6 +306,8 @@ export const DS_ANALYSIS_SYSTEM_PROMPT = [
   "8. Chaque intervention porte une origine : « interne » (atelier AVIS), « externe: <nom> », « externe (non nommé) » ou « inconnu ». N'invente JAMAIS cette origine et ne la déduis pas d'une description ou d'une pièce.",
   "9. RECHERCHE ACTIVEMENT les récurrences par prestataire, au même titre que les récurrences par pièce : si un même prestataire externe revient 3 fois ou plus, produis un constat dédié à son nom. Cite son nom EXACTEMENT tel qu'il apparaît dans les données, avec le nombre d'interventions et leurs dates. Ne regroupe jamais deux noms de prestataires différents, même s'ils se ressemblent.",
   "10. « inconnu » signifie que la donnée est absente : ne le comptabilise ni comme interne ni comme externe, et n'en tire aucune conclusion.",
+  "11. Les contrôles d'intervalle d'entretien (vidange, filtre à air, filtre à gasoil) te sont fournis DÉJÀ CALCULÉS. Ne refais AUCUN calcul kilométrique ou de date toi-même : ne soustrais pas, ne compare pas, ne déduis pas un dépassement. Reprends uniquement les faits fournis et cite les kilométrages et dates tels qu'ils apparaissent.",
+  "12. Un contrôle marqué INDÉTERMINÉ signifie que les données ne permettent pas de conclure (relevés incohérents ou absents) : dis-le explicitement et n'invente pas d'estimation. Un contrôle DÉPASSÉ ou JAMAIS ENREGISTRÉ mérite un constat dédié.",
   "",
   "Champs attendus :",
   '- contractFlag: { level: "ok"|"warn"|"expired"|"unknown", label: string } — reprends le statut fourni.',
@@ -324,7 +326,8 @@ function originLabel(e: DsAnalysisEntry): string {
 /** Builds the user turn. Truncation is applied here and stated to the model. */
 export function buildDsAnalysisPrompt(
   input: DsAnalysisInput,
-  contractStatus: ReturnType<typeof computeContractStatus>
+  contractStatus: ReturnType<typeof computeContractStatus>,
+  intervalLines: readonly string[] = []
 ): string {
   const entries = input.entries.slice(0, MAX_ENTRIES);
   const truncated = input.entries.length > MAX_ENTRIES;
@@ -339,6 +342,11 @@ export function buildDsAnalysisPrompt(
     for (const r of input.replacements) {
       lines.push(`- ${r.date ?? "date inconnue"} — motif: ${r.motif?.trim() || "non précisé"}`);
     }
+  }
+
+  if (intervalLines.length > 0) {
+    lines.push("", "Contrôles d'intervalle d'entretien (DÉJÀ CALCULÉS — à reprendre, pas à recalculer) :");
+    lines.push(...intervalLines);
   }
 
   lines.push("", `Interventions (${entries.length}${truncated ? ` sur ${input.entries.length}, les plus récentes` : ""}) :`);

@@ -34,6 +34,10 @@ import {
   type DsAnalysisInput,
   type RepairOrigin,
 } from "@/lib/ai/prompts/dsAnalysis";
+import {
+  computeIntervalChecks,
+  formatIntervalChecks,
+} from "@/lib/ai/prompts/maintenanceIntervals";
 
 // Lower than bdd-reformulate's 20/min: each call carries a whole vehicle
 // history (~4k input tokens vs ~200) and is a deliberate one-at-a-time action,
@@ -127,7 +131,9 @@ export async function POST(request: Request) {
   }
 
   const contractStatus = computeContractStatus(parsed.contractEnd);
-  const prompt = buildDsAnalysisPrompt(parsed, contractStatus);
+  // Computed here, never asked of the model — same rule as the contract date.
+  const intervalChecks = computeIntervalChecks(parsed.entries);
+  const prompt = buildDsAnalysisPrompt(parsed, contractStatus, formatIntervalChecks(intervalChecks));
 
   try {
     // validate runs inside callAI, after the response arrives — Gemini's
@@ -188,6 +194,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       analysis,
+      intervalChecks,
       truncated: parsed.entries.length > MAX_ENTRIES,
       analysedCount: Math.min(parsed.entries.length, MAX_ENTRIES),
       totalCount: parsed.entries.length,
