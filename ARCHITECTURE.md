@@ -33,8 +33,9 @@ testing it**.
    │  Report generators          External providers                         │
    │  ─────────────────          ──────────────────                         │
    │  /api/bdd/export        → PDF        /api/bdd/reformulate-... → Gemini │
-   │  /api/bdd/export-excel  → XLSX       /api/trigger-import  → ~/import   │
-   │  /api/export            → PDF/DOCX   /api/import-status   → ~/import   │
+   │  /api/bdd/export-excel  → XLSX       /api/ds-history/analyze  → Gemini │
+   │  /api/export            → PDF/DOCX   /api/trigger-import  → ~/import   │
+   │                                      /api/import-status   → ~/import   │
    └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -62,7 +63,7 @@ and only ever read here — plus two small app-owned collections
 | Doc | Covers | Depth |
 |---|---|---|
 | [`docs/bdd-exports.md`](./docs/bdd-exports.md) | `/api/bdd/export` (PDF) + `/api/bdd/export-excel` | full |
-| [`docs/ai.md`](./docs/ai.md) | The `src/lib/ai` module + `/api/bdd/reformulate-comment` | full |
+| [`docs/ai.md`](./docs/ai.md) | The `src/lib/ai` module + its two consumers | full |
 | [`docs/config-options.md`](./docs/config-options.md) | Mongo-backed dropdown options + `/admin/config` | full |
 | [`docs/fleet-data-import.md`](./docs/fleet-data-import.md) | `~/import` proxy + `field_registry.json` contract | full |
 

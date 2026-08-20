@@ -19,6 +19,7 @@ data, and the sheet rows that mention it.
 | **VÉHICULE** | `/api/parc`, `/api/cp` | Mongo `parc`, `cp` |
 | **DS history** | `/api/ds/history` | Mongo `ds` (+ `bc` for lines) |
 | **SheetCard** ×3 | `/api/sheet?sheet=…` | Sheets tabs `bdd`, `rl`, `rl_reunion`, `import` |
+| **ANALYSE IA** | `/api/ds-history/analyze` | none — client sends already-loaded data (§7) |
 
 `/api/ds/history` returns `DsHistoryItem[]` — `n_ds`, `date_ds`,
 `immatriculation`, `entite_nom`, `description`, `fournisseur`, `techniciens[]`,
@@ -90,6 +91,58 @@ without re-verifying against the source.
   overwrite a newer one.
 - `qte: 0` is a legitimate value and must not fall through to the `"—"`
   placeholder (`d4d33be`).
+
+---
+
+## 4.5 ANALYSE IA — the AI health analysis
+
+Sits between the VÉHICULE card and the sheet rows, above the DS entries it
+analyses. **Nothing runs on mount** — the call is made on click only, so
+opening the page never costs a Gemini call. Prompt, output contract and guards
+live in [`src/lib/ai/prompts/dsAnalysis.ts`](../src/lib/ai/prompts/dsAnalysis.ts);
+see [`ai.md`](./ai.md) for the module itself.
+
+**The client sends data it already has; the route does not re-fetch.**
+`/api/ds/history`'s ~100-line aggregation (with its `$lookup` into `bc`) is not
+exported as a reusable helper, so re-fetching would mean a second copy of it —
+the duplication class that let `ef630e0`'s bug outlive its own fix — and would
+cost a round trip for bytes the page is already holding. The route therefore
+treats the payload as untrusted: `parseInput()` narrows every field, caps
+entries at 500 and text at 2000 chars, and tolerates junk rather than throwing.
+
+**What is sent:** contract end date (from `cp`), per-entry date/km/description/
+part designations, and the **RL replacement rows** — the `rl` sheet is the
+vehicle-replacement log, and a plate appearing there with a `Motif` is a real
+health signal, already why this page tints the VÉHICULE card red.
+
+**Contract status is computed in code**, not asked of the model. Date
+arithmetic is deterministic and models are unreliable at it; the model receives
+the computed status as a fact to restate, which also makes the flag testable.
+`contractEnd` reads `contracts[0]`, matching what VÉHICULE displays — picking a
+different row would flag one contract's status beside another's on screen.
+
+**Truncation at 80 entries is surfaced in the UI**, not only to the model. The
+response carries `truncated`/`analysedCount`/`totalCount` and the card renders
+an explicit notice, so a 226-entry vehicle cannot show a partial analysis that
+looks complete. (Measured: 11,169 vehicles, avg 23 entries, max 226.)
+
+**Two grounding guards**, because `responseSchema` steers rather than
+guarantees — see [`ai.md` §0.1](./ai.md#01-validate--schema-steers-it-does-not-guarantee):
+`isDsAnalysisShape()` via the `validate` hook, then `ungroundedDates()` drops
+any finding citing a date absent from the source. The whole finding is dropped,
+not just the date: a recurrence claim stripped of its invented evidence is an
+unsupported claim, not a weaker one.
+
+**Nothing is persisted.** The analysis is advisory output from a
+non-deterministic model and would go stale the moment a new DS entry lands;
+`gemini_usage` already records that the call happened and what it cost, under
+action `ds-history-analysis`.
+
+**Data quality shapes the prompt.** Measured against production, DS
+`description` values are terse French shop notes and frequently content-free
+("PB MOTEUR", "pb", "."), while `designation_consommation` carries the real
+signal ("turbo moteur"). Rule 4 of the prompt states this outright, because a
+model handed both without it will narrate a confident story out of "pb".
 
 ---
 

@@ -368,6 +368,32 @@ nothing to announce and no cache to invalidate.
 
 ---
 
+## 6.5 Second consumer — DS History analysis
+
+`/api/ds-history/analyze` (action `ds-history-analysis`, so its cost is
+traceable separately in `gemini_usage`) is the second and currently last
+consumer of `callAI`. It is the first to use the `validate` hook.
+
+| | `reformulate-comment` | `ds-history-analysis` |
+|---|---|---|
+| Rate limit | 20 / min | **10 / min** |
+| Input size | ~200 tokens | **~4,800 tokens** (a whole vehicle history) |
+| `maxTokens` | 150 | 900 |
+| `temperature` | 0.3 | **0.2** |
+| Timeout | 20 s | **30 s** |
+| `validate` | not used | **yes** — JSON shape check |
+| Output | plain text | structured JSON, rendered as fields |
+
+**Why the lower rate limit:** each call carries a whole vehicle history rather
+than one comment, and it is a deliberate one-at-a-time action rather than a
+button beside every row on a list page.
+
+Prompt, output contract and both guards live in
+[`src/lib/ai/prompts/dsAnalysis.ts`](../src/lib/ai/prompts/dsAnalysis.ts).
+Full behaviour: [`ds-history.md` §4.5](./ds-history.md#45-analyse-ia--the-ai-health-analysis).
+
+---
+
 ## 7. The deleted `generate-email` route
 
 `/api/generate-email` (added by `cb13749`, hardened by `6629251`) was a second,
