@@ -18,11 +18,13 @@ import type { CostInfo, DsHistoryItem, ParcItem, CpItem } from "@/types";
 import type { RlRow } from "@/lib/sheets/googleSheetsRl";
 import { classifyRepairOrigin } from "@/lib/ai/prompts/dsAnalysis";
 import type { DsAnalysis, ContractLevel, FindingLevel } from "@/lib/ai/prompts/dsAnalysis";
+import type { IntervalCheck } from "@/lib/ai/prompts/maintenanceIntervals";
 
 type AnalyzeResponse =
   | {
       ok: true;
       analysis: DsAnalysis;
+      intervalChecks: IntervalCheck[];
       truncated: boolean;
       analysedCount: number;
       totalCount: number;
@@ -35,6 +37,16 @@ const CONTRACT_STYLE: Record<ContractLevel, { variant: "success" | "warning" | "
   warn: { variant: "warning", icon: "⚠" },
   expired: { variant: "error", icon: "⛔" },
   unknown: { variant: "neutral", icon: "?" },
+};
+
+const INTERVAL_STYLE: Record<
+  IntervalCheck["status"],
+  { variant: "success" | "warning" | "error" | "neutral"; label: string }
+> = {
+  ok: { variant: "success", label: "À jour" },
+  overdue: { variant: "error", label: "Dépassé" },
+  never: { variant: "warning", label: "Jamais" },
+  unknown: { variant: "neutral", label: "Indéterminé" },
 };
 
 const FINDING_STYLE: Record<FindingLevel, { variant: "success" | "warning" | "error" | "neutral"; label: string }> = {
@@ -190,6 +202,38 @@ export function DsAnalysisCard({
                 {result.analysis.contractFlag.label}
               </span>
             </div>
+
+            {/* Interval compliance — computed in code, shown as facts rather
+                than as model prose, so the numbers are auditable. */}
+            {result.intervalChecks.length > 0 && (
+              <div className="rounded-lg border border-border">
+                <div className="border-b border-border px-3 py-1.5 text-micro font-medium uppercase tracking-wide text-muted-foreground">
+                  Intervalles d&apos;entretien
+                </div>
+                <ul className="divide-y divide-border">
+                  {result.intervalChecks.map((c) => (
+                    <li key={c.service} className="flex items-start gap-2 px-3 py-2">
+                      <Badge variant={INTERVAL_STYLE[c.status].variant} className="shrink-0">
+                        {INTERVAL_STYLE[c.status].label}
+                      </Badge>
+                      <div className="min-w-0 text-sm">
+                        <span className="font-medium text-card-foreground">{c.label}</span>{" "}
+                        <span className="text-muted-foreground">
+                          ({c.intervalKm.toLocaleString("fr-FR")} km)
+                        </span>
+                        <div className="text-xs text-muted-foreground">
+                          {c.status === "overdue" &&
+                            `Dépassé de ${c.overdueByKm?.toLocaleString("fr-FR")} km — dernier le ${c.lastDate?.slice(0, 10)} à ${c.lastKm?.toLocaleString("fr-FR")} km, compteur ${c.currentKm?.toLocaleString("fr-FR")} km`}
+                          {c.status === "ok" &&
+                            `${c.kmSince?.toLocaleString("fr-FR")} km depuis le dernier (${c.lastDate?.slice(0, 10)})`}
+                          {(c.status === "never" || c.status === "unknown") && c.note}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Findings */}
             {result.analysis.findings.length > 0 ? (

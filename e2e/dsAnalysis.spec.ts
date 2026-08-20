@@ -77,6 +77,13 @@ test.describe("DS History — Analyse IA", () => {
     // call is made, so it must render even without an analysis.
     await expect(page.getByText(/interne.*externe/)).toBeVisible();
 
+    // Interval compliance is computed server-side in code, not by the model,
+    // and rendered as auditable facts rather than prose.
+    await expect(page.getByText("Intervalles d'entretien")).toBeVisible();
+    // .first(): the term legitimately appears twice — once as the interval row
+    // label, once inside the model's summary prose.
+    await expect(page.getByText("Filtre à gasoil", { exact: true }).first()).toBeVisible();
+
     // The String() coercion on part designations exists because real Mongo
     // values do not honour their declared types; a regression there throws in
     // the click handler rather than failing a request.
