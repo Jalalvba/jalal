@@ -13,7 +13,7 @@ import {
   detectAliasDrift,
   PRICING,
   FREE_TIER_LIMITS,
-} from "@/lib/gemini/costTracker";
+} from "@/lib/ai/pricing";
 
 const ORIGINAL_ENV = { ...process.env };
 

@@ -87,7 +87,7 @@ export type SheetFieldOptionsHistoryDoc = {
  * Appends one history row. Never throws: the user's option change has already
  * been committed by the time this runs, and a bookkeeping failure must not
  * turn a successful save into an error. Mirrors the same rule in
- * src/lib/gemini/costTracker.ts's recordUsage().
+ * src/lib/ai/usage.ts's recordUsage().
  */
 async function recordOptionsHistory(
   previous: SheetFieldOptionsDoc | null,

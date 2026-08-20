@@ -755,9 +755,10 @@ export type ImportStatusResponse =
   | { ok: true; run: ImportPipelineResult }
   | { ok: false; error: string };
 
-// Re-exported so client components can type costInfo without importing
-// src/lib/gemini/costTracker.ts, which pulls in the Mongo driver.
-export type { CostInfo } from "@/lib/gemini/costTracker";
+// Re-exported so client components can type costInfo without importing the
+// Mongo-backed side of the AI module. src/lib/ai/types.ts is import-free
+// precisely so this stays true.
+export type { CostInfo } from "@/lib/ai/types";
 
 export type ReformulateCommentContext = {
   modele?: string;
@@ -774,5 +775,5 @@ export type ReformulateCommentRequest = {
 };
 
 export type ReformulateCommentResponse =
-  | { ok: true; reformulated: string; costInfo: import("@/lib/gemini/costTracker").CostInfo }
+  | { ok: true; reformulated: string; costInfo: import("@/lib/ai/types").CostInfo }
   | { ok: false; error: string };

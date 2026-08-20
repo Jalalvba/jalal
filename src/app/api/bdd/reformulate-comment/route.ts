@@ -9,8 +9,8 @@
 // underlying model version over time — acceptable here because every
 // suggestion is reviewed by a human before it reaches the Sheet, but do not
 // reuse this alias-over-snapshot choice for anything output-sensitive without
-// flagging that tradeoff again. src/lib/gemini/costTracker.ts's
-// detectAliasDrift() is what makes such a swap visible after the fact. The API
+// flagging that tradeoff again. src/lib/ai/pricing.ts's detectAliasDrift()
+// is what makes such a swap visible after the fact. The API
 // key belongs to the "jalal" project in Google AI Studio.
 //
 // This header previously lived in src/app/api/generate-email/route.ts, which
@@ -21,7 +21,7 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
-import { callGeminiWithTracking, GeminiCallError } from "@/lib/gemini/costTracker";
+import { callGeminiWithTracking, GeminiCallError } from "@/lib/ai";
 import type { ReformulateCommentRequest } from "@/types";
 
 const RATE_LIMIT = 20;

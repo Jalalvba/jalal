@@ -43,7 +43,7 @@ export function log(level: Level, scope: string, msg: string, ctx?: Record<strin
 // remaining ~26 console.* calls in src/ are intentionally untouched, to keep
 // the introducing diff small and reviewable rather than sweeping the repo.
 //
-// One call site should NOT be converted: src/lib/gemini/costTracker.ts's
+// One call site should NOT be converted: src/lib/ai/usage.ts's
 // `[gemini-usage]` line already emits deliberate JSON-lines audit output whose
 // durable copy is the Vercel log drain. Its shape is a de-facto contract;
 // reformatting it would silently break anything parsing it.

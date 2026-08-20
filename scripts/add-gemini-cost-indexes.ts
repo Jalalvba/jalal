@@ -1,5 +1,5 @@
 /**
- * One-time index creation for lib/gemini-cost-tracker.ts's three collections.
+ * One-time index creation for the AI module's three collections (src/lib/ai/usage.ts).
  *
  * Deliberately a SEPARATE script from scripts/add-indexes.ts, which is
  * DEPRECATED and carries stale ds/bc/cp/parc field-name literals from before
