@@ -42,6 +42,7 @@ import { ZONE_COLORS } from "@/config/zones";
 import { buildPlateVariants } from "@/lib/utils/plateVariants";
 import type { RlRow, RlReunionRow } from "@/lib/sheets/googleSheetsRl";
 import { DsAnalysisCard } from "@/components/fleet/DsAnalysisCard";
+import { mergeVehicleIdentity, type VehicleIdentity } from "@/lib/vehicle/identity";
 import type { ImportRow } from "@/lib/sheets/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/utils/format";
 import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
@@ -258,26 +259,35 @@ async function downloadDocx(
 
 // ─── Vehicle Card (parc + cp merged) ─────────────────────────────────────────
 
-function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: CpItem[]; hasRl?: boolean }) {
+function VehicleCard({ identity, contracts, hasRl }: { identity: VehicleIdentity; contracts: CpItem[]; hasRl?: boolean }) {
   const [open, setOpen] = useState(false);
   const cp = contracts[0] ?? null;
   const isRemplacement = contracts.some(c => c.type?.trim().toLowerCase() === "remplacement");
   const isRed = hasRl || isRemplacement;
-  const zone = useVehicleZone(parc.imm ?? "");
+  const zone = useVehicleZone(identity.imm ?? "");
   // Atelier > Depot > Parking > RDV: a vehicle in the workshop is the most
   // actionable state to flag at a glance, RDV (just an appointment) the
   // least — matches priority as anywhere else in this app that must pick
   // one zone out of several simultaneously-true ones.
   const primaryZone = zone.inAtelier ? "atelier" : zone.inDepot ? "depot" : zone.inParking ? "parking" : zone.inRdv ? "rdv" : null;
 
-  const f = (label: string, val?: string | null) => (
-    <div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold text-card-foreground truncate">
-        {val?.trim() || "—"}
+  // "—" means the field is empty in a record that exists. "non disponible"
+  // means no source could answer it at all (cp-only identity). Collapsing the
+  // two would make a missing parc record look like an empty parc record.
+  const f = (label: string, val?: string | null) => {
+    const missingSource = identity.unavailable.includes(label);
+    return (
+      <div>
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div
+          className={`mt-0.5 text-sm truncate ${missingSource ? "italic text-muted-foreground" : "font-semibold text-card-foreground"}`}
+          title={missingSource ? "Aucune fiche parc pour ce véhicule — champ indisponible" : undefined}
+        >
+          {missingSource ? "non disponible" : val?.trim() || "—"}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const cardTint = isRed
     ? "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20"
@@ -300,16 +310,16 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
         <div className="flex flex-wrap gap-1">
           <ZoneBadges inParking={zone.inParking} inAtelier={zone.inAtelier} inRdv={zone.inRdv} inDepot={zone.inDepot} />
         </div>
-        <span className="ml-auto text-xs italic text-muted-foreground">parc + cp</span>
+        <span className="ml-auto text-xs italic text-muted-foreground">{identity.sourceLabel}</span>
       </div>
 
       {/* ── Priority row: always visible ── */}
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-5 py-4 sm:grid-cols-3 lg:grid-cols-6">
-        {f("Client",        parc.client)}
-        {f("IMM",           parc.imm)}
-        {f("WW",            parc.ww)}
-        {f("Etat véhicule", parc.vehicle_state)}
-        {f("Date MCE",      fmtDate(parc.mce_date ?? cp?.mce_date))}
+        {f("Client",        identity.client)}
+        {f("IMM",           identity.imm)}
+        {f("WW",            identity.ww)}
+        {f("Etat véhicule", identity.vehicle_state)}
+        {f("Date MCE",      fmtDate(identity.mce_date))}
         {f("Fin contrat",   fmtDate(cp?.date_fin_contrat))}
       </div>
 
@@ -325,11 +335,11 @@ function VehicleCard({ parc, contracts, hasRl }: { parc: ParcItem; contracts: Cp
       {open && (
         <div className="border-t border-border px-5 py-4 space-y-4 dark:border-border">
           <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
-            {f("Marque",         parc.brand)}
-            {f("Modèle",         parc.model)}
-            {f("VIN",            parc.vin)}
-            {f("Type location",  parc.location_type ?? cp?.type_location)}
-            {f("Locataire",      parc.tenant)}
+            {f("Marque",         identity.brand)}
+            {f("Modèle",         identity.model)}
+            {f("VIN",            identity.vin)}
+            {f("Type location",  identity.location_type)}
+            {f("Locataire",      identity.tenant)}
             {f("Gestionnaire",   cp?.gestionnaire)}
             {f("Début contrat",  fmtDate(cp?.date_debut_contrat))}
             {f("Type relais",    cp?.type)}
@@ -845,6 +855,9 @@ export default function Home() {
   const [data, setData]         = useState<DsApiResponse | null>(null);
   const [vehicle, setVehicle]   = useState<ParcItem | null>(null);
   const [contracts, setContracts] = useState<CpItem[]>([]);
+  // Derived, not stored: `vehicle` stays the raw parc record (the exports and
+  // the AI payload still read it directly), and the card gets the merged view.
+  const identity = useMemo(() => mergeVehicleIdentity(vehicle, contracts), [vehicle, contracts]);
 
 
   // ── Google Sheets ──────────────────────────────────────────────────────────
@@ -1133,7 +1146,10 @@ export default function Home() {
         </div>
 
         {/* Vehicle metadata (from parc) */}
-        {vehicle && !loading && <div className="mt-4"><VehicleCard parc={vehicle} contracts={contracts} hasRl={rlRows.length > 0} /></div>}
+        {/* Renders whenever EITHER source has something. Previously required a
+            parc record, which hid the card on 46.6% of plates — 3,202 of them
+            despite having full cp identity data already loaded. */}
+        {identity && !loading && <div className="mt-4"><VehicleCard identity={identity} contracts={contracts} hasRl={rlRows.length > 0} /></div>}
 
         {/* AI health analysis — costs nothing until the user clicks. Placed
             above the DS entries it analyses, below the vehicle identity. */}
