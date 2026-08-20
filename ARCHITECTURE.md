@@ -62,7 +62,7 @@ and only ever read here — plus two small app-owned collections
 | Doc | Covers | Depth |
 |---|---|---|
 | [`docs/bdd-exports.md`](./docs/bdd-exports.md) | `/api/bdd/export` (PDF) + `/api/bdd/export-excel` | full |
-| [`docs/ai-gemini.md`](./docs/ai-gemini.md) | `/api/bdd/reformulate-comment` + the shared cost tracker | full |
+| [`docs/ai.md`](./docs/ai.md) | The `src/lib/ai` module + `/api/bdd/reformulate-comment` | full |
 | [`docs/config-options.md`](./docs/config-options.md) | Mongo-backed dropdown options + `/admin/config` | full |
 | [`docs/fleet-data-import.md`](./docs/fleet-data-import.md) | `~/import` proxy + `field_registry.json` contract | full |
 

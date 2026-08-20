@@ -56,7 +56,7 @@ surface the thrown message. Rendering is `sonner` via
 
 > **The one deliberate opt-out:** `useReformulateComment()` has no
 > `successMessage` — nothing was saved, so there is nothing to announce. See
-> [`ai-gemini.md` §6](./ai-gemini.md#6-review-before-save-ux).
+> [`ai.md` §6](./ai.md#6-review-before-save-ux).
 >
 > **The one inconsistency:** the BDD export helpers use a native `alert()`
 > instead. Flagged in [`bdd-exports.md` §7](./bdd-exports.md#7-client-side--srcappsuivi-rlpagetsx).

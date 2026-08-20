@@ -158,7 +158,7 @@ stale server cache.
 1. **`GOOGLE_SHEETS_ID` is validated at module scope** — `googleSheetsBdd.ts:24`
    throws at import time if it's missing. Deliberate for an app-wide requirement
    (contrast `GEMINI_API_KEY`, read per-request; see
-   [`ai-gemini.md` §3](./ai-gemini.md#3-gemini_api_key-handling)).
+   [`ai.md` §3](./ai.md#3-gemini_api_key-handling)).
 2. **The Sheets API has no server-side row filter.** Every read pulls the full
    range regardless of caller — which is why `useVehicleZone` reuses page caches
    instead of a dedicated "does plate X exist" endpoint.

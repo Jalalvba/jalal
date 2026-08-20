@@ -1,8 +1,7 @@
-# Gemini integration — comment reformulation
+# AI — the `src/lib/ai` module and comment reformulation
 
-**Primary files:**
+**Primary files:** [`src/lib/ai/`](../src/lib/ai) · consumer:
 [`src/app/api/bdd/reformulate-comment/route.ts`](../src/app/api/bdd/reformulate-comment/route.ts)
-· cost tracking: [`src/lib/gemini/costTracker.ts`](../src/lib/gemini/costTracker.ts)
 · client: [`src/hooks/useBddRows.ts:98`](../src/hooks/useBddRows.ts#L98) and
 `ReformulateCommentButton` in
 [`src/app/suivi-rl/page.tsx:410`](../src/app/suivi-rl/page.tsx#L410)
@@ -15,19 +14,69 @@
 
 ---
 
+## 0. Module layout
+
+Everything AI-related lives in one module. Application code imports `callAI`
+from [`src/lib/ai`](../src/lib/ai) and nothing else from it.
+
+| File | Holds | Notes |
+|---|---|---|
+| `types.ts` | `AiCallParams`, `AiResult`, `AiCallError`, `AiErrorKind`, `CostInfo` | **Import-free.** `src/types/index.ts` re-exports `CostInfo` from here so client components can type a `costInfo` field without pulling the Mongo driver into their import graph. |
+| `pricing.ts` | `PRICING`, `MODEL_ALIASES`, `resolvePricingKey`, `detectAliasDrift`, `computeCallCost`, `FREE_TIER_LIMITS`, `quotaDayKey` | Pure — no I/O. Which is why its tests need no mocks. |
+| `usage.ts` | `claimFreeTierSlot`, `recordUsage`, `getRemainingCredit` | The Mongo side: `gemini_quota`, `gemini_usage`, `gemini_usage_totals`. |
+| `gemini.ts` | the `fetch` call + response normalization | The **only** file that knows Gemini's wire format. |
+| `index.ts` | `callAI()` | The single entry point. |
+
+**What is deliberately NOT here:** no provider field, no registry, no
+selection layer, no adapter interface with one implementor. `callAI` forwards
+straight to `callGemini`. None of that can be designed honestly against a
+single provider, and building it now would be guessing at requirements that do
+not exist. What would actually make a second provider cheap is not machinery —
+it is that `AiCallParams`/`AiResult`/`AiCallError` carry no Gemini vocabulary,
+so callers would not change.
+
+**The translation boundary.** `gemini.ts` is where neutral names become Gemini
+names: `systemPrompt` → `systemInstruction`, `maxTokens` →
+`generationConfig.maxOutputTokens`. Nothing outside that file uses Gemini's
+vocabulary, and nothing outside it sees Gemini's response shape — a caller gets
+`{ text, costInfo }`, never `candidates[0].content.parts[0].text`.
+
+### 0.1 `validate` — schema steers, it does not guarantee
+
+`AiCallParams.validate` is an optional `(text: string) => boolean` the caller
+supplies, run by this module **after** the response arrives.
+
+There is deliberately **no strict mode** in this interface. Gemini's
+`responseSchema` steers generation; it does not constrain the decoder, so a
+response can still come back the wrong shape. Advertising strictness would be a
+lie the caller then trusts — which is exactly the trap the (since-removed)
+complaint-handler port hit when moving off Anthropic's grammar-level
+`json_schema`, and why it had to hand-write a shape validator.
+
+A rejection raises `AiCallError` with kind `"bad-response"` — the same kind an
+unparseable response produces, because from the caller's side they are the same
+failure: the model did not return something usable.
+
+It runs **after** `recordUsage()` on purpose: the call was made and billed
+whether or not the output is usable, so skipping the record would understate
+real spend.
+
+---
+
 ## 1. Shared design
 
 Gemini access is a hand-rolled `fetch` against the REST API. **No SDK, no
 AI-framework dependency** — `package.json` carries no `@google/generative-ai`
-or similar.
+or similar. (This is also why the module's tests mock global `fetch` rather
+than an SDK.)
 
 The route does **not** issue that `fetch` itself. Since `221b1a9` every call
-goes through `callGeminiWithTracking()` in
-[`src/lib/gemini/costTracker.ts:389`](../src/lib/gemini/costTracker.ts#L389),
-which owns the request, the API key, the timeout, and the cost bookkeeping
-(§8.6). The route's own comment states the rule:
-*"All Gemini access goes through callGeminiWithTracking — never fetch the API
-directly from a route, or the call escapes cost tracking entirely."*
+goes through the module, today via `callAI()` in
+[`src/lib/ai/index.ts`](../src/lib/ai/index.ts), which owns the request, the
+API key, the timeout, and the cost bookkeeping (§8.6). The route's own comment
+states the rule:
+*"All AI access goes through callAI — never fetch a model API directly from a
+route, or the call escapes cost tracking entirely."*
 ([`route.ts:110`](../src/app/api/bdd/reformulate-comment/route.ts#L110))
 
 ```
@@ -110,7 +159,7 @@ model.)
 
 Read from `process.env` **inside the call**, never at module scope — and since
 `221b1a9` that read lives in the wrapper, not the route
-([`costTracker.ts:375`](../src/lib/gemini/costTracker.ts#L375)):
+([`gemini.ts`](../src/lib/ai/gemini.ts)):
 
 ```ts
 const apiKey = process.env.GEMINI_API_KEY;
@@ -332,7 +381,7 @@ that judgment was made and it was deleted.
 
 Kept deliberately when it went: the alias-over-snapshot rationale (moved into
 `reformulate-comment`'s header, §2.1), the `CostInfo` type, and all of
-`src/lib/gemini/`. Removed with it: the `GenerateEmailRequest` /
+`src/lib/ai/` (then `src/lib/gemini/`). Removed with it: the `GenerateEmailRequest` /
 `GenerateEmailResponse` types, which nothing else used.
 
 ---
@@ -350,7 +399,7 @@ Kept deliberately when it went: the alias-over-snapshot rationale (moved into
 5. **20 s timeout is not enforced upstream.** `AbortController` abandons our
    request; Gemini may still bill the completion.
 6. **Cost tracking exists** (since `221b1a9`) — this entry previously claimed
-   it did not. `callGeminiWithTracking()` records every call to the
+   it did not. `callAI()` records every call to the
    `gemini_usage` collection (timestamp, action, model, `served_model`,
    `priced_as`, `alias_drift`, input/output/total tokens, tier, `cost_usd`,
    `cost_mad`) plus a JSON-lines copy on stdout, and folds it into per-model

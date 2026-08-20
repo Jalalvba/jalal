@@ -6,7 +6,7 @@
 [`src/types/index.ts`](../src/types/index.ts) · `src/app/api/bdd/*`
 
 Related: [`bdd-exports.md`](./bdd-exports.md) (the two export buttons' server
-side) · [`ai-gemini.md`](./ai-gemini.md) (the ✨ reformulate button) ·
+side) · [`ai.md`](./ai.md) (the ✨ reformulate button) ·
 [`config-options.md`](./config-options.md) (where dropdown values come from) ·
 [`sheets-data-layer.md`](./sheets-data-layer.md) (the BDD tab itself).
 
@@ -407,7 +407,7 @@ error (`error`) surfaces unconditionally.
 
 - Does not read or write any tab other than **BDD**.
 - Does not write to the sheet from the AI reformulate button — see
-  [`ai-gemini.md`](./ai-gemini.md).
+  [`ai.md`](./ai.md).
 - Does not search on client / modele / prestataire / commentaire.
 - Does not offer chips for values with no live rows.
 - Does not apply chip filters while a plate search is active.
