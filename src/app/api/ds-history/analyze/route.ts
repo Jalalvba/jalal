@@ -47,6 +47,7 @@ import {
   formatBeltPumpCheck,
   formatRulesReference,
 } from "@/lib/ai/prompts/maintenanceIntervals";
+import { checkOilGrade, formatOilGradeCheck } from "@/lib/ai/prompts/oilGrade";
 
 // Lower than bdd-reformulate's 20/min: each call carries a whole vehicle
 // history (~4k input tokens vs ~200) and is a deliberate one-at-a-time action,
@@ -168,9 +169,14 @@ export async function POST(request: Request) {
   const intervalChecks = computeIntervalChecks(parsed.entries);
   // Mileage-only: this check no longer reads date_fin_contrat.
   const beltPumpCheck = checkBeltPump(parsed.entries);
+  // Rule 15. Silent unless the vehicle actually regressed off its own
+  // established grade — see oilGrade.ts for why a plain change-detector is not
+  // usable on this data.
+  const oilGradeCheck = checkOilGrade(parsed.entries);
   const prompt = buildDsAnalysisPrompt(parsed, contractStatus, [
     ...formatIntervalChecks(intervalChecks),
     ...formatBeltPumpCheck(beltPumpCheck),
+    ...formatOilGradeCheck(oilGradeCheck),
   ]);
 
   try {
@@ -244,6 +250,7 @@ export async function POST(request: Request) {
       analysis,
       intervalChecks,
       beltPumpCheck,
+      oilGradeCheck,
       truncated: parsed.entries.length > MAX_ENTRIES,
       analysedCount: Math.min(parsed.entries.length, MAX_ENTRIES),
       totalCount: parsed.entries.length,
@@ -294,6 +301,7 @@ async function handleFollowUp(
   const contractStatus = computeContractStatus(parsed.contractEnd);
   const intervalChecks = computeIntervalChecks(parsed.entries);
   const beltPumpCheck = checkBeltPump(parsed.entries);
+  const oilGradeCheck = checkOilGrade(parsed.entries);
 
   try {
     const { text, costInfo } = await callAI({
@@ -305,10 +313,11 @@ async function handleFollowUp(
         intervalLines: [
           ...formatIntervalChecks(intervalChecks),
           ...formatBeltPumpCheck(beltPumpCheck),
+          ...formatOilGradeCheck(oilGradeCheck),
         ],
         // The rules the analysis was judged against, INCLUDING the ones that
         // did not fire — same check objects, not a second computation.
-        rulesLines: formatRulesReference(intervalChecks, beltPumpCheck),
+        rulesLines: formatRulesReference(intervalChecks, beltPumpCheck, oilGradeCheck),
         previousAnalysis: followUp.previousAnalysis as DsAnalysis,
         question,
       }),

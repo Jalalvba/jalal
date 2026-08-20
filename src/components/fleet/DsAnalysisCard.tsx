@@ -19,6 +19,7 @@ import type { RlRow } from "@/lib/sheets/googleSheetsRl";
 import { classifyRepairOrigin } from "@/lib/ai/prompts/dsAnalysis";
 import type { DsAnalysis, ContractLevel, FindingLevel } from "@/lib/ai/prompts/dsAnalysis";
 import type { IntervalCheck, BeltPumpCheck } from "@/lib/ai/prompts/maintenanceIntervals";
+import type { OilGradeCheck } from "@/lib/ai/prompts/oilGrade";
 
 type FollowUpExchange = { question: string; answer: string };
 
@@ -32,6 +33,7 @@ type AnalyzeResponse =
       analysis: DsAnalysis;
       intervalChecks: IntervalCheck[];
       beltPumpCheck: BeltPumpCheck;
+      oilGradeCheck: OilGradeCheck;
       truncated: boolean;
       analysedCount: number;
       totalCount: number;
@@ -67,6 +69,12 @@ const BELT_PUMP_STYLE: Record<
   never: { variant: "error", label: "Jamais" },
   skipped: { variant: "neutral", label: "Non vérifié" },
 };
+
+// Only the fired state is shown. "ok"/"not_applicable"/"unknown" are all
+// ordinary outcomes here — a vehicle that never left its established grade,
+// one that never reached it, and one whose DS never recorded a grade at all
+// are not findings, and badging them would put a row on nearly every vehicle.
+const OIL_GRADE_STYLE = { variant: "warning" as const, label: "Écart" };
 
 const FINDING_STYLE: Record<FindingLevel, { variant: "success" | "warning" | "error" | "neutral"; label: string }> = {
   info: { variant: "neutral", label: "Info" },
@@ -293,6 +301,23 @@ export function DsAnalysisCard({
                         {result.beltPumpCheck.status === "ok" &&
                           `Effectué le ${result.beltPumpCheck.lastServiceDate?.slice(0, 10)}${result.beltPumpCheck.lastServiceKm ? ` à ${result.beltPumpCheck.lastServiceKm.toLocaleString("fr-FR")} km` : ""}`}
                         {result.beltPumpCheck.status === "skipped" && result.beltPumpCheck.note}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {result.oilGradeCheck.status === "regression" && (
+                  <div className="flex items-start gap-2 border-t border-border px-3 py-2">
+                    <Badge variant={OIL_GRADE_STYLE.variant} className="shrink-0">
+                      {OIL_GRADE_STYLE.label}
+                    </Badge>
+                    <div className="min-w-0 text-sm">
+                      <span className="font-medium text-card-foreground">
+                        {result.oilGradeCheck.label}
+                      </span>
+                      <div className="text-xs text-muted-foreground">
+                        {`Passé au ${result.oilGradeCheck.establishedGrade} le ${result.oilGradeCheck.establishedAt?.date?.slice(0, 10)}, puis ${result.oilGradeCheck.regressions
+                          .map((r) => `${r.grade} le ${r.date?.slice(0, 10)}`)
+                          .join(", ")} — grade constructeur inconnu de l'application, à vérifier.`}
                       </div>
                     </div>
                   </div>

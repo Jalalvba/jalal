@@ -15,6 +15,7 @@
 // on a large minority of vehicles. Every check below returns "unknown" with a
 // stated reason rather than a number it cannot stand behind.
 
+import type { OilGradeCheck } from "@/lib/ai/prompts/oilGrade";
 import type { ServiceType } from "@/lib/ai/prompts/serviceTypes";
 import { servicesInEntry, isTechnicalInspection } from "@/lib/ai/prompts/serviceTypes";
 
@@ -420,7 +421,8 @@ export function formatBeltPumpCheck(c: BeltPumpCheck): string[] {
  */
 export function formatRulesReference(
   checks: readonly IntervalCheck[],
-  belt: BeltPumpCheck
+  belt: BeltPumpCheck,
+  oil?: OilGradeCheck
 ): string[] {
   const km = (n?: number) => (n === undefined ? "?" : n.toLocaleString("fr-FR"));
 
@@ -457,6 +459,27 @@ export function formatRulesReference(
       break;
     default:
       lines.push(`${bHead} Statut calculé : NON VÉRIFIÉ — ${belt.note}`);
+  }
+
+  if (oil) {
+    const oHead = `- ${oil.label} — règle : signalé UNIQUEMENT si le véhicule est déjà passé au ${oil.establishedGrade} puis reçoit un autre grade lors d'une intervention ULTÉRIEURE. Le grade prescrit par le constructeur n'existe nulle part dans les données de cette application : aucune règle ne peut donc dire qu'un grade est « le bon ».`;
+    const cov = `${oil.gradedCount} intervention(s) sur ${oil.examinedCount} portent un grade lisible`;
+    switch (oil.status) {
+      case "regression":
+        lines.push(`${oHead} Statut calculé : DÉCLENCHÉE — passage au ${oil.establishedGrade} le ${oil.establishedAt?.date?.slice(0, 10) ?? "?"}, puis ${oil.regressions.length} intervention(s) avec un autre grade. ${cov}.`);
+        break;
+      case "ok":
+        lines.push(`${oHead} Statut calculé : RESPECTÉE — depuis le passage au ${oil.establishedGrade} le ${oil.establishedAt?.date?.slice(0, 10) ?? "?"}, aucune intervention ultérieure n'a utilisé un autre grade. ${cov}.`);
+        break;
+      case "not_applicable":
+        lines.push(`${oHead} Statut calculé : NON APPLICABLE — ce véhicule n'est jamais passé au ${oil.establishedGrade} dans l'historique fourni, il n'y a donc aucune référence interne dont s'écarter. ${cov}.`);
+        break;
+      default:
+        lines.push(`${oHead} Statut calculé : INDÉTERMINÉ — ${oil.note} ${cov}.`);
+    }
+    if (oil.ambiguous.length > 0) {
+      lines.push(`  (Note : ${oil.ambiguous.length} intervention(s) mentionnent deux grades à la fois — non tranchées, non comptées comme écart.)`);
+    }
   }
 
   return lines;
