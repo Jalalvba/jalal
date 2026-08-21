@@ -153,6 +153,43 @@ Full detail, file/line-cited: [`SECURITY_VERIFICATION.md`](../SECURITY_VERIFICAT
 is nothing cached to display; an *action* error always shows. A background
 refresh failing behind visible stale data stays silent.
 
+### 8.1 Render errors — `CardErrorBoundary`
+
+Everything above handles errors the code *anticipates*. A **render** error is
+different, and this app had no answer to it at all: no `error.tsx`, no
+`global-error.tsx`, no boundary of any kind. In React 19 an uncaught render
+error unmounts the whole tree, so one bad property access in one card took the
+entire page with it.
+
+Measured on DS History (`d0db5fc`), by serving an analysis response missing one
+newly-added field:
+
+| | cards | VehicleCard | document body |
+|---|---|---|---|
+| before the click | 21 | present | full page |
+| after | **0** | **gone** | **70 characters** |
+
+with only `TypeError: Cannot read properties of undefined (reading 'status')`
+in the console. The vehicle card, the sheet cards and all 18 DS entries
+disappeared because an *unrelated* card touched a field that wasn't there.
+
+[`src/components/fleet/CardErrorBoundary.tsx`](../src/components/fleet/CardErrorBoundary.tsx)
+wraps each card individually and takes a `label`, so a crash costs one card and
+names which one instead of blanking the page. **Wrap a card in it when adding
+one** — a boundary around the whole list would still lose the whole list.
+
+**Why this class of bug appears now.** The trigger is deploy skew: a browser
+can hold client JS from one build while the serverless function answering it
+comes from another, so a field added in a later deploy is simply absent from
+the response. A component's prop types describe the *current* server, not the
+one that actually answered. So any component rendering a network payload
+should treat its numeric and nested reads as runtime-optional regardless of
+what the type says — `CostBadge` routes every number through a `num()` helper
+for exactly this reason, and it is shared app-wide, not DS-History-specific.
+
+The boundary is the net, not the plan: prefer narrowing the value so a shape
+gap degrades to "not shown" rather than reaching the boundary at all.
+
 ---
 
 ## 9. Theming

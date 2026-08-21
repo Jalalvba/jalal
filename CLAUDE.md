@@ -198,9 +198,16 @@ The mandatory rules (package manager, styling tokens, Sheets/Mongo write
 safety, auth model) live in [`AGENTS.md`](./AGENTS.md) — not restated
 here. Additional conventions:
 
+- **Wrap every card in `CardErrorBoundary`.** The app has no `error.tsx` /
+  `global-error.tsx`, so an uncaught render error unmounts the whole tree —
+  measured at 21 cards → 0 on DS History before `d0db5fc`. A component
+  rendering a network payload must also treat nested/numeric reads as
+  runtime-optional: its prop types describe the *current* server, not the
+  deploy that answered. See [`docs/cross-cutting.md`](./docs/cross-cutting.md) §8.1.
 - **Don't rebuild a pattern that already exists.** Reuse
   `src/components/fleet/` (`ListPageHeader`, `RecordCard`, `Field`,
-  `PlateSearchInput`, `PlateFilterInput`, `ZoneBadges`, `InlineEdit*`)
+  `PlateSearchInput`, `PlateFilterInput`, `ZoneBadges`, `InlineEdit*`,
+  `CardErrorBoundary`)
   and `src/components/ui/` (Button, Input, Dialog, AlertDialog, Combobox,
   Badge, ToggleGroup, Sheet, Card) instead of new markup — they exist
   because Parking/Atelier/Depot/BDD used to duplicate ~95% of this.

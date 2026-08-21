@@ -949,6 +949,41 @@ including reading the downloaded PDFs.
 
 Full detail: [`docs/ds-history.md`](./docs/ds-history.md) §1.5.
 
+### One card's crash used to blank the whole page
+
+`d0db5fc`. Reported as "cards not rendering", with the observation that it
+started after the AI analysis card shipped. Both halves were right, and the
+first two answers I gave were wrong: I checked whether the AI commits *edited*
+`VehicleCard`, found they had not, and concluded it was not a regression. Blast
+radius is not the set of files a commit touches.
+
+The app had no `error.tsx`, no `global-error.tsx` and no error boundary of any
+kind, so in React 19 an uncaught render error unmounts the entire tree. Serving
+DS History an analysis response missing one newly-added field took the page
+from **21 cards to 0**, with the document body down to **70 characters** and a
+single `TypeError: Cannot read properties of undefined (reading 'status')` in
+the console — the vehicle card, the sheet cards and all 18 DS entries gone
+because an unrelated card touched a field that was not there.
+
+The AI card genuinely is what exposed it: it is the first card on the page to
+read deeply into a server response whose shape changes between deploys. The
+realistic trigger is deploy skew — a browser holding client JS from one build
+while the serverless function answering it is from another.
+
+Three layers, narrowest first: `DsAnalysisCard` treats its check fields as
+runtime-optional (the type describes the current server, not the one that
+answered); `CostBadge` routes every numeric read through `num()`, found by the
+new test rather than by reading — it called `remainingCreditUsd.toFixed(2)`
+unconditionally on any non-free call, and it is shared app-wide;
+`CardErrorBoundary` wraps each card as the net, so a crash costs one labelled
+card instead of the page.
+
+`e2e/cardResilience.spec.ts` pins both failure modes by stubbing the response
+with `page.route()`, so it is repeatable and spends no Gemini quota. Verified
+on the live deployment afterwards: 21 cards before, 21 after, no page errors.
+
+Detail: [`docs/cross-cutting.md`](./docs/cross-cutting.md) §8.1.
+
 ## 3. Architectural tradeoffs & known limitations
 
 - **Single-user hardcoded authorization.** `src/lib/auth/googleOAuth.ts`'s

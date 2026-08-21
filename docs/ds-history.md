@@ -21,6 +21,11 @@ data, and the sheet rows that mention it.
 | **SheetCard** ×3 | `/api/sheet?sheet=…` | Sheets tabs `bdd`, `rl`, `rl_reunion`, `import` |
 | **ANALYSE IA** | `/api/ds-history/analyze` | none — client sends already-loaded data (§7) |
 
+Every card on this page is individually wrapped in `CardErrorBoundary`
+(`d0db5fc`) — before that, one card's render error unmounted all of them. See
+[`cross-cutting.md` §8.1](./cross-cutting.md#81-render-errors--carderrorboundary);
+**wrap any new card the same way.**
+
 `/api/ds/history` returns `DsHistoryItem[]` — `n_ds`, `date_ds`,
 `immatriculation`, `entite_nom`, `description`, `fournisseur`, `techniciens[]`,
 `km`, and `lines[]` (`cmd_num`, `code_art`, `designation_consommation`, `qte`).
