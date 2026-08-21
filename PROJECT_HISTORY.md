@@ -903,6 +903,52 @@ change on the next `pnpm dev`.
 
 ---
 
+### Vehicle identity: one merged view of `parc` + `cp`
+
+`a6ad585` and `25950ea`. Reported as "VehicleCard not rendering in production",
+which it was not: `VehicleCard` had always required a `parc` record, and
+`git blame` dates the conditional to `adc6469` (2026-03-20). The plate that
+prompted the report — `11734-T-1` — simply had no `parc` row.
+
+Measuring the real scope is what turned a non-bug into work worth doing. Of the
+11,169 distinct plates in `ds`, **5,201 (46.6%) have no `parc` record**, so the
+card silently rendered nothing for nearly half the fleet. **3,202 of them do
+have a `cp` record** — the page was already fetching full identity data
+(marque, modèle, VIN, gestionnaire, contract dates) and discarding it.
+
+`src/lib/vehicle/identity.ts`'s `mergeVehicleIdentity()` now produces one
+`VehicleIdentity` for the card, the PDF/DOCX exports and the AI payload. `parc`
+wins field by field where both have a value, `cp` fills gaps, so every
+parc-backed plate renders exactly as before; the card hides only when neither
+source has anything (1,999 plates).
+
+Three fields — `client`, `vehicle_state`, `tenant` — exist only in `parc`
+(verified absent from all 10,230 `cp` documents) and render **`non disponible`**
+rather than `—`. That distinction is the point: `—` means "blank in a record
+that exists", and collapsing the two would make a missing *source* look like an
+empty *record*, which is roughly the confusion that generated the bug report.
+One `PARC_ONLY_FIELDS` definition backs both the card's label lookup and the
+exports' key lookup, with a test pinning the projections together.
+
+`25950ea` carried the identity downstream. The exports had hardcoded the
+heading `Véhicule — Données fixes (parc)` even when rendering `cp` data, and
+the AI payload had been sending `{brand: undefined, model: undefined}` for all
+3,202 cp-only plates — no vehicle context at all on a fleet where marque and
+modèle are known 100% of the time. `vehicle_state` stays undefined rather than
+invented, so the prompt omits its `État:` line.
+
+Two things worth carrying forward. The raw `cp` documents spell their fields
+`num_chassis` / `modele` / `libelle_version_long` / `date_mce` and `/api/cp`
+maps them to the `CpItem` names; measuring the `CpItem` names against Mongo
+reports 0% coverage and is wrong — the first pass of this investigation did
+exactly that. And production browser verification is possible: the Playwright
+auth helper pointed at the production alias, with `secure: true` on the cookie,
+is accepted because `.env.local` carries the Production-scope
+`IRON_SESSION_SECRET`. Both plates were confirmed against the live deployment,
+including reading the downloaded PDFs.
+
+Full detail: [`docs/ds-history.md`](./docs/ds-history.md) §1.5.
+
 ## 3. Architectural tradeoffs & known limitations
 
 - **Single-user hardcoded authorization.** `src/lib/auth/googleOAuth.ts`'s

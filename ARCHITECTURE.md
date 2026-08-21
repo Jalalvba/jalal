@@ -55,7 +55,7 @@ and only ever read here — plus two small app-owned collections
 |---|---|---|
 | [`docs/suivi-rl.md`](./docs/suivi-rl.md) | Suivi RL — 4 filter axes, cascade, "Non renseigné", inline edit, card surface | full |
 | [`docs/fleet-pages.md`](./docs/fleet-pages.md) | Parking · Atelier · Depot · RDV | summary |
-| [`docs/ds-history.md`](./docs/ds-history.md) | DS History + `/api/export` (PDF/DOCX) | summary |
+| [`docs/ds-history.md`](./docs/ds-history.md) | DS History + `/api/export` (PDF/DOCX) · vehicle identity (`parc`+`cp` merge, §1.5) | summary |
 | [`docs/articles.md`](./docs/articles.md) | Articles + `/api/article` | summary |
 
 ### Features

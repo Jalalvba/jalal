@@ -16,7 +16,7 @@ data, and the sheet rows that mention it.
 
 | Card | Source | Collection / tab |
 |---|---|---|
-| **VÉHICULE** | `/api/parc`, `/api/cp` | Mongo `parc`, `cp` |
+| **VÉHICULE** | `/api/parc`, `/api/cp` | Mongo `parc`, `cp` — merged, §1.5 |
 | **DS history** | `/api/ds/history` | Mongo `ds` (+ `bc` for lines) |
 | **SheetCard** ×3 | `/api/sheet?sheet=…` | Sheets tabs `bdd`, `rl`, `rl_reunion`, `import` |
 | **ANALYSE IA** | `/api/ds-history/analyze` | none — client sends already-loaded data (§7) |
@@ -28,6 +28,78 @@ data, and the sheet rows that mention it.
 The BDD SheetCard is **editable** (`c1ece8e`) — it reuses Suivi RL's own
 `useUpdateBddRow()` hook rather than a second write path, so the same allowlist,
 `verifyRowIdentity()` guard, and optimistic update apply.
+
+---
+
+## 1.5 Vehicle identity — `parc` + `cp`, merged
+
+`src/lib/vehicle/identity.ts`'s `mergeVehicleIdentity(parc, contracts)` produces
+the single `VehicleIdentity` that the VÉHICULE card, the PDF/DOCX exports and
+the AI analysis payload all read. Before `a6ad585`/`25950ea` each of those read
+the raw `parc` record directly, and `VehicleCard` took `parc: ParcItem` as a
+**required** prop — so the card rendered nothing whenever `parc` had no row.
+
+That is not a rare edge. Measured against live data:
+
+| | plates |
+|---|---|
+| distinct plates in `ds` | 11,169 |
+| **no `parc` record** (card was hidden) | **5,201 — 46.6%** |
+| …of those, **with** a `cp` record | **3,202** |
+| …with neither (card still hidden, correctly) | 1,999 |
+
+So for 3,202 plates the page was already fetching full identity data and
+throwing it away. This surfaced as a bug report — "VehicleCard not rendering in
+production" — but it was never a regression: `git blame` dates the conditional
+to `adc6469` (2026-03-20). The card had always vanished on nearly half the
+fleet; nobody had hit a cp-only plate and noticed.
+
+**Precedence.** `parc` wins field by field where both carry a value — it is the
+fleet master record — and `cp` fills the gaps. Any plate *with* a `parc` record
+therefore renders exactly as before: same fields, same precedence, same
+`parc + cp` stamp. The card now hides only when **neither** source has anything.
+
+**What `cp` can supply.** Across the 3,250 `cp` rows belonging to those plates:
+`imm`, `ww`, `vin`, `brand`, `model`, `version`, `mce_date`, both contract dates
+and `gestionnaire` at 100%; `location_type` 99%; `jockey` 82%.
+
+**What it cannot.** Three fields exist only in `parc` and are absent from all
+10,230 `cp` documents:
+
+    client · vehicle_state · tenant
+
+These are listed in the identity's `unavailable` (labels) / `unavailableKeys`
+(ParcItem keys) and rendered **`non disponible`** in italics — deliberately
+distinct from `—`, which means "blank in a record that exists". Collapsing the
+two would make a *missing source* look like an *empty parc record*, which is
+close to the confusion that produced the original bug report. Both projections
+come from one `PARC_ONLY_FIELDS` definition, with a test pinning them together:
+drift would have the card call a field unavailable while the export shows `—`,
+and nothing would fail.
+
+**Provenance is stated, not assumed.** The card's stamp and the exports'
+identity heading read `parc + cp`, `parc`, or `cp (aucune fiche parc)` from
+`identity.sourceLabel`. The exports previously hardcoded
+`Véhicule — Données fixes (parc)` even when rendering `cp` data.
+
+**Downstream.** `25950ea` extended the same identity to the exports (which
+resolve values by `ParcItem` key, which `VehicleIdentity` already matches
+structurally) and to the AI payload — which for cp-only plates had been sending
+`{brand: undefined, model: undefined}`, i.e. no vehicle context at all on a
+fleet where marque and modèle are known 100% of the time. `vehicle_state` stays
+undefined rather than invented, so `buildDsAnalysisPrompt()` omits the `État:`
+line instead of guessing.
+
+`identityFromImmOnly(imm)` covers the plate neither collection knows: exports
+still produce a document (the DS history is the point, not the identity block),
+and it reports **nothing** as unavailable — no record at all is not the same as
+a source that exists but cannot answer, so every field renders `—` as before.
+
+> **Field-name trap.** The raw `cp` documents spell these `num_chassis`,
+> `modele`, `libelle_version_long`, `date_mce`; `/api/cp` maps them to the
+> `CpItem` names (`src/app/api/cp/route.ts:37-42`). Measuring the `CpItem`
+> names directly against Mongo reports **0% coverage** and is wrong — the first
+> pass of this investigation fell into exactly that.
 
 ---
 
@@ -77,7 +149,8 @@ without re-verifying against the source.
 
 - **Zone chips live in the VÉHICULE card header**, and the card is tinted by
   zone priority (`803454a`). They render as separate green chips, never as
-  concatenated `"A + B"` text (`6aee573`).
+  concatenated `"A + B"` text (`6aee573`). The zone lookup keys off
+  `identity.imm`, so it works on cp-only vehicles too (§1.5).
 - **`RL_reunion` "suivi" status** is surfaced next to the RL Motif (`cbcf1d0`).
 - **Full-row `INTROUVABLE` highlight** on `BddEditableRow` (`f016018`), sharing
   `EMPLACEMENT_INTROUVABLE` with Suivi RL — and its
@@ -471,3 +544,9 @@ log), not just patched here.
    `/api/export`. It is session-gated but unthrottled.
 4. **Sheet lookups fire 6 parallel `/api/sheet` requests** (IMM + WW variants ×
    3 tabs) on every search.
+5. **1,999 plates still show no VÉHICULE card** — they exist in `ds` but in
+   neither `parc` nor `cp`, so there is genuinely no identity to render (§1.5).
+   Their exports still generate, with `—` throughout the identity block.
+6. **`client`, `vehicle_state` and `tenant` are unrecoverable for cp-only
+   vehicles** (§1.5). Filling them would need the `parc` import to cover those
+   3,202 plates; nothing in this app can derive them.
