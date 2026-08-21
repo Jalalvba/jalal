@@ -108,10 +108,22 @@ renting them out, so you cannot have a contract on a vehicle you do not own —
 yet 3,740 of 10,230 contracts have no `parc` row.
 
 The gap is **not** vehicles ageing out of the fleet (`parc` keeps 1,009 whose
-contracts have all ended, plus 1,392 with no contract), and **not** the import
-(`~/import/parc.py` drops only rows with neither plate nor WW, then fully
-replaces the collection). It is the source export being scoped: whole plate
-series are absent — A-7 100%, E-6 96%, A-72 95% — while T-1 is 99% present.
+contracts have all ended, plus 1,392 with no contract), and **not** the import.
+A `~/import` session opened the real Drive file and scanned every cell of its
+single sheet — 22 columns × 7,844 rows — before any header handling, mapping or
+filtering: the 7 confirmed anomalies appear nowhere in it, under plate or WW.
+Its last run read 7,838 data rows and wrote 7,836, the 2 dropped rows genuinely
+having neither plate nor WW.
+
+So `Fullparcs.xls` itself is incomplete: ~7,836 vehicles against 10,230
+contracts. **Do not read the script's low series percentages as "that series is
+excluded"** — the raw file's own counts match `parc` almost exactly (B-7
+4850/4850, T-6 667/667, T-1 395/395, E-6 128/127, A-7 2/2), so nothing filters
+by plate series. Those percentages measure coverage, not exclusion; an earlier
+reading of them as "whole series absent" was wrong. The file's plausible
+scoping columns are `Société` (LOCAFINANCE 5522, AVIS 839, PLF 699, PSD 663,
+Divers 114) and `Etat véhicule` — that is the question to put to whoever
+generates the export.
 
 The script fails (exit 1) only on a **confirmed** anomaly: an active contract on
 a vehicle with a real plate *and* DS history, which demonstrably exists and is

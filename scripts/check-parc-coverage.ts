@@ -16,11 +16,21 @@
  *
  * The gap is NOT vehicles aging out of the fleet: `parc` keeps 1,009 vehicles
  * whose contracts have all ended, and 1,392 with no contract at all. And it is
- * not the import dropping rows — parc.py filters only rows with neither a
- * plate nor a WW number, then fully replaces the collection, so `parc` is
- * exactly what `Fullparcs.xls` contains. The gap is in the source export,
- * which appears to be scoped: entire plate series are absent (A-7 100%,
- * E-6 96%) while others are essentially complete (T-1 1% missing).
+ * not the import — a ~/import session opened the real Drive file and scanned
+ * every cell of the single sheet (22 columns x 7,844 rows) before any header
+ * handling, mapping or filtering: the 7 confirmed anomalies appear NOWHERE in
+ * it, under plate or WW. Its last run read 7,838 data rows and wrote 7,836,
+ * the 2 dropped rows genuinely having neither plate nor WW. So `parc` is
+ * exactly what `Fullparcs.xls` contains, and the file is what is incomplete:
+ * ~7,836 vehicles against 10,230 cp contracts.
+ *
+ * NOTE on the series breakdown below: do NOT read a low series percentage as
+ * "this series is excluded from the export". It is not. The raw file's own
+ * counts match parc's almost exactly (B-7 4850/4850, T-6 667/667, T-1
+ * 395/395, E-6 128/127, A-7 2/2), so nothing filters by plate series. The
+ * percentages are low where a series has many cp contracts and few parc rows,
+ * which measures COVERAGE, not exclusion. An earlier reading of this table as
+ * "whole series absent" was wrong.
  *
  * So this reports upstream data health. It is deliberately NOT wired into CI:
  * it measures live data, not code, and a build should not fail because a
@@ -109,15 +119,17 @@ async function main() {
   }
 
   console.log(`\nparc coverage of cp — ${new Date().toISOString().slice(0, 10)}\n`);
-  console.log(`  parc rows                     ${parcImms.size}`);
+  const parcDocs = await db.collection("parc").countDocuments({});
+  console.log(`  parc documents                ${parcDocs}  (${parcImms.size} distinct plates)`);
   console.log(`  cp contracts                  ${contracts.length}`);
   console.log(`  cp WITHOUT a parc row         ${missing.length}  (${pct(missing.length, contracts.length)})`);
   console.log(`  ...of which still ACTIVE      ${activeMissing.length}`);
   console.log(`       confirmed anomalies      ${confirmed.length}   <-- real plate + DS history: on the road, must be in parc`);
   console.log(`       awaiting registration    ${pending.length}   (WW-only, no DS history — likely just delivered)\n`);
 
-  // Whole series going missing points at a scoped source export rather than
-  // scattered data-entry gaps, so it is the most diagnostic breakdown.
+  // Coverage per series. This does NOT show which series the export excludes —
+  // verified against the raw file, it excludes none. It shows where cp has
+  // many contracts and parc few rows, which is where to look first.
   const bySeries = new Map<string, { miss: number; total: number }>();
   for (const r of contracts) {
     const s = plateSeries(String(r.imm ?? ""));
@@ -129,7 +141,7 @@ async function main() {
   console.log("  by plate series (>20 contracts):");
   for (const [s, e] of [...bySeries.entries()].sort((a, b) => b[1].miss / b[1].total - a[1].miss / a[1].total)) {
     if (e.total <= 20) continue;
-    const flag = e.miss / e.total > 0.8 ? "  <-- series essentially absent" : "";
+    const flag = e.miss / e.total > 0.8 ? "  <-- lowest coverage" : "";
     console.log(`    ${s.padEnd(7)} ${String(e.miss).padStart(5)} / ${String(e.total).padStart(5)} missing  ${pct(e.miss, e.total).padStart(4)}${flag}`);
   }
 
@@ -149,8 +161,11 @@ async function main() {
   }
 
   console.log(
-    `\n  parc is a full replace of Fullparcs.xls (see ~/import/parc.py), so a gap` +
-      `\n  here is in the source export, not in this app or the import.\n`
+    `\n  parc is a full replace of Fullparcs.xls (see ~/import/parc.py), and that` +
+      `\n  file was scanned cell-by-cell: the confirmed anomalies are not in it.` +
+      `\n  The gap is in the source export — not this app, not the import.` +
+      `\n  The file's own scoping columns are Societe (LOCAFINANCE/AVIS/PLF/PSD/` +
+      `\n  Divers) and Etat vehicule; ask which of those the export filters on.\n`
   );
 
   await client.close();
