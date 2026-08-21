@@ -37,7 +37,7 @@ describe("GET /api/config/options — surfaces degraded status (C2)", () => {
       meta: { EMPLACEMENT_OPTIONS: null },
     });
 
-    const res = await GET();
+    const res = await GET(new Request("http://localhost/api/config/options"));
     const body = await res.json();
 
     expect(body.ok).toBe(true);

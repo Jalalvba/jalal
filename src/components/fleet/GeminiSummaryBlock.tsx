@@ -2,31 +2,27 @@
 
 // The AI summary for one vehicle, plus the button that (re)generates it.
 //
-// One component for all four pages that show it. Suivi RL renders BDD itself
-// so it passes the value straight in; Parking/Atelier/Depot read their own
-// sheet tabs, which have no `gemini` column, so there the summary is looked up
+// One component for all four pages that show it. Suivi RL, Atelier and Parking
+// each read a tab that HAS a `gemini` column of its own, so they pass their own
+// value straight in. Depot's tab has no such column (verified against the live
+// header row, 2026-08-21), so there — and only there — the summary is looked up
 // from BDD by plate.
 //
-// That lookup is why this exists rather than each page rolling its own: the
-// summary is stored in exactly one place (BDD's gemini column) but is useful
-// on every page where you are looking at a vehicle in real time, and four
-// copies of "find the BDD row for this plate" would drift.
-//
-// The BDD fetch is shared: useBddRows() is one React Query entry (101 rows),
-// so a page rendering 84 of these makes ONE request, not 84 — and Suivi RL,
-// which already has the rows, never triggers it at all because it passes
-// `summary` explicitly.
+// The BDD fetch behind that fallback is shared: useBddRows() is one React
+// Query entry (~101 rows), so a page rendering 84 of these makes ONE request,
+// not 84.
 
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useBddRows, ROWS_KEY } from "@/hooks/useBddRows";
+import { useBddRows } from "@/hooks/useBddRows";
+import { markFresh } from "@/hooks/freshFetch";
 import { AnalyseAndSaveButton } from "@/components/fleet/AnalyseAndSaveButton";
 
 type Props = {
   imm: string;
   /**
-   * Pass it when the caller already has the row (Suivi RL). Omit it to have
-   * the summary looked up from BDD by plate (Parking/Atelier/Depot).
+   * Pass it when the caller's own tab has a gemini column (Suivi RL, Atelier,
+   * Parking). Omit it to have the summary looked up from BDD by plate (Depot).
    */
   summary?: string;
   className?: string;
@@ -63,7 +59,18 @@ export function GeminiSummaryBlock({ imm, summary, className }: Props) {
           regenerate={text.length > 0}
           // The button already wrote to the sheet; this pulls the fresh value
           // back so the block stops showing the previous one.
-          onSaved={() => void queryClient.invalidateQueries({ queryKey: ROWS_KEY })}
+          onSaved={() => {
+            // The write fans out to every tab that has the plate AND a gemini
+            // column (see /api/bdd/gemini), so every one of those caches is
+            // now stale — not just the one this block happens to read.
+            for (const scope of ["bdd", "atelier", "parking"]) {
+              // markFresh so the refetch bypasses the server cache — see
+              // src/hooks/freshFetch.ts; invalidating alone reads back the
+              // pre-write value.
+              markFresh(scope);
+              void queryClient.invalidateQueries({ queryKey: [scope] });
+            }
+          }}
         />
       </div>
       <p className="mt-1 whitespace-pre-wrap text-sm text-card-foreground">

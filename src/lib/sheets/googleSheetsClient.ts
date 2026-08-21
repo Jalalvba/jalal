@@ -26,19 +26,43 @@ declare global {
  * before writing) can burn through the 60 req/min per-service-account quota
  * fast for what a human perceives as one action.
  */
-export async function withCache<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
+export async function withCache<T>(
+  key: string,
+  ttlMs: number,
+  fn: () => Promise<T>,
+  /**
+   * Skip the cache entirely and read live. This is the ONLY way to get
+   * read-your-own-writes here — see invalidateCache() below for why
+   * invalidating is not enough. Reserved for a read the user is waiting on
+   * right after their own mutation; ordinary reads must stay cached or the
+   * quota reasoning above stops holding.
+   */
+  opts?: { bypass?: boolean }
+): Promise<T> {
+  if (opts?.bypass) return fn();
   const cached = unstable_cache(fn, [key], { tags: [key], revalidate: Math.ceil(ttlMs / 1000) });
   return cached();
 }
 
 /**
  * Called by a tab's own mutation functions right after a successful write, so
- * the next read isn't served stale cached data for the rest of the TTL
- * window — propagates to every warm instance, not just the one handling the
- * write. `{ expire: 0 }` forces the same immediate full revalidation Next 16
- * would otherwise only apply when the (now-required) profile argument is
- * omitted entirely — passing it explicitly avoids the deprecation warning
- * while keeping the same "next read is guaranteed fresh" behavior.
+ * warm instances stop serving the pre-write rows — this propagates everywhere,
+ * not just to the instance that handled the write.
+ *
+ * IMPORTANT — this does NOT give read-your-own-writes, and an earlier version
+ * of this comment claimed it did. `revalidateTag` is stale-while-revalidate by
+ * definition: "stale content is served immediately while fresh content loads
+ * in the background" (node_modules/next/dist/docs/01-app/01-getting-started/09-revalidating.md).
+ * So the client's refetch, fired the instant a mutation resolves, is served the
+ * PRE-mutation rows — which is why a deleted Atelier card stayed on screen
+ * until the user refreshed the page some seconds later.
+ *
+ * The API that does expire immediately, `updateTag`, is Server-Actions-only
+ * (same doc's comparison table), and every mutation here is a Route Handler.
+ * So the fix is on the read side: the client asks for `?fresh=1` on the one
+ * refetch that follows its own write, which takes withCache()'s bypass path.
+ * This call stays — it is still what stops OTHER instances and other users'
+ * pages from serving the stale rows for the rest of the TTL.
  */
 export function invalidateCache(key: string): void {
   revalidateTag(key, { expire: 0 });

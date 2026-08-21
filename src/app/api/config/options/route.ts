@@ -17,9 +17,13 @@ import { toErrorResponse } from "@/lib/http/apiError";
 // no separate re-auth here, same convention the 17 Sheets mutation routes
 // already follow.
 
-export async function GET() {
+// `?fresh=1` bypasses the server-side cache — sent by the client on the one
+// read that follows its own save, since revalidateTag is stale-while-revalidate
+// and would serve the pre-save options back.
+export async function GET(request: Request) {
+  const fresh = new URL(request.url).searchParams.get("fresh") === "1";
   try {
-    const { options, degraded, meta } = await getAllSheetFieldOptionsWithStatus();
+    const { options, degraded, meta } = await getAllSheetFieldOptionsWithStatus(fresh);
     return NextResponse.json({ ok: true, options, degraded, meta });
   } catch (e) {
     return toErrorResponse(e, "Failed to load sheet field options");

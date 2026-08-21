@@ -1,5 +1,22 @@
-// Saves a DS-History AI analysis summary into the BDD tab's `gemini` column,
-// matched on immatriculation.
+// Saves a DS-History AI analysis summary into the `gemini` column of every
+// tab that both has one and has a row for the plate — BDD, ATELIER, PARKING.
+//
+// It fans out rather than writing to BDD alone because BDD is an
+// immobilisation tracker (~101 rows against ~11,169 analysable plates), so a
+// vehicle sitting in the workshop routinely has NO BDD row. Running the
+// analysis from Atelier therefore burned a real Gemini call and then discarded
+// the result with a "pas de ligne BDD" warning. The ATELIER and PARKING tabs
+// have carried a `gemini` column of their own all along (verified against the
+// live header row, 2026-08-21), so the summary now lands where the user was
+// standing when they asked for it.
+//
+// DEPOT has no such column, so a Depot-only plate still falls back to BDD —
+// adding the column to that tab is a live-sheet change, not something this
+// route should do on its own.
+//
+// The route path stays /api/bdd/gemini: renaming it would break the three
+// client call sites for no behavioural gain, and BDD is still the primary
+// target.
 //
 // Split from /api/bdd/update rather than folded into it: that route edits a
 // row the user is looking at and takes a client-held `row` index, while this
@@ -14,6 +31,8 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
 import { writeGeminiSummary } from "@/lib/sheets/googleSheetsBdd";
+import { writeAtelierGeminiSummary } from "@/lib/sheets/googleSheetsAtelier";
+import { writeParkingGeminiSummary } from "@/lib/sheets/googleSheetsParking";
 import { toErrorResponse } from "@/lib/http/apiError";
 import { log } from "@/lib/http/logger";
 
@@ -51,21 +70,50 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await writeGeminiSummary(imm, summary);
+    // All three in parallel, and none is allowed to sink the others: the
+    // analysis is already paid for, so a plate present in Atelier but not in
+    // BDD must still get its summary stored. Promise.allSettled, not all().
+    const [bdd, atelier, parking] = await Promise.allSettled([
+      writeGeminiSummary(imm, summary),
+      writeAtelierGeminiSummary(imm, summary),
+      writeParkingGeminiSummary(imm, summary),
+    ]);
 
-    // Not an error: BDD tracks ~101 immobilised vehicles out of ~11,169
-    // analysable plates, so "no row" is the common outcome. 200 with a typed
-    // reason lets the client say so plainly instead of showing a failure for
-    // something that worked exactly as intended.
-    if (!result.ok && result.reason === "no-row") {
-      return NextResponse.json({ ok: true, saved: false, reason: "no-row", imm });
-    }
-    if (!result.ok) {
-      log("warn", "bdd-gemini", "Write refused", { imm, error: result.error });
-      return NextResponse.json({ ok: false, error: result.error }, { status: 409 });
+    const written: string[] = [];
+    const failures: string[] = [];
+
+    for (const [tab, settled] of [
+      ["BDD", bdd],
+      ["ATELIER", atelier],
+      ["PARKING", parking],
+    ] as const) {
+      if (settled.status === "rejected") {
+        log("warn", "bdd-gemini", "Write threw", { imm, tab, error: String(settled.reason) });
+        failures.push(tab);
+        continue;
+      }
+      const r = settled.value;
+      if (r.ok) {
+        written.push(tab);
+      } else if (r.reason === "write-failed") {
+        log("warn", "bdd-gemini", "Write refused", { imm, tab, error: r.error });
+        failures.push(tab);
+      }
+      // "no-row"/"no-column" are the ordinary outcome for a tab this vehicle
+      // is simply not in — not a failure, and not reported as one.
     }
 
-    return NextResponse.json({ ok: true, saved: true, imm, row: result.row });
+    // Still a 200 when nothing matched: the vehicle is in none of the three
+    // tabs, which is a fact about the data, not a fault. The client says so
+    // plainly instead of showing an error for something that worked.
+    return NextResponse.json({
+      ok: true,
+      saved: written.length > 0,
+      tabs: written,
+      failures,
+      reason: written.length > 0 ? undefined : "no-row",
+      imm,
+    });
   } catch (e) {
     return toErrorResponse(e, "Échec de l'enregistrement du résumé");
   }

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AllSheetFieldOptions, ColoredOption, OptionKey } from "@/types";
+import { markFreshFor, freshUrl } from "@/hooks/freshFetch";
 import {
   EMPLACEMENT_OPTIONS_FALLBACK,
   ETAT_OPTIONS_FALLBACK,
@@ -36,6 +37,10 @@ const CLIENT_FALLBACK: AllSheetFieldOptions = {
 
 const QUERY_KEY = ["config", "options"] as const;
 
+/** Mirrors CACHE_TTL_MS in src/lib/mongo/sheetFieldOptions.ts — how long a
+ *  stale options read could otherwise be served after a save. */
+const OPTIONS_CACHE_TTL_MS = 5 * 60_000;
+
 type OptionsMeta = Record<OptionKey, string | null>;
 
 type FetchOptionsResult = {
@@ -45,7 +50,7 @@ type FetchOptionsResult = {
 };
 
 async function fetchOptions(): Promise<FetchOptionsResult> {
-  const res = await fetch("/api/config/options");
+  const res = await fetch(freshUrl("config-options", "/api/config/options"));
   const json = (await res.json()) as {
     ok: boolean;
     options?: AllSheetFieldOptions;
@@ -117,6 +122,13 @@ export function useUpdateSheetFieldOptions() {
       if (!json.ok) throw new Error(json.error ?? "Erreur inconnue");
     },
     meta: { successMessage: "Options mises à jour" },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+    onSuccess: () => {
+      // markFreshFor, not markFresh: the read that must see this save is
+      // often on ANOTHER page (add a Technicien here, then open /atelier),
+      // and a one-shot in-memory flag does not survive that navigation. The
+      // window matches the server-side cache TTL — see freshFetch.ts.
+      markFreshFor("config-options", OPTIONS_CACHE_TTL_MS);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
   });
 }

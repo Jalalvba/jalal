@@ -1,6 +1,7 @@
 import { type sheets_v4 } from "googleapis";
 import { getCollection } from "@/lib/mongo/client";
 import type { ParkingRow, ParkingAddResponse, ParkingAddResultItem } from "@/types";
+import type { ZoneGeminiResult } from "@/lib/sheets/googleSheetsAtelier";
 import {
   getSheetsClient,
   serialToUTCDate,
@@ -76,8 +77,14 @@ async function getParkingSheetProps(
  * than being collapsed into one opaque joined string. DATE_DS is the only one
  * that's ever a Sheets date serial; the rest are plain XLOOKUP text/numbers.
  */
-export async function getParkingRows(): Promise<ParkingRow[]> {
-  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchParkingRows());
+/**
+ * `fresh` bypasses the 15s cache and reads Sheets live. Used only for the one
+ * refetch that follows the user's own mutation — see invalidateCache() in
+ * googleSheetsClient.ts for why invalidating the tag is not enough to make
+ * that read see the write.
+ */
+export async function getParkingRows(fresh = false): Promise<ParkingRow[]> {
+  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchParkingRows(), { bypass: fresh });
 }
 
 /** Called by src/app/api/parking/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
@@ -113,6 +120,7 @@ async function fetchParkingRows(): Promise<ParkingRow[]> {
   const partsCol = colMap["PARTS"];
   const techniceinCol = colMap["TECHNICEIN"];
   const founisseurCol = colMap["FOUNISSEUR"];
+  const geminiCol = colMap["GEMINI"];
 
   const rows: ParkingRow[] = [];
 
@@ -162,6 +170,7 @@ async function fetchParkingRows(): Promise<ParkingRow[]> {
       parts: strOrEmpty(partsCol),
       technicein: strOrEmpty(techniceinCol),
       founisseur: strOrEmpty(founisseurCol),
+      gemini: strOrEmpty(geminiCol),
     });
   }
 
@@ -488,4 +497,50 @@ export async function clearAll(): Promise<void> {
     requestBody: { ranges: [colRange(immCol), colRange(tsCol), colRange(actionCol)] },
   });
   invalidateCache(ROWS_CACHE_KEY);
+}
+
+// ─── AI summary ────────────────────────────────────────────────────────────
+
+/**
+ * Writes an AI analysis summary into this tab's own `gemini` column, matched
+ * on immatriculation. Mirror of writeAtelierGeminiSummary() — see that
+ * function for why the zone tabs write their own copy instead of relying on
+ * BDD having a row, and why TIMESTAMP is deliberately left alone.
+ */
+export async function writeParkingGeminiSummary(
+  imm: string,
+  summary: string
+): Promise<ZoneGeminiResult> {
+  const plate = imm.trim();
+  if (!plate) return { ok: false, reason: "write-failed", error: "imm is required" };
+
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const geminiCol = colMap["GEMINI"];
+  if (!geminiCol) return { ok: false, reason: "no-column" };
+
+  const rows = await getParkingRows();
+  const match = rows.find((r) => r.imm.trim() === plate);
+  if (!match) return { ok: false, reason: "no-row" };
+
+  const immCol = colMap["IMM"] ?? 1;
+  try {
+    await verifyRowIdentity(
+      sheets,
+      spreadsheetId!,
+      `'${PARKING_TAB}'!${columnIndexToLetter(immCol)}${match.rowIndex}`,
+      plate
+    );
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: spreadsheetId!,
+      range: `'${PARKING_TAB}'!${columnIndexToLetter(geminiCol)}${match.rowIndex}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[summary]] },
+    });
+  } catch (e) {
+    return { ok: false, reason: "write-failed", error: e instanceof Error ? e.message : "write refused" };
+  }
+  invalidateCache(ROWS_CACHE_KEY);
+  return { ok: true, row: match.rowIndex };
 }

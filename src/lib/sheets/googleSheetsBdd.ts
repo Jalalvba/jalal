@@ -108,8 +108,14 @@ function formatCellValue(header: string, raw: unknown): string | number {
  * plate's rows (e.g. src/app/api/sheet's bdd branch) don't fetch the whole tab
  * and filter redundantly on top.
  */
-export async function getSheetRows(immFilter?: string): Promise<BddRow[]> {
-  const rows = await withCache(ROWS_CACHE_KEY, 15_000, () => fetchSheetRows());
+/**
+ * `fresh` bypasses the 15s cache and reads Sheets live. Used only for the one
+ * refetch that follows the user's own mutation — see invalidateCache() in
+ * googleSheetsClient.ts for why invalidating the tag is not enough to make
+ * that read see the write.
+ */
+export async function getSheetRows(immFilter?: string, fresh = false): Promise<BddRow[]> {
+  const rows = await withCache(ROWS_CACHE_KEY, 15_000, () => fetchSheetRows(), { bypass: fresh });
   if (!immFilter) return rows;
 
   const variants = new Set(buildPlateVariants(immFilter));

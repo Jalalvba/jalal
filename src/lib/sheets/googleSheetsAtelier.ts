@@ -85,8 +85,14 @@ async function getAtelierSheetProps(
  * but no "SUIVI" column exists anywhere in CFG_PARKING_SHEET.COLUMNS or the
  * live header row, so it's always ''. Dead code in the source, not ported.
  */
-export async function getAtelierRows(): Promise<AtelierRow[]> {
-  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchAtelierRows());
+/**
+ * `fresh` bypasses the 15s cache and reads Sheets live. Used only for the one
+ * refetch that follows the user's own mutation — see invalidateCache() in
+ * googleSheetsClient.ts for why invalidating the tag is not enough to make
+ * that read see the write.
+ */
+export async function getAtelierRows(fresh = false): Promise<AtelierRow[]> {
+  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchAtelierRows(), { bypass: fresh });
 }
 
 /** Called by src/app/api/atelier/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
@@ -125,6 +131,7 @@ async function fetchAtelierRows(): Promise<AtelierRow[]> {
   const partsCol = colMap["PARTS"];
   const techniceinDsCol = colMap["TECHNICEIN_DS"];
   const founisseurCol = colMap["FOUNISSEUR"];
+  const geminiCol = colMap["GEMINI"];
 
   const strOrEmpty = (row: unknown[], col: number | undefined) => {
     if (!col) return "";
@@ -177,6 +184,7 @@ async function fetchAtelierRows(): Promise<AtelierRow[]> {
       parts: strOrEmpty(row, partsCol),
       techniceinDs: strOrEmpty(row, techniceinDsCol),
       founisseur: strOrEmpty(row, founisseurCol),
+      gemini: strOrEmpty(row, geminiCol),
     });
   }
 
@@ -440,4 +448,74 @@ export async function clearAtelierAll(): Promise<void> {
     requestBody: { ranges },
   });
   invalidateCache(ROWS_CACHE_KEY);
+}
+
+// ─── AI summary ────────────────────────────────────────────────────────────
+
+/**
+ * Writes an AI analysis summary into this tab's own `gemini` column, matched
+ * on immatriculation.
+ *
+ * Exists because BDD is an immobilisation tracker (~101 rows against ~11,169
+ * analysable plates), so a vehicle sitting in the workshop very often has NO
+ * BDD row — and until this existed, running the analysis from Atelier produced
+ * a real, paid-for summary that was then thrown away with a "pas de ligne BDD"
+ * warning. The ATELIER tab has carried a `gemini` column of its own all along
+ * (verified against the live header row, 2026-08-21); this writes to it.
+ *
+ * Deliberately does NOT bump TIMESTAMP, unlike updateAtelierField(): that
+ * column drives the server-side sort, and an AI summary is not the user
+ * touching the row — bumping it would jump the card to the other end of the
+ * list for everyone, which is the exact behaviour useStableRowOrder() exists
+ * to suppress.
+ *
+ * Returns "no-row" rather than throwing when the plate is not in Atelier: the
+ * caller writes to several tabs and reports which ones took it.
+ */
+export type ZoneGeminiResult =
+  | { ok: true; row: number }
+  | { ok: false; reason: "no-row" | "no-column" }
+  | { ok: false; reason: "write-failed"; error: string };
+
+export async function writeAtelierGeminiSummary(
+  imm: string,
+  summary: string
+): Promise<ZoneGeminiResult> {
+  const plate = imm.trim();
+  if (!plate) return { ok: false, reason: "write-failed", error: "imm is required" };
+
+  const sheets = getSheetsClient();
+  const headers = await getHeaderRow(sheets);
+  const colMap = buildColMap(headers);
+  const geminiCol = colMap["GEMINI"];
+  if (!geminiCol) return { ok: false, reason: "no-column" };
+
+  // Read through the same accessor the UI uses, so a row this app cannot see
+  // is not one it will write into either.
+  const rows = await getAtelierRows();
+  const match = rows.find((r) => r.imm.trim() === plate);
+  if (!match) return { ok: false, reason: "no-row" };
+
+  const immCol = colMap["IMM"] ?? 1;
+  try {
+    await verifyRowIdentity(
+      sheets,
+      spreadsheetId!,
+      `'${ATELIER_TAB}'!${columnIndexToLetter(immCol)}${match.rowIndex}`,
+      plate
+    );
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: spreadsheetId!,
+      range: `'${ATELIER_TAB}'!${columnIndexToLetter(geminiCol)}${match.rowIndex}`,
+      // RAW, not USER_ENTERED: a summary is free text and must land in the
+      // cell exactly as written — a leading "=" or "+" would otherwise be
+      // parsed as a formula.
+      valueInputOption: "RAW",
+      requestBody: { values: [[summary]] },
+    });
+  } catch (e) {
+    return { ok: false, reason: "write-failed", error: e instanceof Error ? e.message : "write refused" };
+  }
+  invalidateCache(ROWS_CACHE_KEY);
+  return { ok: true, row: match.rowIndex };
 }

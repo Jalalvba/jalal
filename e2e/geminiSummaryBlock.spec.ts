@@ -1,49 +1,92 @@
 import { test, expect } from "@playwright/test";
 import { authenticatedCookie } from "./helpers/auth";
 
-// The AI summary lives in ONE place (BDD's gemini column) but is shown on the
-// zone pages, which read their own sheet tabs and have no such column. This
-// pins the lookup: the block must find the summary for the plate it is on,
-// leave the others on the empty state, and cost one /api/bdd request for the
-// whole page rather than one per card.
+// The summary is shown on four pages that get it from two different places,
+// and this pins both routes:
 //
-// /api/bdd is stubbed so the test is deterministic and spends no Gemini quota
-// — the point here is the display path, not generating a summary.
+//   Suivi RL / Atelier / Parking  — their own tab HAS a gemini column, so the
+//                                   value comes straight from the row.
+//   Depot                         — its tab has no such column, so the value
+//                                   is looked up from BDD by plate.
+//
+// Everything is stubbed: deterministic, and no Gemini quota spent — the point
+// is the display path, not generating a summary.
 const SUMMARY = "RÉSUMÉ DE TEST — vérification du rendu dans la carte.";
 
-test("zone card shows the BDD summary for its own plate", async ({ page, context, baseURL }) => {
+test("a zone card shows the summary from its own tab's gemini column", async ({
+  page,
+  context,
+  baseURL,
+}) => {
   test.setTimeout(120_000);
   const errs: string[] = [];
   page.on("pageerror", (e) => errs.push(String(e)));
   await context.addCookies([await authenticatedCookie(baseURL!)]);
 
-  // Which plate is actually rendered first on the page?
+  // Take the real rows and give the FIRST one a summary, so the fixture keeps
+  // the live row shape instead of inventing one that can drift from it.
+  let rows: Record<string, unknown>[] = [];
+  await page.route("**/api/parking**", async (route) => {
+    const res = await route.fetch();
+    const json = (await res.json()) as { ok: boolean; rows: Record<string, unknown>[] };
+    rows = json.rows ?? [];
+    if (rows.length) rows = rows.map((r, i) => ({ ...r, gemini: i === 0 ? SUMMARY : "" }));
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, rows }),
+    });
+  });
+
   await page.goto("/parking");
   await expect(page.getByText("Résumé IA").first()).toBeVisible({ timeout: 40_000 });
-  const firstCard = page.getByTestId("record-card").filter({ hasText: "Résumé IA" }).first();
-  const plate = (await firstCard.innerText()).split("\n")[0].trim();
-  expect(plate).toMatch(/\d/);
+  test.skip(rows.length === 0, "PARKING tab is empty — nothing to render");
+
+  const plate = String(rows[0].imm);
+  const card = page.getByTestId("record-card").filter({ hasText: plate }).first();
+  await expect(card).toContainText(SUMMARY, { timeout: 40_000 });
+
+  // Exactly one card shows it — the value is per row, not per page.
+  const body = await page.locator("body").innerText();
+  expect((body.match(new RegExp(SUMMARY, "g")) ?? []).length).toBe(1);
+  if (rows.length > 1) expect(body).toContain("Aucun résumé");
+  expect(errs).toEqual([]);
+});
+
+test("Depot, whose tab has no gemini column, falls back to a BDD lookup", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  test.setTimeout(120_000);
+  const errs: string[] = [];
+  page.on("pageerror", (e) => errs.push(String(e)));
+  await context.addCookies([await authenticatedCookie(baseURL!)]);
+
+  // Ask the API directly first: the DEPOT tab is routinely empty, and an empty
+  // tab is not a failure of this behaviour — it is nothing to assert about.
+  const live = await context.request.get(`${baseURL}/api/depot`);
+  const depotRows = ((await live.json()) as { rows: Record<string, unknown>[] }).rows ?? [];
+  test.skip(depotRows.length === 0, "DEPOT tab is empty — nothing to render");
 
   let bddCalls = 0;
-  await page.route("**/api/bdd", async (route) => {
+  await page.route("**/api/bdd**", async (route) => {
     bddCalls++;
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ ok: true, rows: [{ IMM: plate, gemini: SUMMARY, _row: 2 }] }),
+      body: JSON.stringify({ ok: true, rows: [{ IMM: depotRows[0].imm, gemini: SUMMARY, _row: 2 }] }),
     });
   });
 
-  await page.reload();
+  await page.goto("/depot");
+  await expect(page.getByText("Résumé IA").first()).toBeVisible({ timeout: 40_000 });
+
+  const plate = String(depotRows[0].imm);
   const card = page.getByTestId("record-card").filter({ hasText: plate }).first();
   await expect(card).toContainText(SUMMARY, { timeout: 40_000 });
 
-  // Every other card stays on the empty state — the lookup is per plate.
-  const body = await page.locator("body").innerText();
-  expect((body.match(new RegExp(SUMMARY, "g")) ?? []).length).toBe(1);
-  expect(body).toContain("Aucun résumé");
-
-  // One shared fetch, not one per card.
+  // One shared BDD fetch for the whole page, not one per card.
   expect(bddCalls).toBeLessThanOrEqual(2);
   expect(errs).toEqual([]);
 });

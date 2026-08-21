@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { markFresh, freshUrl } from "@/hooks/freshFetch";
 import type {
   BddRow,
   BddUpdateResult,
@@ -36,7 +37,7 @@ async function fetchJson<T extends { ok: boolean; error?: string }>(
 export function useBddRows() {
   return useQuery({
     queryKey: ROWS_KEY,
-    queryFn: () => fetchJson<{ ok: true; rows: BddRow[] }>("/api/bdd"),
+    queryFn: () => fetchJson<{ ok: true; rows: BddRow[] }>(freshUrl("bdd", "/api/bdd")),
     select: (data) => data.rows,
     // Inherits the provider's 30s default staleTime — the persisted cache
     // (see src/hooks/queryClient.tsx) plus TanStack Query's default
@@ -58,6 +59,7 @@ export function useRefreshBddRows() {
   return useMutation({
     mutationFn: async () => {
       await fetchJson<{ ok: true }>("/api/bdd/refresh", { method: "POST" });
+      markFresh("bdd");
       await queryClient.refetchQueries({ queryKey: ROWS_KEY });
     },
     meta: { successMessage: "Données actualisées" },
@@ -74,7 +76,12 @@ export function useAddBddRow() {
         body: JSON.stringify({ imm, etat }),
       }),
     meta: { successMessage: "Véhicule ajouté à la BDD" },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSuccess: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("bdd");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -88,7 +95,12 @@ export function useUpdateBddRow() {
         body: JSON.stringify({ row, updates, imm }),
       }),
     meta: { successMessage: "Champ mis à jour" },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSuccess: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("bdd");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -118,7 +130,12 @@ export function useDeleteBddRow() {
         body: JSON.stringify({ row, imm }),
       }),
     meta: { successMessage: "Véhicule supprimé de la BDD" },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSettled: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("bdd");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 

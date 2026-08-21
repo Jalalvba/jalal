@@ -97,7 +97,16 @@ test("admin/config: adding a Technicien value appears in the Atelier dropdown, a
     const cleanupSection = page.locator(".rounded-2xl").filter({ has: page.getByRole("heading", { name: "Technicien", exact: true }) });
     const chip = cleanupSection.locator("span", { hasText: testValue }).first();
     if (await chip.count() > 0) {
-      await chip.locator("button").click();
+      // Wait for the save to actually land. Without this, the page.goto()
+      // immediately below cancels the in-flight POST often enough to make the
+      // final assertion flaky — the value is still there because the removal
+      // never reached the server, not because the read was stale.
+      await Promise.all([
+        page.waitForResponse(
+          (r) => r.url().includes("/api/config/options") && r.request().method() === "POST"
+        ),
+        chip.locator("button").click(),
+      ]);
     }
   }
 

@@ -186,16 +186,21 @@ export function DsAnalysisCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imm, summary }),
       });
+      // The route writes to every tab that has this plate and a gemini column
+      // (BDD/ATELIER/PARKING) and reports which ones took it.
       const json = (await res.json()) as
-        | { ok: true; saved: true; row: number }
-        | { ok: true; saved: false; reason: "no-row" }
+        | { ok: true; saved: boolean; tabs: string[]; failures: string[] }
         | { ok: false; error: string };
       if (!json.ok) {
         setSaved({ ok: false, note: `Résumé non enregistré : ${json.error}` });
       } else if (json.saved) {
-        setSaved({ ok: true, note: `Résumé enregistré dans BDD (colonne gemini, ligne ${json.row}).` });
+        const failed = json.failures.length ? ` Échec : ${json.failures.join(", ")}.` : "";
+        setSaved({ ok: true, note: `Résumé enregistré (colonne gemini) dans ${json.tabs.join(", ")}.${failed}` });
       } else {
-        setSaved({ ok: false, note: "Pas de ligne BDD pour cette immatriculation — résumé non enregistré." });
+        setSaved({
+          ok: false,
+          note: "Aucune ligne BDD/ATELIER/PARKING pour cette immatriculation — résumé non enregistré.",
+        });
       }
     } catch {
       setSaved({ ok: false, note: "Résumé non enregistré — vérifiez la connexion." });

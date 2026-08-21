@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { markFresh, freshUrl } from "@/hooks/freshFetch";
 import type { AtelierRow, AtelierEditableField, ParkingAddResponse } from "@/types";
 
 // Same pattern/refetch-behavior mapping as src/hooks/useParkingRows.ts. The
@@ -23,7 +24,7 @@ async function fetchJson<T extends { ok: boolean; error?: string }>(
 export function useAtelierRows() {
   return useQuery({
     queryKey: ROWS_KEY,
-    queryFn: () => fetchJson<{ ok: true; rows: AtelierRow[] }>("/api/atelier"),
+    queryFn: () => fetchJson<{ ok: true; rows: AtelierRow[] }>(freshUrl("atelier", "/api/atelier")),
     select: (data) => data.rows,
   });
 }
@@ -38,7 +39,12 @@ export function useAddAtelierPlates() {
         body: JSON.stringify({ raw }),
       }),
     meta: { successMessage: "Véhicule(s) ajouté(s) à l'atelier" },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSuccess: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("atelier");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -62,7 +68,12 @@ export function useUpdateAtelierField() {
         body: JSON.stringify({ rowIndex, field, value, imm }),
       }),
     meta: { successMessage: "Champ mis à jour" },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSettled: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("atelier");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -76,7 +87,12 @@ export function useDeleteAtelierRow() {
         body: JSON.stringify({ rowIndex, imm }),
       }),
     meta: { successMessage: "Véhicule retiré de l'atelier" },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSettled: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("atelier");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -85,7 +101,12 @@ export function useClearAtelierAll() {
   return useMutation({
     mutationFn: () => fetchJson<{ ok: true }>("/api/atelier/clear", { method: "POST" }),
     meta: { successMessage: "Atelier vidé" },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSettled: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("atelier");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -95,6 +116,7 @@ export function useRefreshAtelierRows() {
   return useMutation({
     mutationFn: async () => {
       await fetchJson<{ ok: true }>("/api/atelier/refresh", { method: "POST" });
+      markFresh("atelier");
       await queryClient.refetchQueries({ queryKey: ROWS_KEY });
     },
     meta: { successMessage: "Données actualisées" },

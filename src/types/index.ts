@@ -487,6 +487,8 @@ export type ParkingRow = {
   parts: string;
   technicein: string;
   founisseur: string;
+  /** The AI analysis summary, from this tab's own `gemini` column. */
+  gemini: string;
 };
 
 export type ParkingAddStatus = "added" | "updated";
@@ -536,6 +538,8 @@ export type AtelierRow = {
   parts: string;
   techniceinDs: string;
   founisseur: string;
+  /** The AI analysis summary, from this tab's own `gemini` column. */
+  gemini: string;
 };
 
 // Deliberate allowlist (the original GAS updateCellFromWeb() accepts any

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { markFresh, freshUrl } from "@/hooks/freshFetch";
 import type { DepotRow, ParkingAddResponse } from "@/types";
 
 // Same pattern/shape as src/hooks/useParkingRows.ts. The plate-suggestion list
@@ -22,7 +23,7 @@ async function fetchJson<T extends { ok: boolean; error?: string }>(
 export function useDepotRows() {
   return useQuery({
     queryKey: ROWS_KEY,
-    queryFn: () => fetchJson<{ ok: true; rows: DepotRow[] }>("/api/depot"),
+    queryFn: () => fetchJson<{ ok: true; rows: DepotRow[] }>(freshUrl("depot", "/api/depot")),
     select: (data) => data.rows,
   });
 }
@@ -37,7 +38,12 @@ export function useAddDepotPlates() {
         body: JSON.stringify({ raw }),
       }),
     meta: { successMessage: "Véhicule(s) ajouté(s) au dépôt" },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSuccess: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("depot");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -51,7 +57,12 @@ export function useUpdateDepotAction() {
         body: JSON.stringify({ rowIndex, action, imm }),
       }),
     meta: { successMessage: "Action mise à jour" },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSettled: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("depot");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -65,7 +76,12 @@ export function useDeleteDepotRow() {
         body: JSON.stringify({ rowIndex, imm }),
       }),
     meta: { successMessage: "Véhicule retiré du dépôt" },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSettled: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("depot");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -74,7 +90,12 @@ export function useClearDepotAll() {
   return useMutation({
     mutationFn: () => fetchJson<{ ok: true }>("/api/depot/clear", { method: "POST" }),
     meta: { successMessage: "Dépôt vidé" },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSettled: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("depot");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -84,6 +105,7 @@ export function useRefreshDepotRows() {
   return useMutation({
     mutationFn: async () => {
       await fetchJson<{ ok: true }>("/api/depot/refresh", { method: "POST" });
+      markFresh("depot");
       await queryClient.refetchQueries({ queryKey: ROWS_KEY });
     },
     meta: { successMessage: "Données actualisées" },

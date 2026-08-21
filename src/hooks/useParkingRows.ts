@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { markFresh, freshUrl } from "@/hooks/freshFetch";
 import type { ParkingRow, ParkingAddResponse } from "@/types";
 
 // Route logic is untouched — these are thin client-side wrappers around the
@@ -25,7 +26,7 @@ async function fetchJson<T extends { ok: boolean; error?: string }>(
 export function useParkingRows() {
   return useQuery({
     queryKey: ROWS_KEY,
-    queryFn: () => fetchJson<{ ok: true; rows: ParkingRow[] }>("/api/parking"),
+    queryFn: () => fetchJson<{ ok: true; rows: ParkingRow[] }>(freshUrl("parking", "/api/parking")),
     select: (data) => data.rows,
   });
 }
@@ -40,7 +41,12 @@ export function useAddParkingPlates() {
         body: JSON.stringify({ raw }),
       }),
     meta: { successMessage: "Véhicule(s) ajouté(s) au parking" },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSuccess: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("parking");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -54,7 +60,12 @@ export function useUpdateParkingAction() {
         body: JSON.stringify({ rowIndex, action, imm }),
       }),
     meta: { successMessage: "Action mise à jour" },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSettled: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("parking");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -68,7 +79,12 @@ export function useDeleteParkingRow() {
         body: JSON.stringify({ rowIndex, imm }),
       }),
     meta: { successMessage: "Véhicule retiré du parking" },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSettled: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("parking");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -77,7 +93,12 @@ export function useClearParkingAll() {
   return useMutation({
     mutationFn: () => fetchJson<{ ok: true }>("/api/parking/clear", { method: "POST" }),
     meta: { successMessage: "Parking vidé" },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+    onSettled: () => {
+      // markFresh first: invalidating alone gets the pre-write rows back,
+      // because revalidateTag is stale-while-revalidate (see freshFetch.ts).
+      markFresh("parking");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
   });
 }
 
@@ -92,6 +113,7 @@ export function useRefreshParkingRows() {
   return useMutation({
     mutationFn: async () => {
       await fetchJson<{ ok: true }>("/api/parking/refresh", { method: "POST" });
+      markFresh("parking");
       await queryClient.refetchQueries({ queryKey: ROWS_KEY });
     },
     meta: { successMessage: "Données actualisées" },

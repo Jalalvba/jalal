@@ -88,19 +88,23 @@ export function AnalyseAndSaveButton({ imm, className, regenerate, onSaved }: Pr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imm, summary: aJson.analysis.summary }),
       });
+      // The route fans the write out across BDD/ATELIER/PARKING and reports
+      // which tabs took it, so the toast names them rather than claiming a
+      // single destination.
       const sJson = (await sRes.json()) as
-        | { ok: true; saved: true; row: number }
-        | { ok: true; saved: false; reason: "no-row" }
+        | { ok: true; saved: boolean; tabs: string[]; failures: string[] }
         | { ok: false; error: string };
 
       if (sJson.ok && sJson.saved) {
         onSaved?.(aJson.analysis.summary);
-        toast.success(`${imm} analysé — résumé enregistré dans BDD (ligne ${sJson.row}).`, {
+        const failed = sJson.failures.length ? ` (échec : ${sJson.failures.join(", ")})` : "";
+        toast.success(`${imm} analysé — résumé enregistré dans ${sJson.tabs.join(", ")}${failed}.`, {
           id,
           description: aJson.analysis.summary,
         });
       } else if (sJson.ok) {
-        toast.warning(`${imm} analysé — pas de ligne BDD, résumé non enregistré.`, {
+        // Not a failure: the plate is in none of the tabs that store a summary.
+        toast.warning(`${imm} analysé — aucune ligne BDD/ATELIER/PARKING, résumé non enregistré.`, {
           id,
           description: aJson.analysis.summary,
         });

@@ -78,8 +78,14 @@ async function getDepotSheetProps(sheets: sheets_v4.Sheets): Promise<{ sheetId: 
  * getParkingRows(), which this is a straight port of given the confirmed
  * identical schema.
  */
-export async function getDepotRows(): Promise<DepotRow[]> {
-  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchDepotRows());
+/**
+ * `fresh` bypasses the 15s cache and reads Sheets live. Used only for the one
+ * refetch that follows the user's own mutation — see invalidateCache() in
+ * googleSheetsClient.ts for why invalidating the tag is not enough to make
+ * that read see the write.
+ */
+export async function getDepotRows(fresh = false): Promise<DepotRow[]> {
+  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchDepotRows(), { bypass: fresh });
 }
 
 /** Called by src/app/api/depot/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */

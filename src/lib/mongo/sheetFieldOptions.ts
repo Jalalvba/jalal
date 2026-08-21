@@ -166,7 +166,13 @@ export type SheetFieldOptionsResult = {
  * rather than silently treating fallback data as if it were live Mongo
  * state — see src/app/admin/config/page.tsx.
  */
-export async function getAllSheetFieldOptionsWithStatus(): Promise<SheetFieldOptionsResult> {
+export async function getAllSheetFieldOptionsWithStatus(
+  /** Bypass the cache and read Mongo live — for the read that follows the
+   *  admin's own save. Invalidating the tag is not enough: revalidateTag is
+   *  stale-while-revalidate, so that read would show the pre-save list. See
+   *  invalidateCache() in src/lib/sheets/googleSheetsClient.ts. */
+  fresh = false
+): Promise<SheetFieldOptionsResult> {
   try {
     return await withCache(CACHE_KEY, CACHE_TTL_MS, async () => {
       const col = await getCollection<SheetFieldOptionsDoc>(COLLECTION);
@@ -191,7 +197,7 @@ export async function getAllSheetFieldOptionsWithStatus(): Promise<SheetFieldOpt
         meta[key] = doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : null;
       }
       return { options: result, degraded: false, meta };
-    });
+    }, { bypass: fresh });
   } catch (e) {
     console.error("getAllSheetFieldOptions: Mongo unreachable, serving hardcoded fallback", e);
     const meta = Object.fromEntries(OPTION_KEYS.map((k) => [k, null])) as SheetFieldOptionsMeta;

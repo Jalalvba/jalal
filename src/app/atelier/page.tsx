@@ -143,9 +143,9 @@ function AtelierCard({
       </div>
 
       <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
-      {/* Summary + its button. Looked up from BDD by plate — this tab has
-          no gemini column of its own. */}
-      <GeminiSummaryBlock imm={row.imm} className="mt-2" />
+      {/* This tab has its own gemini column, so the value is passed straight
+          in — no BDD lookup, and it shows even for a vehicle with no BDD row. */}
+      <GeminiSummaryBlock imm={row.imm} summary={row.gemini} className="mt-2" />
     </RecordCard>
   );
 }
