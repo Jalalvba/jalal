@@ -105,6 +105,10 @@ export function DsAnalysisCard({
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState("");
+  // Save status for the BDD `gemini` column. Never blocks or hides the
+  // analysis: the result is on screen either way, this only reports whether it
+  // was also written to the tracker.
+  const [saved, setSaved] = useState<null | { ok: boolean; note: string }>(null);
 
   // contracts[0], matching VehicleCard directly above this one (page.tsx:263).
   // Picking a different row — e.g. the first WITH a date — would flag one
@@ -170,12 +174,46 @@ export function DsAnalysisCard({
     }
   }
 
+  /**
+   * Pushes the summary into BDD's `gemini` column, matched on plate.
+   *
+   * Fire-and-forget relative to the analysis: a Sheets failure must never make
+   * a successful (and already paid-for) analysis look failed, so this never
+   * throws into the caller and never clears `result`. BDD holds ~101 rows
+   * against ~11,169 analysable plates, so "no row" is the ordinary outcome and
+   * is reported as information, not as an error.
+   */
+  async function saveSummary(summary: string) {
+    setSaved(null);
+    try {
+      const res = await fetch("/api/bdd/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imm, summary }),
+      });
+      const json = (await res.json()) as
+        | { ok: true; saved: true; row: number }
+        | { ok: true; saved: false; reason: "no-row" }
+        | { ok: false; error: string };
+      if (!json.ok) {
+        setSaved({ ok: false, note: `Résumé non enregistré : ${json.error}` });
+      } else if (json.saved) {
+        setSaved({ ok: true, note: `Résumé enregistré dans BDD (colonne gemini, ligne ${json.row}).` });
+      } else {
+        setSaved({ ok: false, note: "Pas de ligne BDD pour cette immatriculation — résumé non enregistré." });
+      }
+    } catch {
+      setSaved({ ok: false, note: "Résumé non enregistré — vérifiez la connexion." });
+    }
+  }
+
   async function runAnalysis() {
     setLoading(true);
     setError("");
     setResult(null);
     setExchanges([]);
     setAskError("");
+    setSaved(null);
     try {
       const res = await fetch("/api/ds-history/analyze", {
         method: "POST",
@@ -188,6 +226,7 @@ export function DsAnalysisCard({
         return;
       }
       setResult(json);
+      void saveSummary(json.analysis.summary);
     } catch {
       setError("Échec de l'analyse — vérifiez la connexion.");
     } finally {
@@ -389,6 +428,15 @@ export function DsAnalysisCard({
               Analyse générée par IA à partir des interventions listées ci-dessous — vérifiez avant
               de décider.
             </p>
+
+            {/* Save outcome. Stated either way — a silent save leaves you
+                unsure whether the tracker was updated. */}
+            {saved && (
+              <p className={`text-xs ${saved.ok ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                {saved.ok ? "✓ " : "• "}
+                {saved.note}
+              </p>
+            )}
 
             {/* Question -> answer record. Appended below the analysis, never
                 replacing it, so the trail stays visible. */}

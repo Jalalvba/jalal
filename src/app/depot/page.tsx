@@ -9,6 +9,7 @@ import { PlateSearchInput } from "@/components/fleet/PlateSearchInput";
 import { PlateFilterInput } from "@/components/fleet/PlateFilterInput";
 import { AddResultsList } from "@/components/fleet/AddResultsList";
 import { RecordCard } from "@/components/fleet/RecordCard";
+import { AnalyseAndSaveButton } from "@/components/fleet/AnalyseAndSaveButton";
 import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,7 @@ function DepotCard({
       imm={row.imm}
       subtitle={[row.marque, row.model].filter(Boolean).join(" ") + (row.client ? ` | ${row.client}` : "")}
       timestamp={row.timestamp}
+      headerRight={<AnalyseAndSaveButton imm={row.imm} />}
       onDelete={() => onDelete(row.rowIndex, row.imm)}
       deleteTitle="Supprimer cette ligne ?"
     >

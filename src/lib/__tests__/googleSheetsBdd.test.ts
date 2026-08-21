@@ -117,3 +117,58 @@ describe("deleteBddRow — row-identity safety (existing behavior, locked in)", 
     );
   });
 });
+
+// ── The `gemini` column: AI-summary writes ────────────────────────────────
+describe("updateSheetRow — gemini column", () => {
+  const HEADERS = ["IMM", "date", "client", "modele", "ETAT", "prestataire", "flag", "Emplacement", "commentaire", "gemini", "Catégorie", "Technicien"];
+
+  it("accepts gemini — it is on the allowlist, unlike a random column", async () => {
+    const { sheets } = fakeSheets(HEADERS);
+    mockedGetSheetsClient.mockReturnValue(sheets as never);
+    const r = await updateSheetRow(2, { gemini: "Résumé." }, "46749-B-7");
+    expect(r.ok).toBe(true);
+    expect(mockedVerifyRowIdentity).toHaveBeenCalled();
+  });
+
+  it("still runs verifyRowIdentity before writing a summary", async () => {
+    const { sheets } = fakeSheets(HEADERS);
+    mockedGetSheetsClient.mockReturnValue(sheets as never);
+    mockedVerifyRowIdentity.mockRejectedValueOnce(new Error("row moved"));
+    await expect(updateSheetRow(2, { gemini: "Résumé." }, "46749-B-7")).rejects.toThrow("row moved");
+  });
+
+  it("rejects a column that is not on the allowlist, gemini or not", async () => {
+    const { sheets } = fakeSheets(HEADERS);
+    mockedGetSheetsClient.mockReturnValue(sheets as never);
+    const r = await updateSheetRow(2, { IMM: "hacked" }, "46749-B-7");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.rejectedFields).toContain("IMM");
+  });
+
+  it("re-reads the header row before declaring a column missing", async () => {
+    // withCache() wraps unstable_cache, which is stale-while-revalidate: the
+    // first read after the TTL lapses serves the OLD headers. That made the
+    // very first write after the gemini column was added fail with "column not
+    // found" while the column was plainly there. A miss must therefore cost a
+    // fresh re-read before it is believed.
+    const stale = HEADERS.filter((h) => h !== "gemini");
+    const { sheets, valuesGet } = fakeSheets(stale);
+    valuesGet
+      .mockResolvedValueOnce({ data: { values: [stale] } })   // cached, stale
+      .mockResolvedValue({ data: { values: [HEADERS] } });    // fresh, has it
+    mockedGetSheetsClient.mockReturnValue(sheets as never);
+
+    const r = await updateSheetRow(2, { gemini: "Résumé." }, "46749-B-7");
+    expect(r.ok).toBe(true);
+    expect(valuesGet.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("still fails when the column is genuinely absent from a fresh read", async () => {
+    const without = HEADERS.filter((h) => h !== "gemini");
+    const { sheets } = fakeSheets(without);
+    mockedGetSheetsClient.mockReturnValue(sheets as never);
+    const r = await updateSheetRow(2, { gemini: "Résumé." }, "46749-B-7");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.rejectedFields).toContain("gemini");
+  });
+});

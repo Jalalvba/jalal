@@ -141,6 +141,7 @@ export const BDD_HEADERS = [
   "flag",
   "Emplacement",
   "commentaire",
+  "gemini",
   "Catégorie",
   "Technicien",
   "Reunion N-1",
@@ -173,6 +174,8 @@ export type BddRow = {
   flag: string;
   Emplacement: string;
   commentaire: string;
+  /** AI analysis summary, written by the DS-History save path. */
+  gemini: string;
   "Catégorie": string;
   Technicien: string;
   "Reunion N-1": string;
@@ -207,6 +210,11 @@ export const BDD_EDITABLE_FIELDS = [
   "Catégorie",
   "commentaire",
   "Technicien",
+  // Written only by the AI-analysis save path, never by an inline cell edit —
+  // the UI does not expose it as editable. It is on this allowlist because
+  // updateSheetRow() refuses anything absent from it, which is the guard worth
+  // keeping rather than working around.
+  "gemini",
 ] as const;
 
 // The three read-only, sheet-side XLOOKUP presence flags — kept as their own

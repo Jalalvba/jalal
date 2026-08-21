@@ -327,12 +327,28 @@ export async function updateSheetRow(
   }
 
   const sheets = getSheetsClient();
-  const headers = await getHeaderRow(sheets);
+  let headers = await getHeaderRow(sheets);
 
   // Belt-and-suspenders: even though these fields passed the allowlist check,
   // re-verify against the *live* header row in case the sheet's structure has
   // since drifted (column renamed/removed) since BDD_EDITABLE_FIELDS was set.
-  const missingFromSheet = requestedFields.filter((f) => !headers.includes(f));
+  let missingFromSheet = requestedFields.filter((f) => !headers.includes(f));
+
+  // A miss here is more often a STALE CACHE than a drifted sheet. withCache()
+  // wraps unstable_cache, which is stale-while-revalidate: the first read after
+  // the TTL lapses is served the OLD value while the refresh happens behind it.
+  // So the first write attempt after someone adds a column fails with "column
+  // not found" even though the column is right there — observed exactly that
+  // when the `gemini` column was added. Drop the cache and re-read once before
+  // believing it; only a field still missing from a guaranteed-fresh header row
+  // is a real structure change.
+  if (missingFromSheet.length > 0) {
+    invalidateCache(HEADERS_CACHE_KEY);
+    const fresh = await getHeaderRow(sheets);
+    missingFromSheet = requestedFields.filter((f) => !fresh.includes(f));
+    if (missingFromSheet.length === 0) headers = fresh;
+  }
+
   if (missingFromSheet.length > 0) {
     return {
       ok: false,
@@ -416,4 +432,49 @@ export async function deleteBddRow(row: number, expectedImm: string): Promise<vo
     },
   });
   invalidateCache(ROWS_CACHE_KEY);
+}
+
+/**
+ * Writes an AI analysis summary into the BDD `gemini` column for one plate.
+ *
+ * Resolves the row BY IMMATRICULATION rather than taking a row index from the
+ * client. Every other write path here takes a `row` because the user is
+ * editing a row they are looking at; this one is triggered from DS History and
+ * from the Parking/Atelier/Depot lists, which know a plate and nothing about
+ * BDD's layout. Resolving server-side also means there is no client-held index
+ * to go stale — and the write still goes through updateSheetRow(), so
+ * verifyRowIdentity() runs exactly as it does for a manual edit.
+ *
+ * BDD is an immobilisation tracker, not a fleet list: 101 rows against the
+ * ~11,169 plates DS History can analyse. A plate with no row is therefore the
+ * NORMAL case, not an error — it returns { ok: false, reason: "no-row" } and
+ * writes nothing. Creating rows was considered and rejected: it would fill the
+ * tracker with vehicles that are not immobilised.
+ *
+ * An existing value is overwritten. The cell holds the latest analysis.
+ */
+export type BddGeminiResult =
+  | { ok: true; row: number }
+  | { ok: false; reason: "no-row" }
+  | { ok: false; reason: "write-failed"; error: string };
+
+export async function writeGeminiSummary(
+  imm: string,
+  summary: string
+): Promise<BddGeminiResult> {
+  const plate = imm.trim();
+  if (!plate) return { ok: false, reason: "write-failed", error: "imm is required" };
+
+  // Read through the same accessor the UI uses, so a row this app cannot see
+  // is not one it will write into either.
+  const rows = await getSheetRows();
+  const match = rows.find((r) => String(r.IMM ?? "").trim() === plate);
+  if (!match) return { ok: false, reason: "no-row" };
+
+  const result = await updateSheetRow(match._row, { gemini: summary }, plate);
+  if (!result.ok) {
+    return { ok: false, reason: "write-failed", error: result.error ?? "write refused" };
+  }
+  invalidateBddRowsCache();
+  return { ok: true, row: match._row };
 }
