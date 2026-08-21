@@ -19,9 +19,19 @@ import { Button } from "@/components/ui/button";
 import { classifyRepairOrigin } from "@/lib/ai/prompts/dsAnalysis";
 import type { DsHistoryItem } from "@/types";
 
-type Props = { imm: string; className?: string };
+type Props = {
+  imm: string;
+  className?: string;
+  /**
+   * Called with the summary AFTER it is written to the sheet. Exists so a page
+   * already showing the gemini cell can refresh it — the write happened
+   * server-side, so the caller's cached row is stale until it refetches. NOT a
+   * hook to write it a second time.
+   */
+  onSaved?: (summary: string) => void;
+};
 
-export function AnalyseAndSaveButton({ imm, className }: Props) {
+export function AnalyseAndSaveButton({ imm, className, onSaved }: Props) {
   const [busy, setBusy] = useState(false);
 
   async function run() {
@@ -79,6 +89,7 @@ export function AnalyseAndSaveButton({ imm, className }: Props) {
         | { ok: false; error: string };
 
       if (sJson.ok && sJson.saved) {
+        onSaved?.(aJson.analysis.summary);
         toast.success(`${imm} analysé — résumé enregistré dans BDD (ligne ${sJson.row}).`, {
           id,
           description: aJson.analysis.summary,

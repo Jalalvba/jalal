@@ -19,7 +19,9 @@ import type {
 // won't survive a hard reload the same way — flagging this explicitly during
 // that page's migration rather than silently changing the behavior here.
 
-const ROWS_KEY = ["bdd", "rows"] as const;
+/** Exported so a component that writes BDD outside these hooks (the AI
+ * summary save) can invalidate the same cache rather than duplicating the key. */
+export const ROWS_KEY = ["bdd", "rows"] as const;
 
 async function fetchJson<T extends { ok: boolean; error?: string }>(
   url: string,
