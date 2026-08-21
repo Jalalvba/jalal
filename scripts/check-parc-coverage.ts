@@ -70,6 +70,19 @@ function loadEnv(): { uri: string; db: string } {
   return { uri: env.MONGODB_URI, db: env.MONGODB_DB || "avis" };
 }
 
+/**
+ * Mongo returns these as Date objects, so `String(d).slice(0, 10)` yields
+ * "Wed Sep 02" — the weekday and NO YEAR. This script printed exactly that,
+ * and the missing years were then filled in from memory when the list was
+ * relayed, which put wrong contract-end years into an investigation. Format
+ * explicitly; never slice a stringified Date.
+ */
+function isoDate(v: unknown): string {
+  if (!v) return "—";
+  const d = v instanceof Date ? v : new Date(String(v));
+  return Number.isNaN(d.getTime()) ? String(v) : d.toISOString().slice(0, 10);
+}
+
 /** "11734-T-1" -> "T-1". Moroccan plates encode the region here. */
 function plateSeries(imm: string): string {
   const m = imm.match(/-([A-Z])-(\d+)$/);
@@ -98,7 +111,7 @@ async function main() {
 
   const contracts = await db
     .collection("cp")
-    .find({}, { projection: { imm: 1, ww: 1, marque: 1, modele: 1, date_fin_contrat: 1, gestionnaire: 1 } })
+    .find({}, { projection: { imm: 1, ww: 1, marque: 1, modele: 1, date_fin_contrat: 1, gestionnaire: 1, statut: 1, client: 1 } })
     .toArray();
 
   const now = new Date();
@@ -151,7 +164,8 @@ async function main() {
       console.log(
         `    ${String(r.imm).padEnd(12)} ww=${String(r.ww ?? "—").padEnd(10)} ` +
           `${String(r.marque ?? "").padEnd(11)}${String(r.modele ?? "").padEnd(11)} ` +
-          `fin=${String(r.date_fin_contrat).slice(0, 10)}  ds_lines=${(r as { dsLines?: number }).dsLines}`
+          `fin=${isoDate(r.date_fin_contrat)}  ds=${(r as { dsLines?: number }).dsLines}  ` +
+          `statut=${String(r.statut ?? "—").padEnd(18)} ${String(r.client ?? "—").slice(0, 34)}`
       );
     }
   }

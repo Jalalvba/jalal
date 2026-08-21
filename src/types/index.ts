@@ -66,6 +66,15 @@ export type ParcDoc = {
 
 export type CpItem = {
   gestionnaire?: string;
+  /** Renting client. Present on every cp doc (0 blanks across 10,230). */
+  client?: string;
+  /**
+   * Contract lifecycle, verbatim from the CP export. Exactly three values
+   * live, byte-verified after import: "Livré" (5,673), "Arret facturation"
+   * (4,546), "Restitué" (11). Note "Arret" carries NO circumflex — match the
+   * literal, not the correctly-spelled French word.
+   */
+  statut?: string;
   ww?: string;
   imm?: string;
   vin?: string;

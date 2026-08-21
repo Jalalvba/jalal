@@ -44,6 +44,12 @@ export async function GET(req: Request) {
           date_fin_contrat:   "$date_fin_contrat",
           type:               "$type_vh_relais",
           jockey:             "$jockey",
+          // Added once ~/import 8ecafd5 put these into cp. `client` is the
+          // renting client (the card prefers it over parc's); `statut` is the
+          // contract lifecycle — "Arret facturation" is what legitimately
+          // explains a vehicle having no parc row.
+          client:             "$client",
+          statut:             "$statut",
         },
       },
       { $limit: 50 },

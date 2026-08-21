@@ -35,11 +35,24 @@
 // Three fields exist ONLY in `parc` and are absent from every single `cp`
 // document (verified: 0 of 10,230 carry any of them):
 //
-//   client, vehicle_state, tenant
+//   vehicle_state, tenant
 //
 // Those are reported in `unavailable` rather than being faked, guessed, or
 // silently rendered as empty — the card states which source it used and which
 // fields that source cannot answer.
+//
+// `client` USED to be in that list. It no longer is: the CP export always
+// carried it, the import just never extracted it (~/import commit 8ecafd5
+// added `client` and `statut` to cp's COLUMNS_NEEDED). Every one of the 10,230
+// cp documents now has a client, 0 blanks.
+//
+// ── Client precedence is deliberately INVERTED ───────────────────────────
+//
+// Everywhere else parc wins, because it is the fleet master record. For
+// `client` the rule is the opposite: cp first, parc as fallback. cp is the
+// live rental contract, so it names who is renting the vehicle NOW, whereas
+// parc's client can lag behind a re-rental. Asked for explicitly by the fleet
+// owner, and it is the only field with this inversion.
 
 import type { CpItem, ParcItem } from "@/types";
 
@@ -53,7 +66,6 @@ export type VehicleIdentitySource = "parc+cp" | "parc" | "cp";
  * the other about what is missing.
  */
 export const PARC_ONLY_FIELDS = [
-  { key: "client", label: "Client" },
   { key: "vehicle_state", label: "Etat véhicule" },
   { key: "tenant", label: "Locataire" },
 ] as const;
@@ -72,8 +84,16 @@ export type VehicleIdentity = {
   model?: string;
   mce_date?: string;
   location_type?: string;
-  /** parc-only — undefined whenever source is "cp". */
+  /** Renting client — cp first, parc fallback. See the note above. */
   client?: string;
+  /**
+   * Contract lifecycle from cp: "Livré" | "Arret facturation" | "Restitué".
+   * Absent when there is no cp row. "Arret facturation" explains a vehicle
+   * that is legitimately no longer in the parc — billing stopped — which is
+   * otherwise indistinguishable from a data gap.
+   */
+  statut?: string;
+  /** parc-only — undefined whenever source is "cp". */
   vehicle_state?: string;
   tenant?: string;
   /**
@@ -123,7 +143,9 @@ export function mergeVehicleIdentity(
       model: clean(parc.model) ?? clean(cp?.model),
       mce_date: clean(parc.mce_date) ?? clean(cp?.mce_date),
       location_type: clean(parc.location_type) ?? clean(cp?.type_location),
-      client: clean(parc.client),
+      // The one inversion: cp before parc.
+      client: clean(cp?.client) ?? clean(parc.client),
+      statut: clean(cp?.statut),
       vehicle_state: clean(parc.vehicle_state),
       tenant: clean(parc.tenant),
       unavailable: [],
@@ -143,6 +165,8 @@ export function mergeVehicleIdentity(
     model: clean(cp!.model),
     mce_date: clean(cp!.mce_date),
     location_type: clean(cp!.type_location),
+    client: clean(cp!.client),
+    statut: clean(cp!.statut),
     unavailable: PARC_ONLY_LABELS,
     unavailableKeys: PARC_ONLY_KEYS,
   };

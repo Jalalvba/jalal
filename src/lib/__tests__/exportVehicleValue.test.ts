@@ -3,15 +3,20 @@ import { getVehicleValue, vehicleSectionHeading } from "@/app/api/export/route";
 import { mergeVehicleIdentity, identityFromImmOnly } from "@/lib/vehicle/identity";
 import type { CpItem, ParcItem } from "@/types";
 
-const CP: CpItem = { imm: "11734-T-1", ww: "358227WW", vin: "VF1TESTVIN0000001", marque: "AUDI", model: "A4" };
+const CP: CpItem = { imm: "11734-T-1", ww: "358227WW", vin: "VF1TESTVIN0000001", marque: "AUDI", model: "A4", client: "Saint Gobain Maroc", statut: "Arret facturation" };
 const PARC: ParcItem = { imm: "44329-B-7", brand: "FORD", model: "Ranger", client: "GE VERNOVA", vehicle_state: "En parc" };
 
 describe("getVehicleValue — export mirrors the card's missing-source wording", () => {
   it("renders parc-only fields as 'non disponible' on a cp-only identity", () => {
     const id = mergeVehicleIdentity(null, [CP])!;
-    for (const key of ["client", "vehicle_state", "tenant"]) {
+    for (const key of ["vehicle_state", "tenant"]) {
       expect(getVehicleValue(id, key), key).toBe("non disponible");
     }
+  });
+
+  it("renders client from cp — no longer a parc-only field", () => {
+    // Was "non disponible" until ~/import 8ecafd5 put client into cp.
+    expect(getVehicleValue(mergeVehicleIdentity(null, [CP])!, "client")).toBe("Saint Gobain Maroc");
   });
 
   it("still renders the fields cp CAN supply", () => {
@@ -24,7 +29,7 @@ describe("getVehicleValue — export mirrors the card's missing-source wording",
   it("keeps '—' for a field simply blank in a parc record that exists", () => {
     const id = mergeVehicleIdentity(PARC, [])!;
     expect(getVehicleValue(id, "tenant")).toBe("—");   // blank, not missing-source
-    expect(getVehicleValue(id, "client")).toBe("GE VERNOVA");
+    expect(getVehicleValue(id, "client")).toBe("GE VERNOVA"); // parc fallback, no cp row
   });
 
   it("keeps '—' everywhere when neither collection knows the plate", () => {

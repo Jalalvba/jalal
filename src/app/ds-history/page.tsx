@@ -260,6 +260,20 @@ async function downloadDocx(
 
 // ─── Vehicle Card (parc + cp merged) ─────────────────────────────────────────
 
+// The three literals the CP export actually writes, byte-verified in Mongo
+// after import: "Livré" 5,673 · "Arret facturation" 4,546 · "Restitué" 11.
+// "Arret" has NO circumflex — matching the correctly-spelled "Arrêt" silently
+// styles nothing. Anything unrecognised falls through to neutral rather than
+// being hidden, so a new value shows up instead of disappearing.
+const STATUT_STYLE: Record<string, { variant: "success" | "warning" | "neutral"; hint: string }> = {
+  "Livré": { variant: "success", hint: "Contrat en cours — véhicule livré." },
+  "Arret facturation": {
+    variant: "warning",
+    hint: "Facturation arrêtée — ce véhicule ne fait plus partie du parc. C'est la raison attendue d'une fiche parc absente.",
+  },
+  "Restitué": { variant: "neutral", hint: "Véhicule restitué." },
+};
+
 function VehicleCard({ identity, contracts, hasRl }: { identity: VehicleIdentity; contracts: CpItem[]; hasRl?: boolean }) {
   const [open, setOpen] = useState(false);
   const cp = contracts[0] ?? null;
@@ -311,7 +325,16 @@ function VehicleCard({ identity, contracts, hasRl }: { identity: VehicleIdentity
         <div className="flex flex-wrap gap-1">
           <ZoneBadges inParking={zone.inParking} inAtelier={zone.inAtelier} inRdv={zone.inRdv} inDepot={zone.inDepot} />
         </div>
-        <span className="ml-auto text-xs italic text-muted-foreground">{identity.sourceLabel}</span>
+        {identity.statut && (
+          <Badge
+            variant={STATUT_STYLE[identity.statut]?.variant ?? "neutral"}
+            className="ml-auto shrink-0"
+            title={STATUT_STYLE[identity.statut]?.hint ?? "Statut du contrat (source : cp)."}
+          >
+            {identity.statut}
+          </Badge>
+        )}
+        <span className={`text-xs italic text-muted-foreground${identity.statut ? "" : " ml-auto"}`}>{identity.sourceLabel}</span>
       </div>
 
       {/* ── Priority row: always visible ── */}

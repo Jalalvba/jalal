@@ -21,6 +21,8 @@ const CP: CpItem = {
   gestionnaire: "Gestionnaire Test", ww: "358227WW", imm: "11734-T-1",
   vin: "VF1TESTVIN0000001", marque: "AUDI", model: "A4",
   version: "AUDI A4 Premium 2,0L Tdi 163 S-Tronic Automatique Diesel",
+  client: "Saint Gobain Maroc",
+  statut: "Arret facturation",
   type_location: "Véhicule neuf", mce_date: "2024-04-25T00:00:00.000Z",
   date_debut_contrat: "2024-04-29T00:00:00.000Z",
   date_fin_contrat: "2028-04-29T00:00:00.000Z", jockey: "Inclu",
@@ -45,12 +47,23 @@ describe("mergeVehicleIdentity — the empty-parc path", () => {
     expect(id.mce_date).toBe("2024-04-25T00:00:00.000Z");
   });
 
-  it("leaves the three parc-only fields undefined and NAMES them", () => {
+  it("leaves the parc-only fields undefined and NAMES them", () => {
     const id = mergeVehicleIdentity(null, [CP])!;
-    expect(id.client).toBeUndefined();
     expect(id.vehicle_state).toBeUndefined();
     expect(id.tenant).toBeUndefined();
     expect(id.unavailable).toEqual(PARC_ONLY_LABELS);
+  });
+
+  it("no longer treats client as parc-only — cp always carries it", () => {
+    // Was unavailable until ~/import 8ecafd5 added client to cp. All 10,230
+    // cp documents have one, 0 blanks.
+    expect(PARC_ONLY_LABELS).not.toContain("Client");
+    expect(mergeVehicleIdentity(null, [CP])!.client).toBe("Saint Gobain Maroc");
+  });
+
+  it("surfaces statut, which explains a legitimately absent parc row", () => {
+    // 11734-T-1's real value: billing stopped, so it correctly left the parc.
+    expect(mergeVehicleIdentity(null, [CP])!.statut).toBe("Arret facturation");
   });
 
   it("labels the card honestly instead of claiming parc data", () => {
@@ -71,7 +84,8 @@ describe("mergeVehicleIdentity — unchanged behaviour when parc exists", () => 
     const id = mergeVehicleIdentity(PARC, [CP])!;
     expect(id.source).toBe("parc+cp");
     expect(id.sourceLabel).toBe("parc + cp");
-    expect(id.client).toBe("GE VERNOVA INTERNATIONAL LLC - MOROCCO BRANCH");
+    // client is NOT asserted here — it now comes from cp (see the
+    // client-precedence block below), which is the one deliberate inversion.
     expect(id.vehicle_state).toBe("En parc");
     expect(id.tenant).toBe("GE VERNOVA");
     expect(id.unavailable).toEqual([]);
@@ -178,5 +192,42 @@ describe("identity supplies what the export and AI payload consume", () => {
 
   it("leaves state undefined rather than inventing one — prompt omits the line", () => {
     expect(mergeVehicleIdentity(null, [CP])!.vehicle_state).toBeUndefined();
+  });
+});
+
+
+// ── Client precedence is inverted, on purpose ─────────────────────────────
+describe("client — cp wins, parc is the fallback", () => {
+  it("prefers the cp client even when parc has one", () => {
+    // The ONLY field where cp outranks parc: cp is the live rental contract,
+    // so it names who is renting the vehicle now.
+    const id = mergeVehicleIdentity(PARC, [CP])!;
+    expect(id.client).toBe("Saint Gobain Maroc");
+    expect(id.client).not.toBe(PARC.client);
+  });
+
+  it("falls back to parc when cp has no client", () => {
+    const id = mergeVehicleIdentity(PARC, [{ ...CP, client: undefined }])!;
+    expect(id.client).toBe("GE VERNOVA INTERNATIONAL LLC - MOROCCO BRANCH");
+  });
+
+  it("falls back to parc when a cp client is blank, not just missing", () => {
+    const id = mergeVehicleIdentity(PARC, [{ ...CP, client: "   " }])!;
+    expect(id.client).toBe("GE VERNOVA INTERNATIONAL LLC - MOROCCO BRANCH");
+  });
+
+  it("keeps every OTHER field on parc-wins — the inversion is client only", () => {
+    const id = mergeVehicleIdentity(PARC, [CP])!;
+    expect(id.brand).toBe("FORD");        // not AUDI
+    expect(id.model).toBe("Ranger");      // not A4
+    expect(id.vin).toBe(PARC.vin);
+  });
+
+  it("carries statut through the parc-backed path too", () => {
+    expect(mergeVehicleIdentity(PARC, [CP])!.statut).toBe("Arret facturation");
+  });
+
+  it("has no statut when there is no contract", () => {
+    expect(mergeVehicleIdentity(PARC, [])!.statut).toBeUndefined();
   });
 });
