@@ -98,9 +98,18 @@ export async function POST(request: Request) {
       } else if (r.reason === "write-failed") {
         log("warn", "bdd-gemini", "Write refused", { imm, tab, error: r.error });
         failures.push(tab);
+      } else if (r.reason === "no-column") {
+        // A real misconfiguration, never an ordinary outcome: all three tabs
+        // queried here are known to have a `gemini` column, so this means the
+        // module cannot SEE it — which is precisely how this bug hid for a
+        // release. ATELIER's and PARKING's read ranges stopped short of it, so
+        // the column was invisible to buildColMap() and the write was skipped
+        // as if the vehicle simply were not there. Loud from now on.
+        log("error", "bdd-gemini", "Tab has no visible gemini column", { imm, tab });
+        failures.push(tab);
       }
-      // "no-row"/"no-column" are the ordinary outcome for a tab this vehicle
-      // is simply not in — not a failure, and not reported as one.
+      // "no-row" IS the ordinary outcome for a tab this vehicle is not in —
+      // not a failure, and not reported as one.
     }
 
     // Still a 200 when nothing matched: the vehicle is in none of the three

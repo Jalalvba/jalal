@@ -33,9 +33,16 @@ if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 
 const ATELIER_TAB = "ATELIER";
 const DATA_START_ROW = 2;
-const HEADER_RANGE_WIDTH = "S"; // 18 real columns, generous margin
+// Must cover the LAST real column, not just the ones this module maps: a
+// column outside this range is invisible to buildColMap(), and every lookup
+// for it silently returns undefined rather than failing. That is exactly how
+// the AI summary write went missing — the live header row is 21 columns
+// (…PARKING=S, DEPOT=T, gemini=U, read 2026-08-21) while this said "S", so
+// writeAtelierGeminiSummary() reported "no-column" and the route skipped it
+// as an ordinary non-match. Widen this whenever a column is added to the tab.
+const HEADER_RANGE_WIDTH = "X"; // 21 real columns through `gemini` (U), margin to X
 
-async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
+async function getHeaderRow(sheets: sheets_v4.Sheets, fresh = false): Promise<string[]> {
   return withCache(HEADERS_CACHE_KEY, 5 * 60_000, async () => {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId!,
@@ -44,7 +51,7 @@ async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
     });
     const row = res.data.values?.[0] ?? [];
     return row.map((h) => String(h ?? "").trim().toUpperCase());
-  });
+  }, { bypass: fresh });
 }
 
 function buildColMap(headers: string[]): Record<string, number> {
@@ -485,9 +492,20 @@ export async function writeAtelierGeminiSummary(
   if (!plate) return { ok: false, reason: "write-failed", error: "imm is required" };
 
   const sheets = getSheetsClient();
-  const headers = await getHeaderRow(sheets);
-  const colMap = buildColMap(headers);
-  const geminiCol = colMap["GEMINI"];
+  let colMap = buildColMap(await getHeaderRow(sheets));
+  let geminiCol = colMap["GEMINI"];
+
+  // A miss is far more often a STALE HEADER CACHE than a missing column, and
+  // believing it costs a real, already-paid-for analysis. Same reasoning (and
+  // the same bug) as updateSheetRow() in googleSheetsBdd.ts: re-read the header
+  // row live before concluding anything. This exact case was observed — the
+  // read range was widened to reach `gemini`, but the 5-minute header cache
+  // kept serving the old, short header list, so the write went on being
+  // skipped as "no column".
+  if (!geminiCol) {
+    colMap = buildColMap(await getHeaderRow(sheets, true));
+    geminiCol = colMap["GEMINI"];
+  }
   if (!geminiCol) return { ok: false, reason: "no-column" };
 
   // Read through the same accessor the UI uses, so a row this app cannot see

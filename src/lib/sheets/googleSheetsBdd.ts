@@ -36,7 +36,7 @@ const editableFieldSet = new Set<string>(BDD_EDITABLE_FIELDS);
 const HEADER_SCAN_WIDTH = "CZ";
 
 /** Fetches the real row-1 header list, cached 5min — headers essentially never change. */
-async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
+async function getHeaderRow(sheets: sheets_v4.Sheets, fresh = false): Promise<string[]> {
   return withCache(HEADERS_CACHE_KEY, 5 * 60_000, async () => {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId!,
@@ -44,7 +44,7 @@ async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
     });
     const row = res.data.values?.[0] ?? [];
     return row.map((h) => String(h ?? "").trim());
-  });
+  }, { bypass: fresh });
 }
 
 /**
@@ -349,8 +349,11 @@ export async function updateSheetRow(
   // believing it; only a field still missing from a guaranteed-fresh header row
   // is a real structure change.
   if (missingFromSheet.length > 0) {
+    // Bypass the cache outright rather than invalidating and re-reading:
+    // invalidateCache() is stale-while-revalidate, so the re-read could be
+    // served the very value we are trying to get past.
     invalidateCache(HEADERS_CACHE_KEY);
-    const fresh = await getHeaderRow(sheets);
+    const fresh = await getHeaderRow(sheets, true);
     missingFromSheet = requestedFields.filter((f) => !fresh.includes(f));
     if (missingFromSheet.length === 0) headers = fresh;
   }

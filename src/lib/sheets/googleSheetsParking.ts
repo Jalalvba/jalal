@@ -26,19 +26,25 @@ const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
 if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 
 const PARKING_TAB = "PARKING";
+
+// Must cover the LAST real column — see the note on ATELIER's
+// HEADER_RANGE_WIDTH. The live header row is 17 columns (…DEPOT=P, gemini=Q,
+// read 2026-08-21); the ranges below previously stopped at O, which made the
+// `gemini` column invisible to this module entirely.
+const RANGE_WIDTH = "T"; // 17 real columns through `gemini` (Q), margin to T
 const DATA_START_ROW = 2;
 
 /** Live header row → column-name lookup, never hardcoded indices. Cached 5min — headers essentially never change. */
-async function getHeaderRow(sheets: sheets_v4.Sheets): Promise<string[]> {
+async function getHeaderRow(sheets: sheets_v4.Sheets, fresh = false): Promise<string[]> {
   return withCache(HEADERS_CACHE_KEY, 5 * 60_000, async () => {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId!,
-      range: `'${PARKING_TAB}'!A1:O1`,
+      range: `'${PARKING_TAB}'!A1:${RANGE_WIDTH}1`,
       valueRenderOption: "UNFORMATTED_VALUE",
     });
     const row = res.data.values?.[0] ?? [];
     return row.map((h) => String(h ?? "").trim().toUpperCase());
-  });
+  }, { bypass: fresh });
 }
 
 function buildColMap(headers: string[]): Record<string, number> {
@@ -96,7 +102,7 @@ async function fetchParkingRows(): Promise<ParkingRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
-    range: `'${PARKING_TAB}'!A1:O`,
+    range: `'${PARKING_TAB}'!A1:${RANGE_WIDTH}`,
     valueRenderOption: "UNFORMATTED_VALUE",
   });
 
@@ -314,7 +320,7 @@ export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
 
   const dataRes = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
-    range: `'${PARKING_TAB}'!A2:O`,
+    range: `'${PARKING_TAB}'!A2:${RANGE_WIDTH}`,
     valueRenderOption: "UNFORMATTED_VALUE",
   });
   const dataRows = dataRes.data.values ?? [];
@@ -515,9 +521,20 @@ export async function writeParkingGeminiSummary(
   if (!plate) return { ok: false, reason: "write-failed", error: "imm is required" };
 
   const sheets = getSheetsClient();
-  const headers = await getHeaderRow(sheets);
-  const colMap = buildColMap(headers);
-  const geminiCol = colMap["GEMINI"];
+  let colMap = buildColMap(await getHeaderRow(sheets));
+  let geminiCol = colMap["GEMINI"];
+
+  // A miss is far more often a STALE HEADER CACHE than a missing column, and
+  // believing it costs a real, already-paid-for analysis. Same reasoning (and
+  // the same bug) as updateSheetRow() in googleSheetsBdd.ts: re-read the header
+  // row live before concluding anything. This exact case was observed — the
+  // read range was widened to reach `gemini`, but the 5-minute header cache
+  // kept serving the old, short header list, so the write went on being
+  // skipped as "no column".
+  if (!geminiCol) {
+    colMap = buildColMap(await getHeaderRow(sheets, true));
+    geminiCol = colMap["GEMINI"];
+  }
   if (!geminiCol) return { ok: false, reason: "no-column" };
 
   const rows = await getParkingRows();
