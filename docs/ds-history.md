@@ -100,6 +100,27 @@ still produce a document (the DS history is the point, not the identity block),
 and it reports **nothing** as unavailable — no record at all is not the same as
 a source that exists but cannot answer, so every field renders `—` as before.
 
+**Upstream health check.** `pnpm check-parc-coverage`
+([`scripts/check-parc-coverage.ts`](../scripts/check-parc-coverage.ts)) reports
+`cp` contracts with no `parc` row. It exists because this gap was found by
+noticing **one** car: `parc` is the vehicles AVIS owns and `cp` is the contracts
+renting them out, so you cannot have a contract on a vehicle you do not own —
+yet 3,740 of 10,230 contracts have no `parc` row.
+
+The gap is **not** vehicles ageing out of the fleet (`parc` keeps 1,009 whose
+contracts have all ended, plus 1,392 with no contract), and **not** the import
+(`~/import/parc.py` drops only rows with neither plate nor WW, then fully
+replaces the collection). It is the source export being scoped: whole plate
+series are absent — A-7 100%, E-6 96%, A-72 95% — while T-1 is 99% present.
+
+The script fails (exit 1) only on a **confirmed** anomaly: an active contract on
+a vehicle with a real plate *and* DS history, which demonstrably exists and is
+being serviced. Vehicles still on a temporary WW registration with no DS history
+are listed separately and do not fail — those are plausibly just-delivered units.
+Currently 7 confirmed, 22 awaiting registration. Deliberately **not** in CI: it
+measures live data, not code, and a build should not fail because a spreadsheet
+changed.
+
 > **Field-name trap.** The raw `cp` documents spell these `num_chassis`,
 > `modele`, `libelle_version_long`, `date_mce`; `/api/cp` maps them to the
 > `CpItem` names (`src/app/api/cp/route.ts:37-42`). Measuring the `CpItem`

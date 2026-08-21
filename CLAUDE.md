@@ -33,6 +33,7 @@ pnpm start    # run a production build
 pnpm lint     # eslint
 pnpm test     # vitest unit/integration suite (fast, no network)
 pnpm test:e2e # playwright E2E suite (needs real .env.local + a dev server) — see TESTING.md
+pnpm check-parc-coverage  # data-integrity report: cp contracts with no parc row (read-only)
 ```
 
 Copy `.env.example` to `.env.local` and fill in real values:
