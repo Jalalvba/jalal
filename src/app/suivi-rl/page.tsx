@@ -22,8 +22,7 @@ import { ZONE_COLORS } from "@/config/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";
 import { RecordCard } from "@/components/fleet/RecordCard";
-import { AnalyseAndSaveButton } from "@/components/fleet/AnalyseAndSaveButton";
-import { useQueryClient } from "@tanstack/react-query";
+import { GeminiSummaryBlock } from "@/components/fleet/GeminiSummaryBlock";
 import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +41,6 @@ import {
   useDeleteBddRow,
   useRefreshBddRows,
   useReformulateComment,
-  ROWS_KEY,
 } from "@/hooks/useBddRows";
 import { AddBddPlateDialog } from "@/components/fleet/AddBddPlateDialog";
 import { useVehicleZone } from "@/hooks/useVehicleZone";
@@ -243,7 +241,6 @@ const READONLY_HEADERS = BDD_HEADERS.filter(
 // ─── Card ───────────────────────────────────────────────────────────────────
 
 function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: string) => void }) {
-  const queryClient = useQueryClient();
   const updateMutation = useUpdateBddRow();
   const applyOptimisticUpdate = useOptimisticBddUpdate();
   const zone = useVehicleZone(row.IMM);
@@ -401,32 +398,10 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
         </div>
       </div>
 
-      {/* AI summary — read-only on purpose. It is written by the analysis
-          (DS History, or the button here), never hand-edited, so it gets a
-          plain block plus the action that refreshes it rather than an inline
-          editor. Shown even when empty, so the button has a home and the
-          absence of a summary is visible rather than the row just missing. */}
-      <div className="mt-2 rounded-xl border border-border bg-muted/40 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Résumé IA
-          </span>
-          <AnalyseAndSaveButton
-            imm={String(row.IMM ?? "")}
-            className="ml-auto"
-            // The button already wrote to the sheet; this only pulls the
-            // freshly-written value back so the card stops showing the old one.
-            onSaved={() => void queryClient.invalidateQueries({ queryKey: ROWS_KEY })}
-          />
-        </div>
-        <p className="mt-1 whitespace-pre-wrap text-sm text-card-foreground">
-          {String(row.gemini ?? "").trim() || (
-            <span className="italic text-muted-foreground">
-              Aucun résumé — lancez l&apos;analyse pour en générer un.
-            </span>
-          )}
-        </p>
-      </div>
+      {/* Shared with Parking/Atelier/Depot. The value is passed in because
+          this page already has the BDD row — the component only falls back to
+          looking it up when a caller does not. */}
+      <GeminiSummaryBlock imm={String(row.IMM ?? "")} summary={String(row.gemini ?? "")} className="mt-2" />
 
       <ReadonlyFieldList fields={READONLY_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))} />
       <ReadonlyFieldList

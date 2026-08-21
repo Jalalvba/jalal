@@ -10,7 +10,7 @@ import { PlateSearchInput } from "@/components/fleet/PlateSearchInput";
 import { PlateFilterInput } from "@/components/fleet/PlateFilterInput";
 import { AddResultsList } from "@/components/fleet/AddResultsList";
 import { RecordCard } from "@/components/fleet/RecordCard";
-import { AnalyseAndSaveButton } from "@/components/fleet/AnalyseAndSaveButton";
+import { GeminiSummaryBlock } from "@/components/fleet/GeminiSummaryBlock";
 import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
@@ -78,7 +78,6 @@ function AtelierCard({
       imm={row.imm}
       subtitle={[row.marque, row.model].filter(Boolean).join(" ") + (row.client ? ` | ${row.client}` : "")}
       timestamp={row.timestamp}
-      headerRight={<AnalyseAndSaveButton imm={row.imm} />}
       onDelete={() => onDelete(row.rowIndex, row.imm)}
     >
       <div className="grid grid-cols-1 gap-2.5 text-micro sm:grid-cols-2">
@@ -144,6 +143,9 @@ function AtelierCard({
       </div>
 
       <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
+      {/* Summary + its button. Looked up from BDD by plate — this tab has
+          no gemini column of its own. */}
+      <GeminiSummaryBlock imm={row.imm} className="mt-2" />
     </RecordCard>
   );
 }

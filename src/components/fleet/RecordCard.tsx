@@ -58,7 +58,7 @@ export function RecordCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className={cn("space-y-3", className)}>
+    <Card data-testid="record-card" className={cn("space-y-3", className)}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
