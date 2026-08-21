@@ -298,8 +298,17 @@ export function ungroundedSuppliers(analysis: DsAnalysis, input: DsAnalysisInput
       .join(" | ")
   );
 
-  const text = analysis.findings.flatMap((f) => [f.title, f.detail]).join(" \n ");
-  const candidates = text.match(CAPS_RUN_RE) ?? [];
+  // Scanned FIELD BY FIELD, never on a joined string. Joining title and detail
+  // let the caps-run regex straddle the boundary: a title ending
+  // "... : REGENERATION FAP" followed by a detail opening "L'opération ..."
+  // produced the candidate "REGENERATION FAP L'", which is in no source data
+  // because it is not a name at all. The route then dropped every finding
+  // whose text contained it — i.e. the sound finding this fabricated
+  // "supplier" was spliced out of. Observed live on 23625-T-6.
+  const candidates = analysis.findings.flatMap((f) => [
+    ...(f.title.match(CAPS_RUN_RE) ?? []),
+    ...(f.detail.match(CAPS_RUN_RE) ?? []),
+  ]);
 
   return [...new Set(candidates.map(norm).filter((c) => !haystack.includes(c)))];
 }

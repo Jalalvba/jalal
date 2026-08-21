@@ -9,6 +9,7 @@
     "lint": "eslint",
     "verify-field-names": "node scripts/verify-field-names.cjs",
     "check-parc-coverage": "npx tsx scripts/check-parc-coverage.ts",
+    "audit-ds-analysis": "npx tsx scripts/audit-ds-analysis.ts",
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",

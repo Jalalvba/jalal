@@ -303,6 +303,22 @@ describe("ungroundedSuppliers — an invented garage reads as authoritative", ()
     expect(ungroundedSuppliers(a, withSuppliers())).toEqual([]);
   });
 
+  it("does not glue a title's last word to its detail's first (the 23625-T-6 bug)", () => {
+    // Title ending in caps + detail starting with "L'..." used to produce the
+    // candidate "REGENERATION FAP L'" — a name that exists nowhere because it
+    // is not a name. The route then deleted the sound finding it was spliced
+    // out of. Fields are scanned separately, so this must come back empty.
+    const a = analysis({
+      findings: [
+        { level: "warn", title: "Récurrence : REGENERATION FAP", detail: "L'opération revient 2 fois." },
+      ],
+    });
+    const src = input({
+      entries: [{ parts: ["REGENERATION FAP ONLINE"], origin: "interne" }],
+    });
+    expect(ungroundedSuppliers(a, src)).toEqual([]);
+  });
+
   it("returns nothing when the vehicle has no external work at all", () => {
     const a = analysis({ findings: [{ level: "info", title: "RIEN A SIGNALER", detail: "" }] });
     const noExt = input({ entries: [{ parts: [], origin: "interne" }] });

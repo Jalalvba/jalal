@@ -59,13 +59,27 @@ const RATE_WINDOW_MS = 60 * 1000;
 // the analysis budget would let repeated challenges crowd out real analyses.
 // 5/min is generous for a human typing questions.
 const FOLLOWUP_RATE_LIMIT = 5;
-const DEFAULT_MODEL = "gemini-flash-lite-latest";
-const REQUEST_TIMEOUT_MS = 30_000;
-// Raised from 900 after live testing: a 50-entry vehicle with three interval
-// checks, the belt/pump check and six findings hit exactly 896/900 three times
-// running, truncating the JSON mid-object. Highest observed legitimate use is
-// ~900, so this leaves real headroom rather than shaving the limit.
-const MAX_OUTPUT_TOKENS = 1_800;
+// Deliberately NOT the flash-lite alias the reformulate route uses. A full
+// audit ran this exact prompt over all 101 Suivi RL / BDD plates on both, and
+// graded every answer against the source data in code
+// (scripts/audit-ds-analysis.ts). Flash-lite: 11% of analyses cited a date
+// absent from the data, 14 supplier counts were wrong, one vehicle got an
+// entirely invented "grade d'huile" finding. gemini-flash-latest (served by
+// gemini-3.7-flash): zero on every one of those, over the same 98 vehicles.
+// This output is written into the BDD/ATELIER/PARKING `gemini` column and read
+// as fact later, so accuracy outranks the ~$0.008 (≈0.08 MAD) a call costs —
+// unlike the reformulate route, whose suggestion a human reviews before it is
+// saved.
+const DEFAULT_MODEL = "gemini-flash-latest";
+// Median call 4.3s, slowest of 98 was 14.8s. 45s is headroom, not a guess.
+const REQUEST_TIMEOUT_MS = 45_000;
+// 1_800 was right for flash-lite and is NOT enough here: gemini-3.7-flash is a
+// thinking model and its thoughtsTokenCount is billed — and capped — as output.
+// At 1_800, 31 of 101 calls came back HTTP 200 with finishReason MAX_TOKENS,
+// i.e. a truncated JSON body that fails the shape check as an opaque
+// "bad-response". At 4_000 that fell to 1 of 101 (43269-B-7, a 100-entry
+// history); 5_000 is that measurement plus margin. Real answers use ~1_500.
+const MAX_OUTPUT_TOKENS = 5_000;
 const TEMPERATURE = 0.2;
 
 // Hard ceiling on the client-supplied payload, independent of MAX_ENTRIES

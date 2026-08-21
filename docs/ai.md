@@ -109,9 +109,14 @@ not want invention.
 
 ---
 
-## 2. Model choice: `gemini-flash-lite-latest`
+## 2. Model choice: two models, not one
 
-The route pins one constant:
+| Route | Model | Why |
+|---|---|---|
+| `reformulate-comment` | `gemini-flash-lite-latest` | Cheapest active tier; every suggestion is reviewed by a human before it reaches the Sheet. |
+| `ds-history/analyze` | **`gemini-flash-latest`** (served by `gemini-3.7-flash`) | Its output is written into the `gemini` column and read later as fact — nobody re-checks it. §2.4 has the measurement that forced the upgrade. |
+
+The reformulate route pins one constant:
 
 ```ts
 const DEFAULT_MODEL = "gemini-flash-lite-latest";
@@ -129,6 +134,41 @@ Recorded verbatim at
 - A dated snapshot was tried and **failed**: `"gemini-2.5-flash-lite"` returned
   `404 — no longer available` for this key. Google had already retired it once.
 - The API key belongs to the **"jalal" project in Google AI Studio**.
+
+### 2.1b Why the analysis route does NOT share it
+
+Measured, not assumed. `scripts/audit-ds-analysis.ts` ran the real analysis
+pipeline over all 101 Suivi RL / BDD plates on each model and graded every
+answer against the source data in code — same prompt, same computed checks,
+same guards, 98 vehicles analysable on both:
+
+| Defect | `gemini-flash-lite-latest` | `gemini-flash-latest` |
+|---|---|---|
+| Cited a date absent from the source | 11 % of vehicles | **0** |
+| Supplier occurrence count wrong | 14 claims | **0** |
+| Claimed *N* occurrences, cited fewer than *N* dates | 6 claims | **0** |
+| Produced a finding for a check that was never computed | 1 vehicle | **0** |
+| Missed a supplier with ≥ 3 interventions | 2 | **0** |
+
+Cost of the upgrade: ~$0.008 (≈0.08 MAD) per analysis against free-tier, i.e.
+$0.81 to analyse the whole Suivi RL list once. The trade is accuracy for a
+figure that rounds to nothing at this volume.
+
+**The upgrade is not just a model string.** `gemini-3.7-flash` is a thinking
+model and its `thoughtsTokenCount` is billed — and capped — as output, so the
+route's old `maxTokens: 1_800` truncated **31 of 101** calls into an opaque
+`bad-response`. It now sets 5_000; see the constant's comment for the
+measurement behind that number.
+
+Re-run the audit after any change to the prompt or the model:
+
+```bash
+pnpm audit-ds-analysis                              # current model
+pnpm audit-ds-analysis --model=gemini-flash-lite-latest --limit=20
+```
+
+It writes nothing to Sheets or Mongo beyond the ordinary `gemini_usage` cost
+row, and every call it makes is real and billed.
 
 ### 2.2 ⚠️ The accepted risk
 
@@ -378,9 +418,10 @@ consumer of `callAI`. It is the first to use the `validate` hook.
 |---|---|---|
 | Rate limit | 20 / min | **10 / min** |
 | Input size | ~200 tokens | **~4,800 tokens** (a whole vehicle history) |
-| `maxTokens` | 150 | 900 |
+| Model | `gemini-flash-lite-latest` | **`gemini-flash-latest`** (see §2.1b) |
+| `maxTokens` | 150 | **5,000** (thinking tokens count) |
 | `temperature` | 0.3 | **0.2** |
-| Timeout | 20 s | **30 s** |
+| Timeout | 20 s | **45 s** |
 | `validate` | not used | **yes** — JSON shape check |
 | Grounding guards | none | **3** — shape, dates, supplier names |
 | Output | plain text | structured JSON, rendered as fields |
