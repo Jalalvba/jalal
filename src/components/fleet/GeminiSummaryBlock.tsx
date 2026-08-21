@@ -57,6 +57,10 @@ export function GeminiSummaryBlock({ imm, summary, className }: Props) {
         <AnalyseAndSaveButton
           imm={imm}
           className="ml-auto"
+          // A plate that already has a summary costs a full Gemini call to
+          // re-answer, so re-running is put behind a confirm — see the note at
+          // the top of AnalyseAndSaveButton.
+          regenerate={text.length > 0}
           // The button already wrote to the sheet; this pulls the fresh value
           // back so the block stops showing the previous one.
           onSaved={() => void queryClient.invalidateQueries({ queryKey: ROWS_KEY })}

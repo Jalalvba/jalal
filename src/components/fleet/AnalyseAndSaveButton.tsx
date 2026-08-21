@@ -9,19 +9,37 @@
 // this is the compact form for a list row.
 //
 // Each click is a REAL, billed Gemini call, so it is a deliberate per-row
-// action with a confirm-free but clearly-labelled button, never something that
-// fires on render or on hover.
+// action with a clearly-labelled button, never something that fires on render
+// or on hover.
+//
+// `regenerate` exists because this button now sits on every card of four
+// pages, on an account still inside the free tier: a plate that already has a
+// summary costs a full analysis to re-answer, usually with the same result.
+// So the second and later runs go through a confirm, while the first — the one
+// that produces information that does not exist yet — stays one click.
 
 import { useState } from "react";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { classifyRepairOrigin } from "@/lib/ai/prompts/dsAnalysis";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import { buildDsAnalysisPayload } from "@/lib/ai/dsAnalysis/payload";
 import type { DsHistoryItem } from "@/types";
 
 type Props = {
   imm: string;
   className?: string;
+  /** True when a summary already exists — turns the click into a confirm. */
+  regenerate?: boolean;
   /**
    * Called with the summary AFTER it is written to the sheet. Exists so a page
    * already showing the gemini cell can refresh it — the write happened
@@ -31,7 +49,7 @@ type Props = {
   onSaved?: (summary: string) => void;
 };
 
-export function AnalyseAndSaveButton({ imm, className, onSaved }: Props) {
+export function AnalyseAndSaveButton({ imm, className, regenerate, onSaved }: Props) {
   const [busy, setBusy] = useState(false);
 
   async function run() {
@@ -49,26 +67,13 @@ export function AnalyseAndSaveButton({ imm, className, onSaved }: Props) {
         return;
       }
 
-      // 2. The analysis. Payload shape mirrors DsAnalysisCard's buildPayload()
-      // — same route, same validation, same cost accounting.
+      // 2. The analysis. The payload is built by the shared builder, so this
+      // page asks the model about exactly what DS History asks it about —
+      // minus the contract/vehicle/replacement context these lists do not have.
       const aRes = await fetch("/api/ds-history/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imm,
-          contractEnd: null,
-          vehicle: {},
-          replacements: [],
-          entries: items.map((it) => ({
-            date: it.date_ds,
-            km: it.km,
-            description: it.description == null ? undefined : String(it.description),
-            ...classifyRepairOrigin(it.fournisseur, it.techniciens),
-            parts: (it.lines ?? [])
-              .map((l) => String(l.designation_consommation ?? ""))
-              .filter((p) => p.trim()),
-          })),
-        }),
+        body: JSON.stringify(buildDsAnalysisPayload({ imm, items })),
       });
       const aJson = (await aRes.json()) as
         | { ok: true; analysis: { summary: string } }
@@ -112,17 +117,40 @@ export function AnalyseAndSaveButton({ imm, className, onSaved }: Props) {
     }
   }
 
-  return (
+  const button = (
     <Button
       variant="secondary"
       size="sm"
-      onClick={run}
+      onClick={regenerate ? undefined : run}
       disabled={busy}
       className={className}
-      title="Analyse IA de l'historique DS, puis enregistrement du résumé dans la colonne gemini de BDD"
+      title={
+        regenerate
+          ? "Relancer l'analyse IA et remplacer le résumé existant (consomme un appel Gemini)"
+          : "Analyse IA de l'historique DS, puis enregistrement du résumé dans la colonne gemini de BDD"
+      }
     >
       <Sparkles className="h-3.5 w-3.5" />
-      {busy ? "Analyse…" : "Résumé IA"}
+      {busy ? "Analyse…" : regenerate ? "Regénérer" : "Résumé IA"}
     </Button>
+  );
+
+  if (!regenerate) return button;
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>{button}</AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogTitle>Relancer l&apos;analyse de {imm} ?</AlertDialogTitle>
+        <AlertDialogDescription>
+          Un résumé existe déjà. Le relancer consomme un appel Gemini et écrase le
+          résumé enregistré dans BDD.
+        </AlertDialogDescription>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Annuler</AlertDialogCancel>
+          <AlertDialogAction onClick={() => void run()}>Regénérer</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

@@ -18,6 +18,7 @@ import type { CostInfo, DsHistoryItem, CpItem } from "@/types";
 import type { RlRow } from "@/lib/sheets/googleSheetsRl";
 import { classifyRepairOrigin } from "@/lib/ai/prompts/dsAnalysis";
 import type { DsAnalysis, ContractLevel, FindingLevel } from "@/lib/ai/prompts/dsAnalysis";
+import { buildDsAnalysisPayload } from "@/lib/ai/dsAnalysis/payload";
 import type { IntervalCheck, BeltPumpCheck } from "@/lib/ai/prompts/maintenanceIntervals";
 import type { OilGradeCheck } from "@/lib/ai/prompts/oilGrade";
 import type { VehicleIdentity } from "@/lib/vehicle/identity";
@@ -126,22 +127,16 @@ export function DsAnalysisCard({
     { interne: 0, externe: 0, inconnu: 0 }
   );
 
+  // Shared with AnalyseAndSaveButton — see src/lib/ai/dsAnalysis/payload.ts for
+  // why the entries mapping must not be written out per call site.
   function buildPayload() {
-    return {
+    return buildDsAnalysisPayload({
       imm,
+      items,
       contractEnd,
       vehicle: { brand: vehicle?.brand, model: vehicle?.model, state: vehicle?.vehicle_state },
       replacements: rlRows.map((r) => ({ date: r["Date"], motif: r["Motif"] })),
-      entries: items.map((it) => ({
-        date: it.date_ds,
-        km: it.km,
-        description: it.description == null ? undefined : String(it.description),
-        ...classifyRepairOrigin(it.fournisseur, it.techniciens),
-        parts: (it.lines ?? [])
-          .map((l) => String(l.designation_consommation ?? ""))
-          .filter((p) => p.trim()),
-      })),
-    };
+    });
   }
 
   async function askFollowUp() {
