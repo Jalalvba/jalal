@@ -11,8 +11,20 @@ import type { CostInfo } from "@/types";
 
 // 3 decimals: a single Flash-Lite call lands around 0.001–0.05 MAD, so 2 would
 // round most calls to "0.00 MAD".
-function formatMad(mad: number): string {
-  return mad.toFixed(3);
+//
+// Every numeric read here goes through num(): this badge renders a payload
+// that crossed the network, and its type is a promise about the CURRENT
+// server, not the one that actually answered. A browser holding client JS from
+// one deploy can be served by a function from another, and a field added later
+// is then simply absent. `undefined.toFixed()` throws during render, and this
+// badge sits inside a card — before CardErrorBoundary that took the whole page
+// down with it. A missing figure shows "?" instead.
+function num(v: unknown, digits: number): string {
+  return typeof v === "number" && Number.isFinite(v) ? v.toFixed(digits) : "?";
+}
+
+function formatMad(mad: unknown): string {
+  return num(mad, 3);
 }
 
 export function CostBadge({ costInfo, className }: { costInfo: CostInfo; className?: string }) {
@@ -29,8 +41,8 @@ export function CostBadge({ costInfo, className }: { costInfo: CostInfo; classNa
         `Tarifé comme : ${costInfo.pricedAs}\n` +
         (costInfo.aliasDrift ? `⚠ L'alias a changé de modèle — coût non fiable.\n` : "") +
         `Tokens : ${costInfo.inputTokens} entrée / ${costInfo.outputTokens} sortie\n` +
-        `Coût : ${costInfo.costUsd.toFixed(6)} USD` +
-        (isFree ? "" : `\nCrédit restant : ${costInfo.remainingCreditUsd.toFixed(2)} USD`)
+        `Coût : ${num(costInfo.costUsd, 6)} USD` +
+        (isFree ? "" : `\nCrédit restant : ${num(costInfo.remainingCreditUsd, 2)} USD`)
       }
     >
       <span className="font-mono">est. {formatMad(costInfo.costMad)} MAD</span>

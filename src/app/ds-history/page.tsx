@@ -42,6 +42,7 @@ import { ZONE_COLORS } from "@/config/zones";
 import { buildPlateVariants } from "@/lib/utils/plateVariants";
 import type { RlRow, RlReunionRow } from "@/lib/sheets/googleSheetsRl";
 import { DsAnalysisCard } from "@/components/fleet/DsAnalysisCard";
+import { CardErrorBoundary } from "@/components/fleet/CardErrorBoundary";
 import { mergeVehicleIdentity, identityFromImmOnly, type VehicleIdentity } from "@/lib/vehicle/identity";
 import type { ImportRow } from "@/lib/sheets/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/utils/format";
@@ -1149,22 +1150,24 @@ export default function Home() {
         {/* Renders whenever EITHER source has something. Previously required a
             parc record, which hid the card on 46.6% of plates — 3,202 of them
             despite having full cp identity data already loaded. */}
-        {identity && !loading && <div className="mt-4"><VehicleCard identity={identity} contracts={contracts} hasRl={rlRows.length > 0} /></div>}
+        {identity && !loading && <div className="mt-4"><CardErrorBoundary label="Véhicule"><VehicleCard identity={identity} contracts={contracts} hasRl={rlRows.length > 0} /></CardErrorBoundary></div>}
 
         {/* AI health analysis — costs nothing until the user clicks. Placed
             above the DS entries it analyses, below the vehicle identity. */}
         {data && data.items.length > 0 && !loading && (
           <div className="mt-3">
-            <DsAnalysisCard
-              imm={data.imm || imm}
-              items={data.items}
-              vehicle={identity}
-              contracts={contracts}
-              rlRows={rlRows}
-            />
+            <CardErrorBoundary label="Analyse IA">
+              <DsAnalysisCard
+                imm={data.imm || imm}
+                items={data.items}
+                vehicle={identity}
+                contracts={contracts}
+                rlRows={rlRows}
+              />
+            </CardErrorBoundary>
           </div>
         )}
-        {(bddRows.length > 0 || rlRows.length > 0 || importRows.length > 0) && !loading && <div className="mt-3"><SheetCard bddRows={bddRows} rlRows={rlRows} rlReunionRows={rlReunionRows} importRows={importRows} /></div>}
+        {(bddRows.length > 0 || rlRows.length > 0 || importRows.length > 0) && !loading && <div className="mt-3"><CardErrorBoundary label="Immobilisation BDD"><SheetCard bddRows={bddRows} rlRows={rlRows} rlReunionRows={rlReunionRows} importRows={importRows} /></CardErrorBoundary></div>}
 
         {/* Results */}
         <div className="mt-4 space-y-3">
@@ -1183,7 +1186,8 @@ export default function Home() {
             const allCardFields = orderedCardFields;
 
             return (
-            <div key={nds} className="rounded-2xl border border-border bg-card shadow-sm dark:border-border dark:bg-card">
+            <CardErrorBoundary key={nds} label={`Dossier ${nds ?? "?"}`}>
+            <div className="rounded-2xl border border-border bg-card shadow-sm dark:border-border dark:bg-card">
 
               {/* Top bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3 dark:border-border">
@@ -1235,6 +1239,7 @@ export default function Home() {
               ) : null}
 
             </div>
+            </CardErrorBoundary>
             );
           })}
         </div>

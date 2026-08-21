@@ -197,6 +197,22 @@ export function DsAnalysisCard({
 
   const contractStyle = result ? CONTRACT_STYLE[result.analysis.contractFlag.level] : null;
 
+  // Every check below is optional at RUNTIME even though the type says
+  // otherwise: the browser can hold newer client JS than the serverless
+  // function answering it (or older), and a field added in a later deploy is
+  // then simply absent. Reading straight through such a gap threw a
+  // TypeError, and with no error boundary that used to blank the entire page —
+  // 21 cards down to 0. CardErrorBoundary now contains the blast radius; this
+  // narrowing means a shape gap degrades to "check not shown" instead of
+  // reaching the boundary at all.
+  const intervalChecks = result?.intervalChecks ?? [];
+  const beltPumpCheck = result?.beltPumpCheck;
+  const oilGradeCheck = result?.oilGradeCheck;
+  const oilRegression =
+    oilGradeCheck?.status === "regression" && Array.isArray(oilGradeCheck.uniqueGrades)
+      ? oilGradeCheck
+      : null;
+
   return (
     <div className="rounded-2xl border border-border bg-card shadow-sm">
       {/* Header */}
@@ -257,13 +273,13 @@ export function DsAnalysisCard({
 
             {/* Interval compliance — computed in code, shown as facts rather
                 than as model prose, so the numbers are auditable. */}
-            {result.intervalChecks.length > 0 && (
+            {intervalChecks.length > 0 && (
               <div className="rounded-lg border border-border">
                 <div className="border-b border-border px-3 py-1.5 text-micro font-medium uppercase tracking-wide text-muted-foreground">
                   Intervalles d&apos;entretien
                 </div>
                 <ul className="divide-y divide-border">
-                  {result.intervalChecks.map((c) => (
+                  {intervalChecks.map((c) => (
                     <li key={c.service} className="flex items-start gap-2 px-3 py-2">
                       <Badge variant={INTERVAL_STYLE[c.status].variant} className="shrink-0">
                         {INTERVAL_STYLE[c.status].label}
@@ -284,36 +300,36 @@ export function DsAnalysisCard({
                     </li>
                   ))}
                 </ul>
-                {result.beltPumpCheck.status !== "not_applicable" && (
+                {beltPumpCheck && beltPumpCheck.status !== "not_applicable" && BELT_PUMP_STYLE[beltPumpCheck.status] && (
                   <div className="flex items-start gap-2 border-t border-border px-3 py-2">
                     <Badge
-                      variant={BELT_PUMP_STYLE[result.beltPumpCheck.status].variant}
+                      variant={BELT_PUMP_STYLE[beltPumpCheck.status].variant}
                       className="shrink-0"
                     >
-                      {BELT_PUMP_STYLE[result.beltPumpCheck.status].label}
+                      {BELT_PUMP_STYLE[beltPumpCheck.status].label}
                     </Badge>
                     <div className="min-w-0 text-sm">
                       <span className="font-medium text-card-foreground">
-                        {result.beltPumpCheck.label}
+                        {beltPumpCheck.label}
                       </span>
                       <div className="text-xs text-muted-foreground">
-                        {result.beltPumpCheck.status === "never" &&
-                          `Jamais enregistré — ${result.beltPumpCheck.currentKm?.toLocaleString("fr-FR")} km (seuil ${result.beltPumpCheck.thresholdKm.toLocaleString("fr-FR")} km)`}
-                        {result.beltPumpCheck.status === "ok" &&
-                          `Effectué le ${result.beltPumpCheck.lastServiceDate?.slice(0, 10)}${result.beltPumpCheck.lastServiceKm ? ` à ${result.beltPumpCheck.lastServiceKm.toLocaleString("fr-FR")} km` : ""}`}
-                        {result.beltPumpCheck.status === "skipped" && result.beltPumpCheck.note}
+                        {beltPumpCheck.status === "never" &&
+                          `Jamais enregistré — ${beltPumpCheck.currentKm?.toLocaleString("fr-FR")} km (seuil ${beltPumpCheck.thresholdKm.toLocaleString("fr-FR")} km)`}
+                        {beltPumpCheck.status === "ok" &&
+                          `Effectué le ${beltPumpCheck.lastServiceDate?.slice(0, 10)}${beltPumpCheck.lastServiceKm ? ` à ${beltPumpCheck.lastServiceKm.toLocaleString("fr-FR")} km` : ""}`}
+                        {beltPumpCheck.status === "skipped" && beltPumpCheck.note}
                       </div>
                     </div>
                   </div>
                 )}
-                {result.oilGradeCheck.status === "regression" && (
+                {oilRegression && (
                   <div className="flex items-start gap-2 border-t border-border px-3 py-2">
                     <Badge variant={OIL_GRADE_STYLE.variant} className="shrink-0">
                       {OIL_GRADE_STYLE.label}
                     </Badge>
                     <div className="min-w-0 text-sm">
                       <span className="font-medium text-card-foreground">
-                        {result.oilGradeCheck.label}
+                        {oilRegression.label}
                       </span>
                       <div className="text-xs text-muted-foreground">
                         {/* Leads with the pre-computed unique list, then the
@@ -321,9 +337,9 @@ export function DsAnalysisCard({
                             oilGradeCheck.uniqueGrades / .regressions, so this
                             row and the AI finding cannot disagree. */}
                         <span className="font-medium text-card-foreground">
-                          {`Grades utilisés : ${result.oilGradeCheck.uniqueGrades.join(", ")} (${result.oilGradeCheck.uniqueGrades.length} grades différents)`}
+                          {`Grades utilisés : ${oilRegression.uniqueGrades.join(", ")} (${oilRegression.uniqueGrades.length} grades différents)`}
                         </span>
-                        {` — passé au ${result.oilGradeCheck.establishedGrade} le ${result.oilGradeCheck.establishedAt?.date?.slice(0, 10)}, puis ${result.oilGradeCheck.regressions
+                        {` — passé au ${oilRegression.establishedGrade} le ${oilRegression.establishedAt?.date?.slice(0, 10)}, puis ${oilRegression.regressions
                           .map((r) => `${r.grade} le ${r.date?.slice(0, 10)}`)
                           .join(", ")}. Grade constructeur inconnu de l'application, à vérifier.`}
                       </div>
