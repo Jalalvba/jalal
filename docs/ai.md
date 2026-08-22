@@ -150,6 +150,15 @@ same guards, 98 vehicles analysable on both:
 | Produced a finding for a check that was never computed | 1 vehicle | **0** |
 | Missed a supplier with ≥ 3 interventions | 2 | **0** |
 
+Rules 2d/2e were added after a second, manual pass: the 11 Suivi RL plates
+with `ETAT = INTERNE` and `flag = REP` were read entry by entry by hand and
+analysed against the same rules, then compared with what the model produced.
+Its counts and dates were right every time; what it missed was everything
+that lives ONLY in `description` — on 47129-B-7, three FAP interventions and
+the open "manque de puissance, témoin de défaut moteur" entry that is the
+reason the vehicle is in the workshop. Rule 4 had told it to lean on part
+designations, and it obeyed too well.
+
 Cost of the upgrade: ~$0.008 (≈0.08 MAD) per analysis against free-tier, i.e.
 $0.81 to analyse the whole Suivi RL list once. The trade is accuracy for a
 figure that rounds to nothing at this volume.
