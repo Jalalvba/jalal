@@ -222,7 +222,10 @@ async function analyseOne(imm: string) {
         ? `${analysis.contractFlag.level} vs ${contractStatus.level}`
         : null,
     ungroundedDates: ungroundedDates(analysis, input),
-    ungroundedSuppliers: ungroundedSuppliers(analysis, input),
+    // Same third argument the route passes. Without it the harness re-creates
+    // the very defect 3528cce fixed and reports ~19% of vehicles as naming a
+    // fabricated supplier when they were quoting a computed check line back.
+    ungroundedSuppliers: ungroundedSuppliers(analysis, input, checkLines),
     findingCount: analysis.findings.length,
     insufficientData: analysis.insufficientData,
     truth: { partRecurrences: parts.slice(0, 12), supplierRecurrences: sups, flaggedChecks: flaggedLines },
