@@ -84,14 +84,22 @@ AVIS vehicles — silently lost their AVIS treatment as well. A row limit on a
 tab that grows is a bug with a timer on it. After the fix: 7 835 plates mapped,
 0 blank clients, and the AVIS count went from 4 to 9.
 
-**Where `Société` lives.** Only in this spreadsheet tab. The Mongo `parc`
-collection does not carry it — `~/import`'s `PARC_FIELD_MAP` already maps
-`"Société" → "societe"`, but `parc.py`'s `COLUMNS_NEEDED` keep-list drops it
-before the write, so importing it is one line there plus a `field_registry.json`
-refresh (its `validate_against_registry()` checks `COLUMNS_NEEDED` against the
-registry, which cannot list a field Mongo has never held). Until that happens,
-this tab is the only source, and `locataire` is NOT a substitute — it reads
-"Locafinance" for the very plates whose Société is "AVIS".
+**Where `Société` comes from.** MongoDB's `parc` collection, as of
+2026-08-22 — `~/import` commit 08aab01 added `societe` to `parc.py`'s
+`COLUMNS_NEEDED` (the mapping had always known `"Société" → "societe"`; the
+keep-list simply dropped it). Before that it could only come from the
+spreadsheet's `parc` TAB, which is what `googleSheetsParc.ts` used to read.
+
+Both sources were compared in full before switching: 7 838 sheet rows against
+7 836 documents, **0 disagreements** on Société across the 7 836 plates in
+both, distributions matching to a row. An earlier comparison that appeared to
+show a 19× gap on one bucket had been measured against a truncated 4 000-row
+read of the tab — the same cap that hid 43 Parking plates.
+
+The switch removes a ~7 800-row read of a second tab on every cache miss, from
+a 60 req/min quota four zone tabs already share. `locataire` is still NOT a
+substitute for `societe`: it reads "Locafinance" for the very plates whose
+Société is "AVIS".
 
 **Export PDF** renders the filtered view — `POST /api/parking/export`, seven
 columns: IMM, TIMESTAMP, ACTION, ZONING, MARQUE, MODEL, gemini.

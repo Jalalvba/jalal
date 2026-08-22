@@ -144,13 +144,13 @@ changed.
 ### 1.6 Société and the AVIS fleet — a third source
 
 `mergeVehicleIdentity()` answers `client` from **cp** (parc as fallback), and
-that stays true. But **Société is in neither collection**: the Mongo `parc`
-import maps the column and then drops it in `parc.py`'s `COLUMNS_NEEDED`
-keep-list, and `locataire` is not a stand-in — it reads "Locafinance" for the
-very plates whose Société is "AVIS".
+that stays true. Société is not among the fields that merge answers, and until
+2026-08-22 it was in no Mongo collection at all; it now lives in `parc.societe`
+(`~/import` 08aab01). `locataire` is still not a stand-in — it reads
+"Locafinance" for the very plates whose Société is "AVIS".
 
-So the card asks `GET /api/vehicle/owner?imm=` for that one field, served from
-the spreadsheet's own `parc` TAB (`src/lib/sheets/googleSheetsParc.ts`). It
+So the card asks `GET /api/vehicle/owner?imm=` for that one field
+(`src/lib/sheets/googleSheetsParc.ts`, now reading Mongo). It
 renders **Client** and **Société** side by side — a vehicle can have a customer
 and an owner, and for AVIS's own fleet the owner is the operative fact — plus a
 loud badge when either field reads AVIS / Scal Avis. The same owner travels

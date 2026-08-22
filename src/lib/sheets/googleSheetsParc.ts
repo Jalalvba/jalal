@@ -1,34 +1,36 @@
-// Vehicle ownership, read from the spreadsheet's own `parc` tab.
+// Vehicle ownership: who the vehicle belongs to, and whether that is AVIS.
 //
-// This is NOT the Mongo `parc` collection. The two are different exports of
-// the fleet and they disagree on exactly the point that matters here: the
-// sheet tab carries a **Société** column (LOCAFINANCE 2848, PLF 659, AVIS 424,
-// PSD 35, Divers 33) which the Mongo import does not map at all, and Mongo's
-// `locataire` is NOT a stand-in for it — the AVIS-owned plates read
-// "Locafinance" there (checked plate by plate, e.g. 89869-E-1, 88369-E-1).
-// Using locataire as a proxy would label AVIS's own vehicles as a leasing
-// company's.
+// Reads MongoDB's `parc` collection. It did not always: `societe` reached Mongo
+// only on 2026-08-22 (~/import commit 08aab01 added it to parc.py's
+// COLUMNS_NEEDED — the mapping had always known "Société" -> "societe", the
+// keep-list simply dropped it), and until then this module read the
+// spreadsheet's own `parc` TAB because that column existed nowhere else.
 //
-// Why it matters: an AVIS-owned vehicle (short-term rental fleet) is handled
-// differently from a customer's leased one, and 766 of the tab's rows have an
-// EMPTY Client with the owner recorded only in Société. The PARKING tab's own
-// CLIENT column is an XLOOKUP into this tab's Client column, so those vehicles
-// show up on the page with no client at all until this fallback runs.
+// Both sources were compared before switching, in full: 7 838 sheet rows
+// against 7 836 documents, and across the 7 836 plates present in both, ZERO
+// disagreements on Société. The distributions match to a row (LOCAFINANCE
+// 5 522/5 521, AVIS 839, PLF 699, PSD 663, Divers 114) — an earlier comparison
+// suggesting otherwise had been measured against a truncated 4 000-row read of
+// the tab, not against the tab.
+//
+// Mongo wins on cost: this replaced a ~7 800-row Sheets read of a second tab on
+// every cache miss, against a 60 req/min service-account quota that four zone
+// tabs already share.
+//
+// `locataire` is NOT a substitute for `societe` and must never be used as one:
+// it reads "Locafinance" for the very plates whose Société is "AVIS" (checked
+// per plate on 89869-E-1, 88369-E-1, 87965-E-1).
+//
+// Why it matters at all: an AVIS-owned vehicle (short-term rental fleet) is
+// handled differently from a customer's leased one — after any part change it
+// goes to the garage Pierre Parent — and 766 parc rows have an EMPTY Client
+// with the owner recorded only in Société, so without this fallback those
+// vehicles show no owner at all.
 
-import { getSheetsClient, withCache, ROWS_CACHE_TTL_MS } from "@/lib/sheets/googleSheetsClient";
+import { getCollection } from "@/lib/mongo/client";
+import { withCache, ROWS_CACHE_TTL_MS } from "@/lib/sheets/googleSheetsClient";
 
-const PARC_TAB = "parc";
 const CACHE_KEY = "rows:parc-owners";
-
-// Verified against the live header row: ID, Société, Client, Marque, Modèle,
-// Immatriculation, ... Read by NAME below rather than by these positions —
-// they are here to say what the range covers, not to be trusted.
-//
-// OPEN-ENDED on purpose. The first version capped this at row 5000 and the tab
-// is bigger than that: 43 of the 83 Parking plates fell past the cut and came
-// back with no owner at all, which read as "the fallback does not work". A row
-// limit on a tab that grows is a bug with a timer on it.
-const RANGE = `'${PARC_TAB}'!A:F`;
 
 export type VehicleOwner = {
   /** The Client column — the customer, when there is one. */
@@ -69,39 +71,23 @@ export function classifyOwner(client: unknown, societe: unknown): VehicleOwner {
  */
 export async function getParcOwners(fresh = false): Promise<Map<string, VehicleOwner>> {
   // The CACHE stores an array, and the Map is built outside it. unstable_cache
-  // serialises what it returns, so a Map survives exactly one call and comes
-  // back as `{}` on every cached hit afterwards — the first request answered
+  // serialises what it returns, so a cached Map survives exactly one call and
+  // comes back as `{}` on every hit afterwards — the first request answered
   // correctly and every later one threw "(intermediate value).get is not a
   // function". Anything cached here must be JSON, by construction.
   const entries = await withCache(
     CACHE_KEY,
     ROWS_CACHE_TTL_MS,
     async () => {
-      const sheets = getSheetsClient();
-      const res = await sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
-        range: RANGE,
-      });
-      const values = res.data.values ?? [];
-      if (values.length === 0) return [] as [string, VehicleOwner][];
-
-      const headers = values[0].map((h) => String(h ?? "").trim().toLowerCase());
-      const idx = (name: string) => headers.findIndex((h) => h === name);
-      const iSociete = idx("société");
-      const iClient = idx("client");
-      const iImm = idx("immatriculation");
-      // Read by name, and refuse to guess: a renamed column must produce an
-      // empty map (every vehicle simply unknown) rather than silently reading
-      // whatever now sits in that position and attributing it to the wrong
-      // field.
-      if (iImm < 0 || (iSociete < 0 && iClient < 0)) return [] as [string, VehicleOwner][];
-
+      const parc = await getCollection("parc");
+      const docs = await parc
+        .find({}, { projection: { _id: 0, immatriculation: 1, client: 1, societe: 1 } })
+        .toArray();
       const out: [string, VehicleOwner][] = [];
-      for (let i = 1; i < values.length; i++) {
-        const row = values[i];
-        const imm = String(row[iImm] ?? "").trim().toUpperCase();
+      for (const d of docs) {
+        const imm = String(d.immatriculation ?? "").trim().toUpperCase();
         if (!imm) continue;
-        out.push([imm, classifyOwner(iClient >= 0 ? row[iClient] : "", iSociete >= 0 ? row[iSociete] : "")]);
+        out.push([imm, classifyOwner(d.client, d.societe)]);
       }
       return out;
     },
