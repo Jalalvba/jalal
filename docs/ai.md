@@ -111,10 +111,23 @@ not want invention.
 
 ## 2. Model choice: two models, not one
 
-| Route | Model | Why |
+| Route / caller | Model | Why |
 |---|---|---|
 | `reformulate-comment` | `gemini-flash-lite-latest` | Cheapest active tier; every suggestion is reviewed by a human before it reaches the Sheet. |
-| `ds-history/analyze` | **`gemini-flash-latest`** (served by `gemini-3.7-flash`) | Its output is written into the `gemini` column and read later as fact — nobody re-checks it. §2.4 has the measurement that forced the upgrade. |
+| `ds-history/analyze` — default (`quality` absent) | `gemini-flash-lite-latest` | Free. What DS History's card, and the Parking / Atelier / Depot buttons, get. |
+| `ds-history/analyze` — `quality: "pro"` | **`gemini-flash-latest`** (served by `gemini-3.7-flash`) | Paid, ~$0.008 a call. Asked for by **Suivi RL / BDD only**, whose summary is written into the sheet and later read as fact. |
+
+**The tier is chosen by name, never by model id** (§2.3 still holds: a client
+cannot name a model). The route's `TIERS` map carries the model AND its token
+cap together, because the paid model is a thinking model whose thoughts are
+capped as output — 1,800 truncated 31 of 101 real calls, so a tier that
+changed the model but not the cap would fail a third of the time.
+
+Which page opts in is a product decision, not a technical one: `pro` is passed
+by `src/app/suivi-rl/page.tsx` alone, through `GeminiSummaryBlock` →
+`AnalyseAndSaveButton`. Everything else stays free by omission — a page has to
+opt in to spend. `e2e/geminiSummaryBlock.spec.ts` pins that with a real click
+on both pages, reading the request the browser actually sent.
 
 The reformulate route pins one constant:
 

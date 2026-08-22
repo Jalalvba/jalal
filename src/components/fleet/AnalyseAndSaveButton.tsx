@@ -41,6 +41,13 @@ type Props = {
   /** True when a summary already exists — turns the click into a confirm. */
   regenerate?: boolean;
   /**
+   * Ask for the paid, more accurate tier. Passed ONLY by Suivi RL / BDD, whose
+   * summary is written into the sheet and later read as fact; Parking, Atelier
+   * and Depot deliberately leave it off and stay on the free model. Omitted
+   * means free — a page has to opt in to spend.
+   */
+  pro?: boolean;
+  /**
    * Called with the summary AFTER it is written to the sheet. Exists so a page
    * already showing the gemini cell can refresh it — the write happened
    * server-side, so the caller's cached row is stale until it refetches. NOT a
@@ -49,7 +56,7 @@ type Props = {
   onSaved?: (summary: string) => void;
 };
 
-export function AnalyseAndSaveButton({ imm, className, regenerate, onSaved }: Props) {
+export function AnalyseAndSaveButton({ imm, className, regenerate, pro, onSaved }: Props) {
   const [busy, setBusy] = useState(false);
 
   async function run() {
@@ -73,7 +80,9 @@ export function AnalyseAndSaveButton({ imm, className, regenerate, onSaved }: Pr
       const aRes = await fetch("/api/ds-history/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildDsAnalysisPayload({ imm, items })),
+        // `quality` is a NAME, not a model id — the route maps it. See its
+        // TIERS comment for why the client may not choose a model directly.
+        body: JSON.stringify({ ...buildDsAnalysisPayload({ imm, items }), ...(pro ? { quality: "pro" } : {}) }),
       });
       const aJson = (await aRes.json()) as
         | { ok: true; analysis: { summary: string } }
@@ -130,8 +139,8 @@ export function AnalyseAndSaveButton({ imm, className, regenerate, onSaved }: Pr
       className={className}
       title={
         regenerate
-          ? "Relancer l'analyse IA et remplacer le résumé existant (consomme un appel Gemini)"
-          : "Analyse IA de l'historique DS, puis enregistrement du résumé dans la colonne gemini de BDD"
+          ? `Relancer l'analyse IA et remplacer le résumé existant (${pro ? "appel payant, ~0,08 MAD" : "appel gratuit"})`
+          : `Analyse IA de l'historique DS, puis enregistrement du résumé dans la colonne gemini de BDD (${pro ? "appel payant, ~0,08 MAD" : "appel gratuit"})`
       }
     >
       <Sparkles className="h-3.5 w-3.5" />
@@ -147,8 +156,8 @@ export function AnalyseAndSaveButton({ imm, className, regenerate, onSaved }: Pr
       <AlertDialogContent>
         <AlertDialogTitle>Relancer l&apos;analyse de {imm} ?</AlertDialogTitle>
         <AlertDialogDescription>
-          Un résumé existe déjà. Le relancer consomme un appel Gemini et écrase le
-          résumé enregistré dans BDD.
+          Un résumé existe déjà. Le relancer écrase le résumé enregistré dans BDD
+          {pro ? " et consomme un appel payant (~0,08 MAD)." : " et consomme un appel Gemini."}
         </AlertDialogDescription>
         <AlertDialogFooter>
           <AlertDialogCancel>Annuler</AlertDialogCancel>

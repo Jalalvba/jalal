@@ -195,6 +195,51 @@ describe("POST /api/ds-history/analyze — grounding", () => {
 });
 
 
+describe("POST /api/ds-history/analyze — tiers", () => {
+  // The paid tier exists because it is measurably more accurate, and it is
+  // opt-in because it measurably costs money. Both halves are pinned here: a
+  // page that says nothing must never spend, and a client must never be able
+  // to name a model of its own.
+  it("defaults to the free model when no quality is asked for", async () => {
+    resolveWith(GOOD);
+    await POST(req(BASE));
+    expect(mockedCallAI.mock.calls[0][0].model).toBe("gemini-flash-lite-latest");
+    expect(mockedCallAI.mock.calls[0][0].maxTokens).toBe(1_800);
+  });
+
+  it('uses the paid model, with its larger cap, for quality: "pro"', async () => {
+    resolveWith(GOOD);
+    const res = await POST(req({ ...BASE, quality: "pro" }));
+    expect(mockedCallAI.mock.calls[0][0].model).toBe("gemini-flash-latest");
+    // 1_800 truncated 31 of 101 real pro calls — thinking tokens are billed as
+    // output — so the cap moving with the tier is the point, not a detail.
+    expect(mockedCallAI.mock.calls[0][0].maxTokens).toBe(5_000);
+    expect((await res.json()).tier).toBe("pro");
+  });
+
+  it("ignores an unknown quality rather than failing the request", async () => {
+    resolveWith(GOOD);
+    await POST(req({ ...BASE, quality: "ultra" }));
+    expect(mockedCallAI.mock.calls[0][0].model).toBe("gemini-flash-lite-latest");
+  });
+
+  it("refuses to let the client name a model directly", async () => {
+    resolveWith(GOOD);
+    await POST(req({ ...BASE, model: "gemini-3-7-flash", quality: "nope" }));
+    expect(mockedCallAI.mock.calls[0][0].model).toBe("gemini-flash-lite-latest");
+  });
+
+  it("answers a follow-up with the same tier that produced the analysis", async () => {
+    mockedCallAI.mockResolvedValue({ text: "Réponse.", costInfo: COST });
+    await POST(req({
+      ...BASE,
+      quality: "pro",
+      followUp: { question: "pourquoi ?", previousAnalysis: GOOD },
+    }));
+    expect(mockedCallAI.mock.calls[0][0].model).toBe("gemini-flash-latest");
+  });
+});
+
 describe("POST /api/ds-history/analyze — follow-up mode", () => {
   const PRIOR = {
     contractFlag: { level: "ok", label: "Contrat valide" },

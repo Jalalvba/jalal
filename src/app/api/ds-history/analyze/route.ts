@@ -59,27 +59,46 @@ const RATE_WINDOW_MS = 60 * 1000;
 // the analysis budget would let repeated challenges crowd out real analyses.
 // 5/min is generous for a human typing questions.
 const FOLLOWUP_RATE_LIMIT = 5;
-// Deliberately NOT the flash-lite alias the reformulate route uses. A full
-// audit ran this exact prompt over all 101 Suivi RL / BDD plates on both, and
-// graded every answer against the source data in code
-// (scripts/audit-ds-analysis.ts). Flash-lite: 11% of analyses cited a date
-// absent from the data, 14 supplier counts were wrong, one vehicle got an
-// entirely invented "grade d'huile" finding. gemini-flash-latest (served by
-// gemini-3.7-flash): zero on every one of those, over the same 98 vehicles.
-// This output is written into the BDD/ATELIER/PARKING `gemini` column and read
-// as fact later, so accuracy outranks the ~$0.008 (≈0.08 MAD) a call costs —
-// unlike the reformulate route, whose suggestion a human reviews before it is
-// saved.
-const DEFAULT_MODEL = "gemini-flash-latest";
-// Median call 4.3s, slowest of 98 was 14.8s. 45s is headroom, not a guess.
+// Two tiers, chosen by the CALLER — but by name, never by model id. A client
+// may send quality: "pro"; it may not send a model string (docs/ai.md §2.3:
+// the model is not client-overridable, or a compromised page could point this
+// route at anything and bill it).
+//
+// Why two: a full audit ran the same prompt over all 101 Suivi RL / BDD plates
+// on both models and graded every answer against the source data in code
+// (scripts/audit-ds-analysis.ts). Flash-lite cited a date absent from the data
+// on 11% of vehicles, got 14 supplier counts wrong and invented a whole "grade
+// d'huile" finding; gemini-flash-latest (served by gemini-3.7-flash) scored
+// zero on all of those over the same 98 vehicles. So "pro" is genuinely more
+// accurate — and genuinely costs ~$0.008 (≈0.08 MAD) a call against
+// flash-lite's free tier.
+//
+// Who gets which is a deliberate product decision, not a technical one: only
+// Suivi RL / BDD asks for "pro", because that is where the summary is written
+// into the sheet and read later as fact. DS History's card is a look-at-it-now
+// view whose reader has the whole history on screen beside it, and the
+// Parking / Atelier / Depot buttons stay free too. Nothing spends money unless
+// the caller explicitly asked for the paid tier.
+const TIERS = {
+  standard: { model: "gemini-flash-lite-latest", maxTokens: 1_800 },
+  // 1_800 is NOT enough here: gemini-3.7-flash is a thinking model and its
+  // thoughtsTokenCount is billed — and capped — as output. At 1_800, 31 of 101
+  // calls came back HTTP 200 with finishReason MAX_TOKENS, i.e. a truncated
+  // JSON body failing the shape check as an opaque "bad-response". At 4_000
+  // that fell to 1 of 101; 5_000 is that measurement plus margin. Real answers
+  // use ~1_500.
+  pro: { model: "gemini-flash-latest", maxTokens: 5_000 },
+} as const;
+
+type Tier = keyof typeof TIERS;
+
+/** Anything other than the literal "pro" means the free tier. Never throws. */
+function resolveTier(v: unknown): Tier {
+  return v === "pro" ? "pro" : "standard";
+}
+
+// Median pro call 4.3s, slowest of 98 was 14.8s. 45s is headroom, not a guess.
 const REQUEST_TIMEOUT_MS = 45_000;
-// 1_800 was right for flash-lite and is NOT enough here: gemini-3.7-flash is a
-// thinking model and its thoughtsTokenCount is billed — and capped — as output.
-// At 1_800, 31 of 101 calls came back HTTP 200 with finishReason MAX_TOKENS,
-// i.e. a truncated JSON body that fails the shape check as an opaque
-// "bad-response". At 4_000 that fell to 1 of 101 (43269-B-7, a 100-entry
-// history); 5_000 is that measurement plus margin. Real answers use ~1_500.
-const MAX_OUTPUT_TOKENS = 5_000;
 const TEMPERATURE = 0.2;
 
 // Hard ceiling on the client-supplied payload, independent of MAX_ENTRIES
@@ -174,8 +193,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: parsed }, { status: 400 });
   }
 
+  // Read off the raw body, not parseInput's shape: the tier is about HOW to
+  // answer, not about the vehicle being asked about.
+  const tier = resolveTier(raw.quality);
+
   if (isFollowUp) {
-    return handleFollowUp(parsed, followUpRaw as Record<string, unknown>);
+    // A follow-up challenges an analysis, so it is answered by the same tier
+    // that produced it — a free model second-guessing a paid one's finding
+    // would be worse than useless.
+    return handleFollowUp(parsed, followUpRaw as Record<string, unknown>, tier);
   }
 
   const contractStatus = computeContractStatus(parsed.contractEnd);
@@ -204,10 +230,10 @@ export async function POST(request: Request) {
     // here rather than assumed. A failure surfaces as kind "bad-response".
     const { text, costInfo } = await callAI({
       action: "ds-history-analysis",
-      model: DEFAULT_MODEL,
+      model: TIERS[tier].model,
       prompt,
       systemPrompt: DS_ANALYSIS_SYSTEM_PROMPT,
-      maxTokens: MAX_OUTPUT_TOKENS,
+      maxTokens: TIERS[tier].maxTokens,
       temperature: TEMPERATURE,
       timeoutMs: REQUEST_TIMEOUT_MS,
       validate: (t) => {
@@ -273,6 +299,7 @@ export async function POST(request: Request) {
       truncated: parsed.entries.length > MAX_ENTRIES,
       analysedCount: Math.min(parsed.entries.length, MAX_ENTRIES),
       totalCount: parsed.entries.length,
+      tier,
       costInfo,
     });
   } catch (e) {
@@ -298,7 +325,8 @@ function stripFence(t: string): string {
  */
 async function handleFollowUp(
   parsed: DsAnalysisInput,
-  followUp: Record<string, unknown>
+  followUp: Record<string, unknown>,
+  tier: Tier
 ): Promise<NextResponse> {
   const question = typeof followUp.question === "string" ? followUp.question.trim() : "";
   if (!question) {
@@ -325,7 +353,7 @@ async function handleFollowUp(
   try {
     const { text, costInfo } = await callAI({
       action: "ds-history-followup",
-      model: DEFAULT_MODEL,
+      model: TIERS[tier].model,
       prompt: buildFollowUpPrompt({
         input: parsed,
         contractStatus,
@@ -341,7 +369,7 @@ async function handleFollowUp(
         question,
       }),
       systemPrompt: DS_FOLLOWUP_SYSTEM_PROMPT,
-      maxTokens: MAX_OUTPUT_TOKENS,
+      maxTokens: TIERS[tier].maxTokens,
       temperature: TEMPERATURE,
       timeoutMs: REQUEST_TIMEOUT_MS,
       validate: (t) => t.trim().length > 0,

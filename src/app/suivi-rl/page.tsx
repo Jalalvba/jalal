@@ -401,7 +401,7 @@ function BddCard({ row, onDelete }: { row: BddRow; onDelete: (row: number, imm: 
       {/* Shared with Parking/Atelier/Depot. The value is passed in because
           this page already has the BDD row — the component only falls back to
           looking it up when a caller does not. */}
-      <GeminiSummaryBlock imm={String(row.IMM ?? "")} summary={String(row.gemini ?? "")} className="mt-2" />
+      <GeminiSummaryBlock imm={String(row.IMM ?? "")} summary={String(row.gemini ?? "")} className="mt-2" pro />
 
       <ReadonlyFieldList fields={READONLY_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))} />
       <ReadonlyFieldList

@@ -26,9 +26,15 @@ type Props = {
    */
   summary?: string;
   className?: string;
+  /**
+   * Use the paid analysis tier. Suivi RL passes it; Parking, Atelier and Depot
+   * do not — the paid model is confined to the page whose summary is treated
+   * as the record. See AnalyseAndSaveButton's `pro`.
+   */
+  pro?: boolean;
 };
 
-export function GeminiSummaryBlock({ imm, summary, className }: Props) {
+export function GeminiSummaryBlock({ imm, summary, className, pro }: Props) {
   const queryClient = useQueryClient();
   // Only subscribe when the caller did NOT supply the value — otherwise Suivi
   // RL would pull a second copy of data it is already rendering.
@@ -57,6 +63,7 @@ export function GeminiSummaryBlock({ imm, summary, className }: Props) {
           // re-answer, so re-running is put behind a confirm — see the note at
           // the top of AnalyseAndSaveButton.
           regenerate={text.length > 0}
+          pro={pro}
           // The button already wrote to the sheet; this pulls the fresh value
           // back so the block stops showing the previous one.
           onSaved={() => {

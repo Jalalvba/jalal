@@ -90,3 +90,62 @@ test("Depot, whose tab has no gemini column, falls back to a BDD lookup", async 
   expect(bddCalls).toBeLessThanOrEqual(2);
   expect(errs).toEqual([]);
 });
+
+// The paid tier is opt-in per PAGE, and the only thing standing between "free"
+// and "billed" is one prop threaded through two components. A unit test cannot
+// see that wiring — it lives in JSX — so this drives a real click and reads the
+// request the browser actually sent.
+//
+// Nothing is spent and nothing is written: the analyze call is intercepted
+// before it leaves the browser, and the save that would follow never happens.
+test("Suivi RL asks for the paid tier; Parking does not", async ({ page, context, baseURL }) => {
+  test.setTimeout(120_000);
+  await context.addCookies([await authenticatedCookie(baseURL!)]);
+
+  const sent: (string | undefined)[] = [];
+  await page.route("**/api/ds-history/analyze", async (route) => {
+    const body = route.request().postDataJSON() as { quality?: string };
+    sent.push(body?.quality);
+    // Answer with a valid-shaped analysis so the click completes, and stop
+    // there — no model call, no sheet write.
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        analysis: {
+          contractFlag: { level: "unknown", label: "Date de fin de contrat indisponible" },
+          findings: [],
+          summary: "Résumé de test.",
+          insufficientData: false,
+        },
+      }),
+    });
+  });
+  // The save is stubbed too: this test must never touch the live sheet.
+  await page.route("**/api/bdd/gemini", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, saved: false, tabs: [], failures: [], reason: "no-row" }),
+    })
+  );
+
+  for (const [path, expected] of [
+    ["/suivi-rl", "pro"],
+    ["/parking", undefined],
+  ] as const) {
+    await page.goto(path);
+    const button = page.getByRole("button", { name: /Résumé IA|Regénérer/ }).first();
+    await expect(button).toBeVisible({ timeout: 40_000 });
+
+    const before = sent.length;
+    await button.click();
+    // "Regénérer" goes through a confirm dialog first.
+    const confirm = page.getByRole("button", { name: "Regénérer", exact: true }).last();
+    if (await confirm.isVisible().catch(() => false)) await confirm.click();
+
+    await expect.poll(() => sent.length, { timeout: 40_000 }).toBeGreaterThan(before);
+    expect(sent[sent.length - 1], `${path} should send quality=${expected}`).toBe(expected);
+  }
+});
