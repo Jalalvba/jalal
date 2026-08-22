@@ -523,10 +523,24 @@ share the store and nothing else:
 | **Analyse DS** | `gemini` | `prompt.ts` (the DS analysis) | what this vehicle's history says |
 | **Actions IA** | `ACTION` | `prompt-parking.ts` (the work order) | what the workshop should do |
 
+Each exists twice, at two scopes:
+
+- **Per row** — `ParkingRowAiButtons`, an `Action` / `Analyse DS` pair on every
+  card, for one vehicle.
+- **Whole list** — the header buttons, labelled `… (liste)` precisely because
+  the row buttons share their names: two identical labels on one page, one
+  acting on a vehicle and one on 84 of them, is a mis-click waiting to happen.
+
+Both scopes call the SAME two endpoints, the row buttons simply with a list of
+one. That keeps the reuse rule, the never-overwrite-a-hand-typed-ACTION rule
+and the per-plate verdicts in one place on the server; a dedicated per-row
+route would be a second copy of all three. A cell that already holds something
+turns the click into a refresh (`force`), because regenerating a value you are
+looking at should not hand you back the stored text you just rejected.
+
 Both walk the vehicles CURRENTLY listed — a filter narrows them — reuse a
 stored analysis when the vehicle has not been worked on since, and give every
-plate its own verdict rather than letting one failure sink the batch. The
-per-card sparkle button runs the same "Analyse DS" path for a single vehicle.
+plate its own verdict rather than letting one failure sink the batch.
 
 **Parking writes to Parking.** `/api/bdd/gemini` fans a summary out to
 BDD + ATELIER + PARKING, which is right from DS History but wrong here: it

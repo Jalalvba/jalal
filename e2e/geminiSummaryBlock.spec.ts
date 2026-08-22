@@ -66,9 +66,12 @@ test("a zone card shows the summary from its own tab's gemini column", async ({
   // Suivi RL. Its absence is the assertion.
   expect(body).not.toContain("Aucun résumé");
   if (rows.length > 1) {
-    // …and the trigger is still reachable on those rows, by its accessible
-    // name, since it no longer carries visible text.
-    await expect(page.getByRole("button", { name: /^Résumé IA — / }).first()).toBeVisible();
+    // …and the row still offers a way to create one. On Parking that is the
+    // pair of per-row AI buttons (ACTION / gemini), not the generic sparkle:
+    // this page stopped writing through the BDD fan-out.
+    await expect(
+      page.getByTestId("record-card").first().getByRole("button", { name: "Analyse DS", exact: true })
+    ).toBeVisible();
   }
   expect(errs).toEqual([]);
 });
@@ -118,16 +121,22 @@ test("Depot, whose tab has no gemini column, falls back to a BDD lookup", async 
 //
 // Nothing is spent and nothing is written: the analyze call is intercepted
 // before it leaves the browser, and the save that would follow never happens.
-test("Suivi RL asks for the paid tier; Parking does not", async ({ page, context, baseURL }) => {
+test("Suivi RL asks for the paid tier, and Parking goes through its own route", async ({
+  page,
+  context,
+  baseURL,
+}) => {
   test.setTimeout(120_000);
   await context.addCookies([await authenticatedCookie(baseURL!)]);
 
-  const sent: (string | undefined)[] = [];
+  // The paid tier is opt-in per PAGE, and the only thing standing between
+  // "free" and "billed" is one prop threaded through two components. A unit
+  // test cannot see that wiring — it lives in JSX — so this drives a real
+  // click and reads the request the browser actually sent.
+  const analyze: (string | undefined)[] = [];
   await page.route("**/api/ds-history/analyze", async (route) => {
     const body = route.request().postDataJSON() as { quality?: string };
-    sent.push(body?.quality);
-    // Answer with a valid-shaped analysis so the click completes, and stop
-    // there — no model call, no sheet write.
+    analyze.push(body?.quality);
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -142,7 +151,6 @@ test("Suivi RL asks for the paid tier; Parking does not", async ({ page, context
       }),
     });
   });
-  // The save is stubbed too: this test must never touch the live sheet.
   await page.route("**/api/bdd/gemini", (route) =>
     route.fulfill({
       status: 200,
@@ -150,22 +158,37 @@ test("Suivi RL asks for the paid tier; Parking does not", async ({ page, context
       body: JSON.stringify({ ok: true, saved: false, tabs: [], failures: [], reason: "no-row" }),
     })
   );
+  const parkingCalls: string[] = [];
+  await page.route("**/api/parking/analyse", async (route) => {
+    parkingCalls.push(new URL(route.request().url()).pathname);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, results: [{ imm: "X", outcome: "written" }] }),
+    });
+  });
 
-  for (const [path, expected] of [
-    ["/suivi-rl", "pro"],
-    ["/parking", undefined],
-  ] as const) {
-    await page.goto(path);
-    const button = page.getByRole("button", { name: /Résumé IA|Regénérer/ }).first();
-    await expect(button).toBeVisible({ timeout: 40_000 });
+  // Suivi RL: the paid tier, asked for by name.
+  await page.goto("/suivi-rl");
+  const rlButton = page.getByRole("button", { name: /Résumé IA|Regénérer/ }).first();
+  await expect(rlButton).toBeVisible({ timeout: 40_000 });
+  await rlButton.click();
+  const confirm = page.getByRole("button", { name: "Regénérer", exact: true }).last();
+  if (await confirm.isVisible().catch(() => false)) await confirm.click();
+  await expect.poll(() => analyze.length, { timeout: 40_000 }).toBe(1);
+  expect(analyze[0]).toBe("pro");
 
-    const before = sent.length;
-    await button.click();
-    // "Regénérer" goes through a confirm dialog first.
-    const confirm = page.getByRole("button", { name: "Regénérer", exact: true }).last();
-    if (await confirm.isVisible().catch(() => false)) await confirm.click();
-
-    await expect.poll(() => sent.length, { timeout: 40_000 }).toBeGreaterThan(before);
-    expect(sent[sent.length - 1], `${path} should send quality=${expected}`).toBe(expected);
-  }
+  // Parking: its own route, and never the shared analyze endpoint — that is
+  // what keeps this page off the paid tier AND out of the BDD fan-out.
+  await page.goto("/parking");
+  // The per-ROW button, scoped to a card: the header carries a batch button
+  // whose label says "(liste)", and clicking that one opens a confirm instead.
+  const parkingButton = page
+    .getByTestId("record-card")
+    .first()
+    .getByRole("button", { name: "Analyse DS", exact: true });
+  await expect(parkingButton).toBeVisible({ timeout: 40_000 });
+  await parkingButton.click();
+  await expect.poll(() => parkingCalls.length, { timeout: 40_000 }).toBe(1);
+  expect(analyze.length, "Parking must not call the shared analyze endpoint").toBe(1);
 });

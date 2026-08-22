@@ -39,7 +39,10 @@ type Result = { imm: string; outcome: Outcome; actions?: number; error?: string 
 const VARIANTS = {
   actions: {
     endpoint: "/api/parking/actions",
-    label: "Actions IA",
+    // "(liste)" because each ROW carries its own Action / Analyse DS pair:
+    // two buttons with the same name on one page, one acting on a vehicle and
+    // one on 84 of them, is a mis-click waiting to happen.
+    label: "Actions IA (liste)",
     busyLabel: "Génération…",
     title: "Analyser chaque véhicule et écrire les opérations à effectuer dans sa colonne ACTION",
     dialogTitle: (n: number) => `Générer les actions pour ${n} véhicule(s) ?`,
@@ -49,7 +52,7 @@ const VARIANTS = {
   },
   analyse: {
     endpoint: "/api/parking/analyse",
-    label: "Analyse DS",
+    label: "Analyse DS (liste)",
     busyLabel: "Analyse…",
     title: "Analyser l'historique DS de chaque véhicule et écrire le résumé dans sa colonne gemini",
     dialogTitle: (n: number) => `Analyser ${n} véhicule(s) ?`,

@@ -11,6 +11,7 @@ import { AddResultsList } from "@/components/fleet/AddResultsList";
 import { RecordCard } from "@/components/fleet/RecordCard";
 import { GeminiSummaryBlock } from "@/components/fleet/GeminiSummaryBlock";
 import { GenerateActionsButton } from "@/components/fleet/GenerateActionsButton";
+import { ParkingRowAiButtons } from "@/components/fleet/ParkingRowAiButtons";
 import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
@@ -48,10 +49,13 @@ function ParkingCard({
   row,
   onActionCommit,
   onDelete,
+  onAiDone,
 }: {
   row: ParkingRow;
   onActionCommit: (rowIndex: number, action: string, imm: string) => void;
   onDelete: (rowIndex: number, imm: string) => void;
+  /** Refetch after an AI button wrote into this row's ACTION or gemini cell. */
+  onAiDone: () => void;
 }) {
   const [action, setAction] = useEditableState(row.action, [row.rowIndex, row.action, row.timestamp]);
 
@@ -63,6 +67,17 @@ function ParkingCard({
       onDelete={() => onDelete(row.rowIndex, row.imm)}
       deleteTitle="Supprimer cette ligne ?"
     >
+      {/* Both AI actions for this vehicle, together: one fills ACTION (the work
+          order), the other fills gemini (the DS analysis). */}
+      <div className="flex justify-end">
+        <ParkingRowAiButtons
+          imm={row.imm}
+          hasAction={Boolean(String(row.action ?? "").trim())}
+          hasSummary={Boolean(String(row.gemini ?? "").trim())}
+          onDone={onAiDone}
+        />
+      </div>
+
       <Field label="Action">
         <Input
           value={action}
@@ -77,7 +92,7 @@ function ParkingCard({
       <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
       {/* This tab has its own gemini column, so the value is passed straight
           in — no BDD lookup, and it shows even for a vehicle with no BDD row. */}
-      <GeminiSummaryBlock imm={row.imm} summary={row.gemini} className="mt-2" saveTo="parking" />
+      <GeminiSummaryBlock imm={row.imm} summary={row.gemini} className="mt-2" saveTo="parking" hideButton />
     </RecordCard>
   );
 }
@@ -227,7 +242,13 @@ export default function ParkingPage() {
 
         <div className="flex flex-col gap-2.5">
           {deferredRows.map((row) => (
-            <ParkingCard key={row.rowIndex} row={row} onActionCommit={handleActionCommit} onDelete={handleDelete} />
+            <ParkingCard
+              key={row.rowIndex}
+              row={row}
+              onActionCommit={handleActionCommit}
+              onDelete={handleDelete}
+              onAiDone={() => void refreshMutation.mutateAsync()}
+            />
           ))}
         </div>
       </div>

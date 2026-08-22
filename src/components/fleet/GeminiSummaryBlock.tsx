@@ -39,9 +39,16 @@ type Props = {
    * AnalyseAndSaveButton's `saveTo`.
    */
   saveTo?: "bdd-fanout" | "parking";
+  /**
+   * Render the summary WITHOUT its own trigger. Parking passes this because
+   * its card carries both AI buttons together (ParkingRowAiButtons) — one
+   * sparkle here and another button elsewhere on the same card would be two
+   * affordances for the same thing in two places.
+   */
+  hideButton?: boolean;
 };
 
-export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo }: Props) {
+export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo, hideButton }: Props) {
   const queryClient = useQueryClient();
   // Only subscribe when the caller did NOT supply the value — otherwise Suivi
   // RL would pull a second copy of data it is already rendering.
@@ -87,6 +94,10 @@ export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo }: Pro
   // rectangle saying "aucun résumé" on every un-analysed row is a page full of
   // boxes announcing their own emptiness — on Suivi RL that was ~95 of them.
   // The affordance to create one is all that is needed until one exists.
+  // Nothing to show and no trigger to offer: render nothing at all rather than
+  // an empty container.
+  if (!text && hideButton) return null;
+
   if (!text) {
     return (
       <div className={`flex justify-end ${className ?? ""}`}>
@@ -101,6 +112,7 @@ export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo }: Pro
         <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Résumé IA
         </span>
+        {!hideButton && (
         <AnalyseAndSaveButton
           imm={imm}
           className="ml-auto"
@@ -114,6 +126,7 @@ export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo }: Pro
           // back so the block stops showing the previous one.
           onSaved={onGenerated}
         />
+        )}
       </div>
       <p className="mt-1 whitespace-pre-wrap text-sm text-card-foreground">
         {text || (
