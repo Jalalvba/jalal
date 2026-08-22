@@ -77,7 +77,7 @@ function ParkingCard({
       <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
       {/* This tab has its own gemini column, so the value is passed straight
           in — no BDD lookup, and it shows even for a vehicle with no BDD row. */}
-      <GeminiSummaryBlock imm={row.imm} summary={row.gemini} className="mt-2" />
+      <GeminiSummaryBlock imm={row.imm} summary={row.gemini} className="mt-2" saveTo="parking" />
     </RecordCard>
   );
 }
@@ -196,9 +196,19 @@ export default function ParkingPage() {
         {/* Acts on what is CURRENTLY listed, not on the whole tab: with a
             filter applied, "Actions IA" means "these vehicles", which is what
             the count next to it says. */}
-        <div className="flex justify-end">
+        {/* Two columns, two questions. "Analyse DS" fills `gemini` (what the
+            vehicle's history says); "Actions IA" fills `ACTION` (what the
+            workshop should do). Both act on what is CURRENTLY listed, which is
+            what the count beside the title says. */}
+        <div className="flex justify-end gap-2">
           <GenerateActionsButton
             imms={searched.map((r) => r.imm)}
+            variant="analyse"
+            onDone={() => void refreshMutation.mutateAsync()}
+          />
+          <GenerateActionsButton
+            imms={searched.map((r) => r.imm)}
+            variant="actions"
             onDone={() => void refreshMutation.mutateAsync()}
           />
         </div>

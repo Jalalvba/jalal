@@ -33,9 +33,15 @@ type Props = {
    * as the record. See AnalyseAndSaveButton's `pro`.
    */
   pro?: boolean;
+  /**
+   * Where this block's button saves. Parking passes "parking" so the write
+   * stays on its own tab instead of fanning out to BDD and ATELIER — see
+   * AnalyseAndSaveButton's `saveTo`.
+   */
+  saveTo?: "bdd-fanout" | "parking";
 };
 
-export function GeminiSummaryBlock({ imm, summary, className, pro }: Props) {
+export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo }: Props) {
   const queryClient = useQueryClient();
   // Only subscribe when the caller did NOT supply the value — otherwise Suivi
   // RL would pull a second copy of data it is already rendering.
@@ -84,7 +90,7 @@ export function GeminiSummaryBlock({ imm, summary, className, pro }: Props) {
   if (!text) {
     return (
       <div className={`flex justify-end ${className ?? ""}`}>
-        <AnalyseAndSaveButton imm={imm} pro={pro} onSaved={onGenerated} iconOnly />
+        <AnalyseAndSaveButton imm={imm} pro={pro} saveTo={saveTo} onSaved={onGenerated} iconOnly />
       </div>
     );
   }
@@ -103,6 +109,7 @@ export function GeminiSummaryBlock({ imm, summary, className, pro }: Props) {
           // the top of AnalyseAndSaveButton.
           regenerate={text.length > 0}
           pro={pro}
+          saveTo={saveTo}
           // The button already wrote to the sheet; this pulls the fresh value
           // back so the block stops showing the previous one.
           onSaved={onGenerated}

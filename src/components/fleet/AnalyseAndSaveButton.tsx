@@ -54,6 +54,18 @@ type Props = {
    */
   iconOnly?: boolean;
   /**
+   * Where the summary is saved.
+   *
+   * "bdd-fanout" (default) writes to every tab holding this plate AND a gemini
+   * column — BDD, ATELIER, PARKING — which is right from DS History and from
+   * a zone page that wants the tracker updated.
+   *
+   * "parking" writes ONLY to the PARKING tab. From the Parking page the
+   * fan-out is wrong: it changes two tabs the user is not looking at, so an
+   * action taken on one page silently appears on another.
+   */
+  saveTo?: "bdd-fanout" | "parking";
+  /**
    * Called with the summary AFTER it is written to the sheet. Exists so a page
    * already showing the gemini cell can refresh it — the write happened
    * server-side, so the caller's cached row is stale until it refetches. NOT a
@@ -62,7 +74,15 @@ type Props = {
   onSaved?: (summary: string) => void;
 };
 
-export function AnalyseAndSaveButton({ imm, className, regenerate, pro, iconOnly, onSaved }: Props) {
+export function AnalyseAndSaveButton({
+  imm,
+  className,
+  regenerate,
+  pro,
+  iconOnly,
+  saveTo = "bdd-fanout",
+  onSaved,
+}: Props) {
   const [busy, setBusy] = useState(false);
 
   async function run() {
@@ -70,6 +90,36 @@ export function AnalyseAndSaveButton({ imm, className, regenerate, pro, iconOnly
     setBusy(true);
     const id = toast.loading(`Analyse de ${imm}…`);
     try {
+      if (saveTo === "parking") {
+        // One route does the whole chain server-side for this tab: reuse the
+        // stored analysis when the history has not moved, otherwise run and
+        // store it, then write the summary into PARKING's own gemini column.
+        const res = await fetch("/api/parking/analyse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imms: [imm], force: regenerate === true }),
+        });
+        const json = (await res.json()) as
+          | { ok: true; results: { outcome: string; error?: string }[] }
+          | { ok: false; error: string };
+        if (!json.ok) throw new Error(json.error);
+        const outcome = json.results[0]?.outcome;
+        if (outcome === "written" || outcome === "reused") {
+          onSaved?.("");
+          toast.success(
+            outcome === "reused"
+              ? `${imm} — analyse enregistrée réutilisée, résumé écrit.`
+              : `${imm} analysé — résumé écrit dans la colonne gemini.`,
+            { id }
+          );
+        } else if (outcome === "no-history") {
+          toast.error(`${imm} : aucune intervention à analyser.`, { id });
+        } else {
+          toast.warning(`${imm} : ${json.results[0]?.error ?? outcome}`, { id });
+        }
+        return;
+      }
+
       // 1. The vehicle's DS history — the same endpoint DS History uses.
       const hRes = await fetch(`/api/ds/history?imm=${encodeURIComponent(imm)}`);
       const hJson = (await hRes.json()) as { ok: boolean; items?: DsHistoryItem[]; error?: string };

@@ -1,12 +1,13 @@
 "use client";
 
-// One click: analyse every vehicle on the PARKING tab and write each one's
-// work order into its own ACTION cell.
+// One click for a whole column of the PARKING tab. Two variants, because the
+// tab has two AI columns answering two different questions:
 //
-// The list pages already carry a per-card "Résumé IA" button; this is the
-// other half — the service advisor's view, where the useful output is not a
-// paragraph about the vehicle but the list of operations to book, sitting in
-// the column they already read.
+//   ACTION  the work order — what the workshop should do (prompt-parking.ts)
+//   gemini  the DS analysis — what the vehicle's history says (the main prompt)
+//
+// Both reuse a stored analysis when the vehicle has not been worked on since,
+// so a second pass over the tab costs nothing.
 //
 // Batched deliberately. Sending 84 plates as one request would sit silently
 // for minutes and die on a function timeout; this walks the tab in small
@@ -31,29 +32,57 @@ import {
 // Matches the route's own cap.
 const BATCH = 8;
 
-type Outcome = "written" | "reused" | "manual" | "no-action" | "no-history" | "no-row" | "failed";
+type Outcome =
+  | "written" | "reused" | "manual" | "no-action" | "no-summary" | "no-history" | "no-row" | "failed";
 type Result = { imm: string; outcome: Outcome; actions?: number; error?: string };
+
+const VARIANTS = {
+  actions: {
+    endpoint: "/api/parking/actions",
+    label: "Actions IA",
+    busyLabel: "Génération…",
+    title: "Analyser chaque véhicule et écrire les opérations à effectuer dans sa colonne ACTION",
+    dialogTitle: (n: number) => `Générer les actions pour ${n} véhicule(s) ?`,
+    dialogBody:
+      "Les opérations à effectuer sont écrites dans la colonne ACTION, prêtes à être copiées dans un ordre de réparation. Une analyse déjà enregistrée est réutilisée telle quelle — seuls les véhicules dont l'historique a changé consomment un appel. Les cellules ACTION remplies à la main ne sont jamais écrasées.",
+    confirm: "Générer",
+  },
+  analyse: {
+    endpoint: "/api/parking/analyse",
+    label: "Analyse DS",
+    busyLabel: "Analyse…",
+    title: "Analyser l'historique DS de chaque véhicule et écrire le résumé dans sa colonne gemini",
+    dialogTitle: (n: number) => `Analyser ${n} véhicule(s) ?`,
+    dialogBody:
+      "L'historique DS de chaque véhicule est analysé et le résumé est écrit dans la colonne gemini de CET onglet — aucun autre onglet n'est touché. Une analyse déjà enregistrée est relue depuis la base sans nouvel appel ; seuls les véhicules dont l'historique a changé en consomment un.",
+    confirm: "Analyser",
+  },
+} as const;
 
 export function GenerateActionsButton({
   imms,
+  variant = "actions",
   onDone,
 }: {
   imms: string[];
+  /** Which column this button fills. See VARIANTS. */
+  variant?: keyof typeof VARIANTS;
   /** Called once at the end so the page can refetch the rows it just changed. */
   onDone?: () => void;
 }) {
+  const v = VARIANTS[variant];
   const [busy, setBusy] = useState(false);
 
   async function run() {
     if (busy || imms.length === 0) return;
     setBusy(true);
-    const id = toast.loading(`Génération des actions — 0/${imms.length}`);
+    const id = toast.loading(`${v.label} — 0/${imms.length}`);
     const all: Result[] = [];
 
     try {
       for (let i = 0; i < imms.length; i += BATCH) {
         const slice = imms.slice(i, i + BATCH);
-        const res = await fetch("/api/parking/actions", {
+        const res = await fetch(v.endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ imms: slice }),
@@ -61,7 +90,7 @@ export function GenerateActionsButton({
         const json = (await res.json()) as { ok: true; results: Result[] } | { ok: false; error: string };
         if (!json.ok) throw new Error(json.error);
         all.push(...json.results);
-        toast.loading(`Génération des actions — ${Math.min(i + BATCH, imms.length)}/${imms.length}`, { id });
+        toast.loading(`${v.label} — ${Math.min(i + BATCH, imms.length)}/${imms.length}`, { id });
       }
 
       const n = (o: Outcome) => all.filter((r) => r.outcome === o).length;
@@ -69,10 +98,11 @@ export function GenerateActionsButton({
       // Every outcome is named. A silent "done" over a run that wrote 3 cells
       // and skipped 60 would be worse than no button at all.
       const parts = [
-        `${written} action(s) écrite(s)`,
+        `${written} ${variant === "actions" ? "action(s)" : "résumé(s)"} écrit(s)`,
         n("reused") > 0 ? `dont ${n("reused")} sans nouvel appel` : "",
         n("manual") > 0 ? `${n("manual")} conservée(s) (saisie manuelle)` : "",
         n("no-action") > 0 ? `${n("no-action")} sans action à faire` : "",
+        n("no-summary") > 0 ? `${n("no-summary")} sans résumé exploitable` : "",
         n("no-history") > 0 ? `${n("no-history")} sans historique DS` : "",
         n("failed") > 0 ? `${n("failed")} en échec` : "",
       ].filter(Boolean);
@@ -81,7 +111,7 @@ export function GenerateActionsButton({
       if (n("failed") > 0) toast.warning(parts.join(" · "), { id, duration: 10_000 });
       else toast.success(parts.join(" · "), { id, duration: 8_000 });
     } catch (e) {
-      toast.error(`Génération interrompue : ${e instanceof Error ? e.message : "échec"}`, { id });
+      toast.error(`${v.label} interrompu : ${e instanceof Error ? e.message : "échec"}`, { id });
       onDone?.();
     } finally {
       setBusy(false);
@@ -95,24 +125,18 @@ export function GenerateActionsButton({
           variant="secondary"
           size="sm"
           disabled={busy || imms.length === 0}
-          title="Analyser chaque véhicule et écrire les opérations à effectuer dans sa colonne ACTION"
+          title={v.title}
         >
           <ListChecks className="h-3.5 w-3.5" />
-          {busy ? "Génération…" : "Actions IA"}
+          {busy ? v.busyLabel : v.label}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
-        <AlertDialogTitle>Générer les actions pour {imms.length} véhicule(s) ?</AlertDialogTitle>
-        <AlertDialogDescription>
-          Chaque véhicule est analysé et les opérations à effectuer sont écrites dans sa
-          colonne ACTION, prêtes à être copiées dans un ordre de réparation. Une analyse
-          déjà enregistrée est réutilisée telle quelle — seuls les véhicules dont
-          l&apos;historique a changé consomment un appel. Les cellules ACTION remplies à la
-          main ne sont jamais écrasées.
-        </AlertDialogDescription>
+        <AlertDialogTitle>{v.dialogTitle(imms.length)}</AlertDialogTitle>
+        <AlertDialogDescription>{v.dialogBody}</AlertDialogDescription>
         <AlertDialogFooter>
           <AlertDialogCancel>Annuler</AlertDialogCancel>
-          <AlertDialogAction onClick={() => void run()}>Générer</AlertDialogAction>
+          <AlertDialogAction onClick={() => void run()}>{v.confirm}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

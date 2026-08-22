@@ -513,7 +513,29 @@ RL.
 
 ---
 
-## 6.7 Parking — the work order in the ACTION column
+## 6.7 Parking — two columns, two questions, no fan-out
+
+The Parking tab has two AI columns, and the page has one button for each. They
+share the store and nothing else:
+
+| Button | Column | Prompt | Answers |
+|---|---|---|---|
+| **Analyse DS** | `gemini` | `prompt.ts` (the DS analysis) | what this vehicle's history says |
+| **Actions IA** | `ACTION` | `prompt-parking.ts` (the work order) | what the workshop should do |
+
+Both walk the vehicles CURRENTLY listed — a filter narrows them — reuse a
+stored analysis when the vehicle has not been worked on since, and give every
+plate its own verdict rather than letting one failure sink the batch. The
+per-card sparkle button runs the same "Analyse DS" path for a single vehicle.
+
+**Parking writes to Parking.** `/api/bdd/gemini` fans a summary out to
+BDD + ATELIER + PARKING, which is right from DS History but wrong here: it
+changes two tabs the user is not looking at, so an action taken on one page
+silently appears on another. `/api/parking/analyse` writes only to this tab's
+own `gemini` column. Verified live on 15374-T-1, a plate present on both tabs:
+PARKING's cell was filled, BDD's stayed empty.
+
+### The work order in the ACTION column
 
 Suivi RL's card answers "what is going on with this vehicle" in a paragraph.
 Parking answers a different question, for a different reader: a service advisor
