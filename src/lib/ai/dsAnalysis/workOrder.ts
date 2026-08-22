@@ -11,6 +11,13 @@ import type { DsAnalysis } from "@/lib/ai/prompts/dsAnalysis";
 const MAX_CELL = 1500;
 
 /**
+ * One control point, in characters. Beyond this it is not an instruction but a
+ * pasted DS description — measured on 45802-B-7, whose first line ran to
+ * "…antigel+2l huil boit+huile frein+cullase+colle+fh+5l 5w30".
+ */
+const MAX_ACTION_LENGTH = 90;
+
+/**
  * Returns "" only when the model produced no action at all.
  *
  * That is now an ANOMALY rather than a normal outcome: prompt rule A4b makes an
@@ -23,7 +30,11 @@ const MAX_CELL = 1500;
  * nothing.
  */
 export function formatWorkOrder(analysis: DsAnalysis): string {
-  const actions = (analysis.actions ?? []).map((a) => a.trim()).filter(Boolean);
+  // Style is enforced HERE, not only where the model answers: a stored
+  // analysis is replayed straight into this function, so an answer written
+  // before a style rule existed would otherwise keep its old shape forever.
+  // That is how "Diagnostiquer diagnostic" survived the rule that banned it.
+  const actions = enforceActionStyle(analysis.actions);
   if (actions.length === 0) return "";
 
   const text = actions.map((a, i) => `${i + 1}. ${a}`).join("\n");
@@ -37,10 +48,17 @@ export function formatWorkOrder(analysis: DsAnalysis): string {
  * Anything else is a human's text — the ACTION column is theirs too (it holds
  * values like "DISPONIBLE" today) — and is left exactly as it is.
  */
-export function mayOverwrite(current: string, lastWritten: string | undefined): boolean {
+export function mayOverwrite(current: string, lastWritten: string | undefined, next?: string): boolean {
   const c = current.trim();
   if (!c) return true;
-  return lastWritten !== undefined && c === lastWritten.trim();
+  if (lastWritten !== undefined && c === lastWritten.trim()) return true;
+  // Identical to what we are about to write: the write is a no-op, so refusing
+  // it protects nothing — and refusing forever is what actually happened. A
+  // vehicle whose ACTION this app wrote WITHOUT recording it (the no-history
+  // path used to skip that) was reported "manual" on every later run, so its
+  // cell could never be refreshed again. Allowing the no-op lets the run
+  // record what it now knows and unstick itself.
+  return next !== undefined && c === next.trim();
 }
 
 /**
@@ -59,6 +77,18 @@ export function mayOverwrite(current: string, lastWritten: string | undefined): 
  * removed is never the instruction, only the commentary the column does not
  * want. The findings keep their dates — that is where the evidence belongs.
  */
+/**
+ * Words that name no symptom. A DS description is often just one of these, and
+ * repeating it back produces "Diagnostiquer diagnostic" — a line seen in
+ * production twice, on 45372-B-7.
+ */
+const EMPTY_SUBJECTS = new Set([
+  "diagnostic", "diagnostique", "controle", "contrôle", "revision", "révision",
+  "pb", "probleme", "problème", "rien", "ras", ".", "-",
+]);
+
+const CONTROL_VERBS = /^(contrôler|controler|vérifier|verifier|diagnostiquer|remplacer|effectuer|réaliser|realiser|faire)\s+(l[ea]s?\s+|l'|du\s+|de\s+la\s+|des\s+|au\s+)?/i;
+
 export function enforceActionStyle(actions: readonly string[] | undefined): string[] {
   if (!actions) return [];
   const DATE = /\b(\d{1,2}\/\d{1,2}\/\d{4}|\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})\b/g;
@@ -66,7 +96,7 @@ export function enforceActionStyle(actions: readonly string[] | undefined): stri
   const out: string[] = [];
 
   for (const raw of actions) {
-    const cleaned = String(raw ?? "")
+    let cleaned = String(raw ?? "")
       // Parenthesised commentary, including the nested-free case
       // "(3 interventions : 2025-01-04, ...)".
       .replace(/\s*\([^)]*\)/g, "")
@@ -81,12 +111,41 @@ export function enforceActionStyle(actions: readonly string[] | undefined): stri
       .replace(/[\s:;,.—-]+$/g, "")
       .trim();
 
+    // The controller verifies; he does not diagnose. The prompt says so
+    // (rule A1), and this makes it true regardless: "Diagnostiquer pb
+    // démarrage" becomes "Vérifier pb démarrage".
+    cleaned = cleaned.replace(/^diagnostiquer\b/i, "Vérifier");
+
+    // A subject longer than this is a DS description dumped in whole —
+    // "Vérifier pb démarrage antigel+2l huil boit+huile frein+cullase+colle+fh"
+    // is not a control point, it is a paste. Cut at a word boundary.
+    if (cleaned.length > MAX_ACTION_LENGTH) {
+      const cut = cleaned.slice(0, MAX_ACTION_LENGTH);
+      const lastSpace = cut.lastIndexOf(" ");
+      cleaned = (lastSpace > 40 ? cut.slice(0, lastSpace) : cut).replace(/[\s+,;:.-]+$/, "");
+    }
+
     if (!cleaned) continue;
+
+    // "Diagnostiquer diagnostic": the verb plus a word that names nothing.
+    // Dropping it is safe — there is no instruction inside it to lose.
+    const subject = cleaned
+      .replace(CONTROL_VERBS, "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+    if (EMPTY_SUBJECTS.has(subject)) continue;
+
     const key = cleaned.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(cleaned);
   }
+
+  // "Si conforme : ..." only makes sense after something to check. Alone, the
+  // destination is not conditional on anything.
+  if (out.length === 1) out[0] = out[0].replace(/^si\s+conforme\s*:\s*/i, "");
   return out;
 }
 
@@ -122,5 +181,36 @@ export function statusWorkOrder(v: {
   if (etat === "ATV") return ["À envoyer vers depot-ATV"];
   if (etat === "REMPLACEMENT") return ["À envoyer vers depot-rempalcmemnt"];
   if (v.isAvis) return ["À envoyer au garage Pierre Parent"];
-  return ["Disponible — à livrer au client"];
+  // No prefix: with nothing to control, the destination is not conditional on
+  // anything. The prompt writes "Si conforme : ..." only when checks precede it.
+  return ["À livrer au client"];
+}
+
+/** Any phrasing of a destination line, current or from an older rule set. */
+const DESTINATION_RE =
+  /(à\s+livrer\s+au\s+client|disponible\s*[—-]\s*à\s+livrer|depot-ATV|depot-rempalcmemnt|garage\s+Pierre\s+Parent)/i;
+
+/**
+ * Guarantees the work order ends on the destination the quality controller
+ * will order — exactly once, in the canonical wording, and last.
+ *
+ * The prompt asks for this (rule A3 point 5) and mostly complies, but "mostly"
+ * leaves vehicles like 45802-B-7 with six checks and nowhere to send the car,
+ * which is the one line the controller cannot do his job without. Doing it in
+ * code also normalises the phrasing of REUSED answers written under older
+ * rules, instead of leaving three spellings of the same instruction in one
+ * column.
+ *
+ * "Si conforme : " goes on only when something is checked first — a
+ * destination with nothing before it is conditional on nothing.
+ */
+export function withDestination(
+  actions: readonly string[],
+  vehicle: { etat?: string; isAvis?: boolean }
+): string[] {
+  const checks = actions.filter((a) => !DESTINATION_RE.test(a));
+  const destination = statusWorkOrder(vehicle)[0];
+  return checks.length > 0
+    ? [...checks, `Si conforme : ${destination}`]
+    : [destination];
 }

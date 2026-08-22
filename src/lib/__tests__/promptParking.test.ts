@@ -14,11 +14,13 @@ describe("the two prompts are separate documents on one set of rules", () => {
   });
 
   it("only Parking's asks for actions", () => {
-    expect(DS_PARKING_WORKORDER_PROMPT).toContain("ORDRE DE TRAVAIL");
+    expect(DS_PARKING_WORKORDER_PROMPT).toContain("FICHE DE CONTRÔLE");
+    // Who reads the column decides how it is written.
+    expect(DS_PARKING_WORKORDER_PROMPT).toContain("LE LECTEUR EST LE CONTRÔLEUR QUALITÉ");
     expect(DS_PARKING_WORKORDER_PROMPT).toContain("- actions:");
     // DS History's card renders findings and a summary; asking it for a work
     // order too would spend tokens on output nothing displays.
-    expect(DS_ANALYSIS_SYSTEM_PROMPT).not.toContain("ORDRE DE TRAVAIL");
+    expect(DS_ANALYSIS_SYSTEM_PROMPT).not.toContain("FICHE DE CONTRÔLE");
     expect(DS_ANALYSIS_SYSTEM_PROMPT).not.toContain("- actions:");
   });
 
@@ -55,7 +57,7 @@ describe("the two prompts are separate documents on one set of rules", () => {
     expect(p).toContain("Pas de justification");
     // The example pair is the instruction: show the bare consigne, show the
     // rejected form next to it.
-    expect(p).toContain('Écris : « Remplacer le filtre à gasoil »');
+    expect(p).toContain("Écris : « Contrôler le remplacement du filtre à gasoil »");
     expect(p).toContain("PAS   : « Remplacer le filtre à gasoil (jamais enregistré, 144 878 km) »");
   });
 
@@ -106,5 +108,24 @@ describe("prompt fingerprinting — a rule change must invalidate stored answers
     expect(promptFingerprint(DS_PARKING_WORKORDER_PROMPT)).not.toBe(
       promptFingerprint(DS_ANALYSIS_SYSTEM_PROMPT)
     );
+  });
+});
+
+describe("the ACTION column is written for the quality controller", () => {
+  it("asks for controls, not repairs", async () => {
+    const { DS_PARKING_WORKORDER_PROMPT: p } = await import("@/lib/ai/dsAnalysis/prompt-parking");
+    // He does not repair and orders no parts: "Remplacer le filtre à gasoil"
+    // asks him to do somebody else's job.
+    expect(p).toContain("POINT DE CONTRÔLE");
+    expect(p).toContain("Jamais « Remplacer »");
+    expect(p).toContain("n'est pas l'atelier");
+  });
+
+  it("always ends on the destination he will order", async () => {
+    const { DS_PARKING_WORKORDER_PROMPT: p } = await import("@/lib/ai/dsAnalysis/prompt-parking");
+    expect(p).toContain("LA DESTINATION — TOUJOURS, et toujours en dernier");
+    expect(p).toContain("À livrer au client");
+    // Conditional when there is something to check first, bare when there is not.
+    expect(p).toContain("Si conforme :");
   });
 });

@@ -630,6 +630,29 @@ organ in `findings` must have its `Contrôler <organe>` in `actions`, and then
 oil changes are the deliberate exception: their return is normal servicing,
 already governed by the interval checks.
 
+**The reader is the QUALITY CONTROLLER, and that decides everything about the
+column.** He repairs nothing and orders no parts: he takes the vehicle,
+verifies the work was done properly, and then orders where it goes. So every
+line is a control point — `Contrôler …`, `Vérifier …`, never `Remplacer …`,
+which would ask him to do somebody else's job — and the LAST line is always the
+destination he will order:
+
+| | |
+|---|---|
+| ETAT ATV | `À envoyer vers depot-ATV` |
+| ETAT Remplacement | `À envoyer vers depot-rempalcmemnt` |
+| AVIS / Scal Avis | `À envoyer au garage Pierre Parent` |
+| otherwise | `À livrer au client` |
+
+Prefixed `Si conforme : ` when something is checked first, bare when it stands
+alone — a destination with nothing before it is conditional on nothing.
+
+**The destination is guaranteed in code**, not merely requested:
+`withDestination()` appends it, deduplicates it, puts it last and normalises
+older phrasings. The prompt asked for it and mostly complied, which left
+45802-B-7 with six checks and nowhere to send the car — the one line the
+controller cannot work without.
+
 **Actions carry no justification.** The instruction and nothing else —
 `Remplacer le filtre à gasoil`, not `Remplacer le filtre à gasoil (jamais
 enregistré, 144 878 km)`. The evidence is already in the `gemini` column the

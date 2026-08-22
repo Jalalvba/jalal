@@ -32,9 +32,9 @@ import { canonicalizeSuppliers } from "@/lib/ai/prompts/dsAnalysis";
 import { runDsAnalysis, resolveTier } from "@/lib/ai/dsAnalysis/run";
 import { resolveCpStatus } from "@/lib/vehicle/contractEnd";
 import { DS_PARKING_WORKORDER_PROMPT } from "@/lib/ai/dsAnalysis/prompt-parking";
-import { getAnalysis, recordActionText } from "@/lib/mongo/dsAnalyses";
+import { getAnalysis, recordActionText, saveAnalysis } from "@/lib/mongo/dsAnalyses";
 import { isStale, promptFingerprint } from "@/lib/ai/dsAnalysis/stored";
-import { formatWorkOrder, mayOverwrite, statusWorkOrder } from "@/lib/ai/dsAnalysis/workOrder";
+import { formatWorkOrder, mayOverwrite, statusWorkOrder, withDestination } from "@/lib/ai/dsAnalysis/workOrder";
 import { getParkingRows, updateAction } from "@/lib/sheets/googleSheetsParking";
 import type { DsHistoryItem } from "@/types";
 
@@ -81,9 +81,10 @@ export async function POST(request: Request) {
   // store is that the second pass over the tab is free.
   const force = b.force === true;
 
-  // One read for the whole batch: rows carry both the sheet row index the
-  // write needs and the current ACTION text the overwrite rule needs.
-  const rows = await getParkingRows();
+  // FRESH, not cached: the overwrite rule compares the cell's current text
+  // against what this app last wrote, so a row read from a 60s-old cache can
+  // make it mistake its own write for a human's and refuse to touch the cell.
+  const rows = await getParkingRows(true);
   const results: Result[] = [];
 
   for (const imm of imms) {
@@ -113,11 +114,35 @@ export async function POST(request: Request) {
           insufficientData: true,
         });
         const stored0 = await getAnalysis(imm);
-        if (!mayOverwrite(String(row.action ?? ""), stored0?.actionText)) {
+        if (!mayOverwrite(String(row.action ?? ""), stored0?.actionText, text)) {
           results.push({ imm, outcome: "manual" });
           continue;
         }
         await updateAction(row.rowIndex, text, row.imm);
+        // The document has to exist BEFORE recordActionText, which updates and
+        // does not upsert: without this the plate has no stored analysis (no
+        // model ran), nothing is recorded, and the NEXT run reads this app's
+        // own text as a human's and reports "manual". Seen on 79878-B-7 and
+        // 72351-T-1 within minutes of writing them.
+        await saveAnalysis({
+          imm,
+          analysis: {
+            contractFlag: { level: "unknown", label: "" },
+            actions: statusWorkOrder({ etat: String(row.etatVehicule ?? ""), isAvis: row.isAvis }),
+            findings: [],
+            summary: "Aucune intervention DS enregistrée pour ce véhicule.",
+            insufficientData: true,
+          },
+          tier,
+          model: "aucun (déduit du statut)",
+          costUsd: 0,
+          entriesCount: 0,
+          lastEntryDate: null,
+          // Not a prompt: this answer comes from the status rules in code.
+          // Never matches a prompt fingerprint, so it is always recomputed —
+          // which costs nothing, since no model is involved.
+          promptHash: "status-only",
+        });
         await recordActionText(imm, text);
         results.push({ imm, outcome: "written", actions: 1 });
         continue;
@@ -179,18 +204,20 @@ export async function POST(request: Request) {
       // A4b makes an empty list impossible in every case but a closed
       // contract, and this is what keeps that true when the model slips or
       // when the grounding guards drop its last action.
-      const modelActions = analysis.actions ?? [];
-      const text = formatWorkOrder(
-        modelActions.length > 0
-          ? analysis
-          : { ...analysis, actions: statusWorkOrder({ etat: String(row.etatVehicule ?? ""), isAvis: row.isAvis }) }
-      );
+      // The destination is guaranteed in code, not merely requested: it is the
+      // line the controller cannot work without, and withDestination() also
+      // normalises whatever wording a reused answer carries.
+      const vehicle = { etat: String(row.etatVehicule ?? ""), isAvis: row.isAvis };
+      const text = formatWorkOrder({
+        ...analysis,
+        actions: withDestination(analysis.actions ?? [], vehicle),
+      });
       if (!text) {
         results.push({ imm, outcome: "no-action" });
         continue;
       }
 
-      if (!mayOverwrite(String(row.action ?? ""), stored?.actionText)) {
+      if (!mayOverwrite(String(row.action ?? ""), stored?.actionText, text)) {
         results.push({ imm, outcome: "manual" });
         continue;
       }

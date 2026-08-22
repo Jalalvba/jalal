@@ -64,7 +64,8 @@ export async function POST(request: Request) {
   // wrong — not a default, since reuse is the whole point of the store.
   const force = b.force === true;
 
-  const rows = await getParkingRows();
+  // Fresh for the same reason as the sibling /actions route.
+  const rows = await getParkingRows(true);
   const results: Result[] = [];
 
   for (const imm of imms) {
