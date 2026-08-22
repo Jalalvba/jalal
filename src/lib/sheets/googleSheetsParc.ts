@@ -23,7 +23,12 @@ const CACHE_KEY = "rows:parc-owners";
 // Verified against the live header row: ID, Société, Client, Marque, Modèle,
 // Immatriculation, ... Read by NAME below rather than by these positions —
 // they are here to say what the range covers, not to be trusted.
-const RANGE = `'${PARC_TAB}'!A1:F5000`;
+//
+// OPEN-ENDED on purpose. The first version capped this at row 5000 and the tab
+// is bigger than that: 43 of the 83 Parking plates fell past the cut and came
+// back with no owner at all, which read as "the fallback does not work". A row
+// limit on a tab that grows is a bug with a timer on it.
+const RANGE = `'${PARC_TAB}'!A:F`;
 
 export type VehicleOwner = {
   /** The Client column — the customer, when there is one. */

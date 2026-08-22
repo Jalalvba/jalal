@@ -144,8 +144,11 @@ function ParkingCard({
       // called out where the eye lands first, not buried in the field list.
       headerLeft={
         row.isAvis ? (
-          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-micro font-bold uppercase tracking-wide text-white shadow-sm dark:bg-amber-600">
-            AVIS
+          <span
+            title="Véhicule du parc AVIS (Client ou Société = AVIS / Scal Avis) — après tout changement de pièce, direction garage Pierre Parent"
+            className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-1 text-xs font-black uppercase tracking-widest text-white ring-2 ring-amber-300 dark:bg-amber-600 dark:ring-amber-700"
+          >
+            ★ AVIS
           </span>
         ) : undefined
       }

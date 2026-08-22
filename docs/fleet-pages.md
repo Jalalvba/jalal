@@ -72,6 +72,27 @@ AND in the work-order prompt. The action has to name the zone as it exists, not
 as it should be written — correcting the spelling here would send vehicles to a
 zone no row matches. Fix the sheet first, then the list.
 
+**Ownership and the AVIS badge.** `client` falls back to the parc tab's
+`Société` when the tab's own CLIENT lookup is empty, and a vehicle whose Client
+OR Société reads AVIS / Scal Avis gets a loud amber badge on its card and the
+Pierre Parent routing in its work order.
+
+The parc-tab read is `'parc'!A:F`, deliberately open-ended. The first version
+capped it at row 5000 and the tab is bigger: **43 of the 83 Parking plates fell
+past the cut**, came back with no owner at all, and — because four of them were
+AVIS vehicles — silently lost their AVIS treatment as well. A row limit on a
+tab that grows is a bug with a timer on it. After the fix: 7 835 plates mapped,
+0 blank clients, and the AVIS count went from 4 to 9.
+
+**Where `Société` lives.** Only in this spreadsheet tab. The Mongo `parc`
+collection does not carry it — `~/import`'s `PARC_FIELD_MAP` already maps
+`"Société" → "societe"`, but `parc.py`'s `COLUMNS_NEEDED` keep-list drops it
+before the write, so importing it is one line there plus a `field_registry.json`
+refresh (its `validate_against_registry()` checks `COLUMNS_NEEDED` against the
+registry, which cannot list a field Mongo has never held). Until that happens,
+this tab is the only source, and `locataire` is NOT a substitute — it reads
+"Locafinance" for the very plates whose Société is "AVIS".
+
 **Export PDF** renders the filtered view — `POST /api/parking/export`, seven
 columns: IMM, TIMESTAMP, ACTION, ZONING, MARQUE, MODEL, gemini.
 
