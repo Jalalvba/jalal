@@ -21,6 +21,7 @@ import type { DsAnalysis, ContractLevel, FindingLevel } from "@/lib/ai/prompts/d
 import { buildDsAnalysisPayload } from "@/lib/ai/dsAnalysis/payload";
 import { useStoredAnalysis, useInvalidateStoredAnalyses } from "@/hooks/useStoredAnalyses";
 import { isStale } from "@/lib/ai/dsAnalysis/stored";
+import { useVehicleOwner } from "@/hooks/useVehicleOwner";
 import type { IntervalCheck, BeltPumpCheck } from "@/lib/ai/prompts/maintenanceIntervals";
 import type { OilGradeCheck } from "@/lib/ai/prompts/oilGrade";
 import type { VehicleIdentity } from "@/lib/vehicle/identity";
@@ -117,6 +118,10 @@ export function DsAnalysisCard({
   // model is not called again just because the page was reopened, which is the
   // whole reason /api/ds-history/analysis exists.
   const { data: storedDoc } = useStoredAnalysis(imm);
+  // Ownership travels with the payload here for the same reason it does on
+  // Parking: an AVIS vehicle is the company's own, and the analysis says so
+  // instead of describing it as a customer's.
+  const { data: owner } = useVehicleOwner(imm);
   const invalidateStored = useInvalidateStoredAnalyses();
 
   // The history this card is looking at RIGHT NOW, against the history the
@@ -153,7 +158,16 @@ export function DsAnalysisCard({
       imm,
       items,
       contractEnd,
-      vehicle: { brand: vehicle?.brand, model: vehicle?.model, state: vehicle?.vehicle_state },
+      vehicle: {
+        brand: vehicle?.brand,
+        model: vehicle?.model,
+        state: vehicle?.vehicle_state,
+        // cp's contract status, and the owner from the parc tab — Client when
+        // there is one, Société otherwise.
+        cpStatus: vehicle?.statut,
+        owner: owner?.display,
+        isAvis: owner?.isAvis === true,
+      },
       replacements: rlRows.map((r) => ({ date: r["Date"], motif: r["Motif"] })),
     });
   }

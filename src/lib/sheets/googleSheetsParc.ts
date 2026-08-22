@@ -68,7 +68,12 @@ export function classifyOwner(client: unknown, societe: unknown): VehicleOwner {
  * call per vehicle on a page rendering 84 of them.
  */
 export async function getParcOwners(fresh = false): Promise<Map<string, VehicleOwner>> {
-  return withCache(
+  // The CACHE stores an array, and the Map is built outside it. unstable_cache
+  // serialises what it returns, so a Map survives exactly one call and comes
+  // back as `{}` on every cached hit afterwards — the first request answered
+  // correctly and every later one threw "(intermediate value).get is not a
+  // function". Anything cached here must be JSON, by construction.
+  const entries = await withCache(
     CACHE_KEY,
     ROWS_CACHE_TTL_MS,
     async () => {
@@ -78,7 +83,7 @@ export async function getParcOwners(fresh = false): Promise<Map<string, VehicleO
         range: RANGE,
       });
       const values = res.data.values ?? [];
-      if (values.length === 0) return new Map<string, VehicleOwner>();
+      if (values.length === 0) return [] as [string, VehicleOwner][];
 
       const headers = values[0].map((h) => String(h ?? "").trim().toLowerCase());
       const idx = (name: string) => headers.findIndex((h) => h === name);
@@ -89,19 +94,21 @@ export async function getParcOwners(fresh = false): Promise<Map<string, VehicleO
       // empty map (every vehicle simply unknown) rather than silently reading
       // whatever now sits in that position and attributing it to the wrong
       // field.
-      if (iImm < 0 || (iSociete < 0 && iClient < 0)) return new Map<string, VehicleOwner>();
+      if (iImm < 0 || (iSociete < 0 && iClient < 0)) return [] as [string, VehicleOwner][];
 
-      const map = new Map<string, VehicleOwner>();
+      const out: [string, VehicleOwner][] = [];
       for (let i = 1; i < values.length; i++) {
         const row = values[i];
         const imm = String(row[iImm] ?? "").trim().toUpperCase();
         if (!imm) continue;
-        map.set(imm, classifyOwner(iClient >= 0 ? row[iClient] : "", iSociete >= 0 ? row[iSociete] : ""));
+        out.push([imm, classifyOwner(iClient >= 0 ? row[iClient] : "", iSociete >= 0 ? row[iSociete] : "")]);
       }
-      return map;
+      return out;
     },
     { bypass: fresh }
   );
+
+  return new Map(entries);
 }
 
 /** One plate's owner, or null when the tab does not know it. */

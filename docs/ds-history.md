@@ -141,6 +141,33 @@ changed.
 
 ---
 
+### 1.6 Société and the AVIS fleet — a third source
+
+`mergeVehicleIdentity()` answers `client` from **cp** (parc as fallback), and
+that stays true. But **Société is in neither collection**: the Mongo `parc`
+import maps the column and then drops it in `parc.py`'s `COLUMNS_NEEDED`
+keep-list, and `locataire` is not a stand-in — it reads "Locafinance" for the
+very plates whose Société is "AVIS".
+
+So the card asks `GET /api/vehicle/owner?imm=` for that one field, served from
+the spreadsheet's own `parc` TAB (`src/lib/sheets/googleSheetsParc.ts`). It
+renders **Client** and **Société** side by side — a vehicle can have a customer
+and an owner, and for AVIS's own fleet the owner is the operative fact — plus a
+loud badge when either field reads AVIS / Scal Avis. The same owner travels
+with the analysis payload, so the DS History analysis describes an AVIS vehicle
+as the company's own rather than as a customer's.
+
+Kept OUT of `mergeVehicleIdentity()` on purpose: that function is pure and
+merges two Mongo documents. Folding a Sheets read into it would make it depend
+on a network call, and every test of it would need a fixture for a spreadsheet.
+
+**A caching trap worth naming**: `getParcOwners()` caches an ARRAY and builds
+its `Map` outside `withCache`. `unstable_cache` serialises what it returns, so
+a cached `Map` survives exactly one call and comes back `{}` afterwards — the
+first request answered correctly and every later one threw
+"(intermediate value).get is not a function". Anything cached must be JSON by
+construction.
+
 ## 2. Search
 
 **Plate-only, strict prefix match, with browser caching** (`6f24bdf`,

@@ -44,6 +44,7 @@ import type { RlRow, RlReunionRow } from "@/lib/sheets/googleSheetsRl";
 import { DsAnalysisCard } from "@/components/fleet/DsAnalysisCard";
 import { CardErrorBoundary } from "@/components/fleet/CardErrorBoundary";
 import { mergeVehicleIdentity, identityFromImmOnly, type VehicleIdentity } from "@/lib/vehicle/identity";
+import { useVehicleOwner } from "@/hooks/useVehicleOwner";
 import type { ImportRow } from "@/lib/sheets/googleSheetsImport";
 import { fmtDate, fmtNum } from "@/lib/utils/format";
 import { useSheetFieldOptions, optionValues } from "@/hooks/useSheetFieldOptions";
@@ -280,6 +281,10 @@ function VehicleCard({ identity, contracts, hasRl }: { identity: VehicleIdentity
   const isRemplacement = contracts.some(c => c.type?.trim().toLowerCase() === "remplacement");
   const isRed = hasRl || isRemplacement;
   const zone = useVehicleZone(identity.imm ?? "");
+  // Société comes from the spreadsheet's parc TAB — neither Mongo collection
+  // carries it (see /api/vehicle/owner). Client still comes from cp/parc via
+  // mergeVehicleIdentity(); this only adds what those two cannot answer.
+  const { data: owner } = useVehicleOwner(identity.imm ?? "");
   // Atelier > Depot > Parking > RDV: a vehicle in the workshop is the most
   // actionable state to flag at a glance, RDV (just an appointment) the
   // least — matches priority as anywhere else in this app that must pick
@@ -325,6 +330,14 @@ function VehicleCard({ identity, contracts, hasRl }: { identity: VehicleIdentity
         <div className="flex flex-wrap gap-1">
           <ZoneBadges inParking={zone.inParking} inAtelier={zone.inAtelier} inRdv={zone.inRdv} inDepot={zone.inDepot} />
         </div>
+        {owner?.isAvis && (
+          <span
+            title="Véhicule du parc AVIS (Client ou Société = AVIS / Scal Avis) — après tout changement de pièce, direction garage Pierre Parent"
+            className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-1 text-xs font-black uppercase tracking-widest text-white ring-2 ring-amber-300 dark:bg-amber-600 dark:ring-amber-700"
+          >
+            ★ AVIS
+          </span>
+        )}
         {identity.statut && (
           <Badge
             variant={STATUT_STYLE[identity.statut]?.variant ?? "neutral"}
@@ -339,7 +352,12 @@ function VehicleCard({ identity, contracts, hasRl }: { identity: VehicleIdentity
 
       {/* ── Priority row: always visible ── */}
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-5 py-4 sm:grid-cols-3 lg:grid-cols-6">
-        {f("Client",        identity.client)}
+        {/* Client from cp (parc as fallback); Société from the parc tab — the
+            one field neither Mongo collection holds. Both shown: a vehicle can
+            have a customer AND an owner, and for the AVIS fleet the owner is
+            the operative fact. */}
+        {f("Client",        identity.client ?? owner?.display)}
+        {f("Société",       owner?.societe)}
         {f("IMM",           identity.imm)}
         {f("WW",            identity.ww)}
         {f("Etat véhicule", identity.vehicle_state)}
