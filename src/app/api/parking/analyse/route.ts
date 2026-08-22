@@ -29,7 +29,8 @@ import { canonicalizeSuppliers } from "@/lib/ai/prompts/dsAnalysis";
 import { runDsAnalysis, resolveTier } from "@/lib/ai/dsAnalysis/run";
 import { resolveCpStatus } from "@/lib/vehicle/contractEnd";
 import { getAnalysis } from "@/lib/mongo/dsAnalyses";
-import { isStale } from "@/lib/ai/dsAnalysis/stored";
+import { isStale, promptFingerprint } from "@/lib/ai/dsAnalysis/stored";
+import { DS_ANALYSIS_SYSTEM_PROMPT } from "@/lib/ai/prompts/dsAnalysis";
 import { getParkingRows, writeParkingGeminiSummary } from "@/lib/sheets/googleSheetsParking";
 import type { DsHistoryItem } from "@/types";
 
@@ -105,6 +106,7 @@ export async function POST(request: Request) {
       const fresh =
         !force &&
         stored != null &&
+        stored.promptHash === promptFingerprint(DS_ANALYSIS_SYSTEM_PROMPT) &&
         !isStale(stored, { entriesCount: input.entries.length, lastEntryDate: input.entries[0]?.date ?? null });
 
       // No prompt argument: this is the DS History analysis, the default.

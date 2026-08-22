@@ -27,6 +27,20 @@ export type StoredDsAnalysis = {
   /** ISO date of the most recent intervention that was analysed. */
   lastEntryDate: string | null;
   /**
+   * Fingerprint of the prompt that produced this analysis.
+   *
+   * Freshness is not only about the vehicle. When the RULES change — a new
+   * status branch, a different action style — every stored answer is stale in
+   * a way isStale() cannot see, because the history did not move. Measured:
+   * after the work-order rules changed, a full pass over the tab reused 79 of
+   * 83 analyses and left them written to the OLD rules, including an ATV
+   * vehicle still listing filter replacements it should never have been given.
+   *
+   * A hash rather than a hand-maintained number, because a version constant is
+   * exactly the kind of thing that gets forgotten in the edit that needed it.
+   */
+  promptHash?: string;
+  /**
    * The exact text this app last wrote into PARKING's ACTION cell for this
    * plate, when it did.
    *
@@ -60,4 +74,15 @@ export function isStale(
 ): boolean {
   if (current.entriesCount !== stored.entriesCount) return true;
   return (current.lastEntryDate ?? "") !== (stored.lastEntryDate ?? "");
+}
+
+/**
+ * Fingerprints a prompt document. Short on purpose: this is a change detector,
+ * not a security boundary — a collision would only mean one skipped re-run.
+ */
+export function promptFingerprint(prompt: string): string {
+  // djb2, so this stays usable from a client component too (no node:crypto).
+  let h = 5381;
+  for (let i = 0; i < prompt.length; i++) h = ((h << 5) + h + prompt.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
 }

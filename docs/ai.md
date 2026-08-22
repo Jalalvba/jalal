@@ -702,6 +702,17 @@ hallucinated date is worse than a report built on one — somebody books the
 work — and `promptParking.test.ts` fails if a rule appears in one and not the
 other.
 
+**Reuse also requires the answer to come from TODAY'S rules.** Freshness is not
+only about the vehicle: when the prompt changes, every stored analysis is stale
+in a way `isStale()` cannot see, because no history moved. Measured — a full
+pass over the tab right after the work-order rules changed reused **79 of 83**
+analyses and left them written to the old rules, an ATV vehicle among them
+still listing filter replacements it should never have been given. Each stored
+analysis now carries `promptHash`, a fingerprint of the prompt that produced
+it, and reuse requires a match. A hash rather than a hand-maintained version
+number, because a version constant is exactly what gets forgotten in the edit
+that needed it.
+
 **Reuse requires an answer to THIS question.** A stored analysis is reused only
 when the history has not moved AND `actions` is an array. That second condition
 is not pedantry: `ds_analyses` is shared with DS History, whose prompt produces

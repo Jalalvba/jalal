@@ -33,7 +33,7 @@ import { runDsAnalysis, resolveTier } from "@/lib/ai/dsAnalysis/run";
 import { resolveCpStatus } from "@/lib/vehicle/contractEnd";
 import { DS_PARKING_WORKORDER_PROMPT } from "@/lib/ai/dsAnalysis/prompt-parking";
 import { getAnalysis, recordActionText } from "@/lib/mongo/dsAnalyses";
-import { isStale } from "@/lib/ai/dsAnalysis/stored";
+import { isStale, promptFingerprint } from "@/lib/ai/dsAnalysis/stored";
 import { formatWorkOrder, mayOverwrite, statusWorkOrder } from "@/lib/ai/dsAnalysis/workOrder";
 import { getParkingRows, updateAction } from "@/lib/sheets/googleSheetsParking";
 import type { DsHistoryItem } from "@/types";
@@ -156,10 +156,16 @@ export async function POST(request: Request) {
       // array that is present but EMPTY is a genuine "nothing to do" and is
       // reused; an absent one means nobody ever asked.
       const stored = await getAnalysis(imm);
+      const currentPrompt = promptFingerprint(DS_PARKING_WORKORDER_PROMPT);
       const fresh =
         !force &&
         stored != null &&
         Array.isArray(stored.analysis?.actions) &&
+        // Produced by the rules in force TODAY. Without this, a rule change
+        // silently applies to nothing: the vehicles' histories have not moved,
+        // so every stored answer looks fresh and the whole tab keeps its old
+        // work orders.
+        stored.promptHash === currentPrompt &&
         !isStale(stored, { entriesCount: input.entries.length, lastEntryDate: input.entries[0]?.date ?? null });
 
       // Parking's OWN prompt — not DS History's. Same data, same grounding

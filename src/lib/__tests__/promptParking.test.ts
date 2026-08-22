@@ -89,3 +89,22 @@ describe("the zone actions name real ZONING values", () => {
     }
   });
 });
+
+describe("prompt fingerprinting — a rule change must invalidate stored answers", () => {
+  it("changes when the prompt changes, and is stable when it does not", async () => {
+    const { promptFingerprint } = await import("@/lib/ai/dsAnalysis/stored");
+    const { DS_PARKING_WORKORDER_PROMPT: p } = await import("@/lib/ai/dsAnalysis/prompt-parking");
+    expect(promptFingerprint(p)).toBe(promptFingerprint(p));
+    expect(promptFingerprint(p)).not.toBe(promptFingerprint(p + " "));
+  });
+
+  it("distinguishes the two prompt documents", async () => {
+    const { promptFingerprint } = await import("@/lib/ai/dsAnalysis/stored");
+    const { DS_PARKING_WORKORDER_PROMPT } = await import("@/lib/ai/dsAnalysis/prompt-parking");
+    const { DS_ANALYSIS_SYSTEM_PROMPT } = await import("@/lib/ai/dsAnalysis/prompt");
+    // Otherwise an analysis written by one would be reused for the other.
+    expect(promptFingerprint(DS_PARKING_WORKORDER_PROMPT)).not.toBe(
+      promptFingerprint(DS_ANALYSIS_SYSTEM_PROMPT)
+    );
+  });
+});

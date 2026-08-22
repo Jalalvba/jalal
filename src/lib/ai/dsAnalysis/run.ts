@@ -34,6 +34,7 @@ import {
 import { checkOilGrade, formatOilGradeCheck, type OilGradeCheck } from "@/lib/ai/prompts/oilGrade";
 import { resolveContractEnd } from "@/lib/vehicle/contractEnd";
 import { saveAnalysis } from "@/lib/mongo/dsAnalyses";
+import { promptFingerprint } from "@/lib/ai/dsAnalysis/stored";
 import { enforceActionStyle } from "@/lib/ai/dsAnalysis/workOrder";
 
 /**
@@ -202,6 +203,9 @@ export async function runDsAnalysis(
       costUsd: costInfo.costUsd,
       entriesCount: input.entries.length,
       lastEntryDate: input.entries[0]?.date ?? null,
+      // Which rules produced this. A later run under different rules must not
+      // reuse it — see StoredDsAnalysis.promptHash.
+      promptHash: promptFingerprint(systemPrompt),
     });
   } catch (e) {
     log("warn", "ds-analysis", "Could not store the analysis", { imm: input.imm, ...serializeError(e) });
