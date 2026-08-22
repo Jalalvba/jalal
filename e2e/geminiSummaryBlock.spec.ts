@@ -38,6 +38,17 @@ test("a zone card shows the summary from its own tab's gemini column", async ({
     });
   });
 
+  // Stored analyses would otherwise fill in summaries for rows this fixture
+  // deliberately left blank, and the empty-state assertion below is the point
+  // of the test.
+  await page.route("**/api/ds-history/analysis**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, summaries: [] }),
+    })
+  );
+
   await page.goto("/parking");
   await expect(page.getByText("Résumé IA").first()).toBeVisible({ timeout: 40_000 });
   test.skip(rows.length === 0, "PARKING tab is empty — nothing to render");
@@ -49,7 +60,16 @@ test("a zone card shows the summary from its own tab's gemini column", async ({
   // Exactly one card shows it — the value is per row, not per page.
   const body = await page.locator("body").innerText();
   expect((body.match(new RegExp(SUMMARY, "g")) ?? []).length).toBe(1);
-  if (rows.length > 1) expect(body).toContain("Aucun résumé");
+  // A row with no summary renders NO panel at all — just the icon that starts
+  // one. The old placeholder ("Aucun résumé — lancez l'analyse…") was a
+  // bordered rectangle per row announcing its own emptiness, ~95 of them on
+  // Suivi RL. Its absence is the assertion.
+  expect(body).not.toContain("Aucun résumé");
+  if (rows.length > 1) {
+    // …and the trigger is still reachable on those rows, by its accessible
+    // name, since it no longer carries visible text.
+    await expect(page.getByRole("button", { name: /^Résumé IA — / }).first()).toBeVisible();
+  }
   expect(errs).toEqual([]);
 });
 

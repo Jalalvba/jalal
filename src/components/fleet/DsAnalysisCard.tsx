@@ -19,6 +19,8 @@ import type { RlRow } from "@/lib/sheets/googleSheetsRl";
 import { classifyRepairOrigin } from "@/lib/ai/prompts/dsAnalysis";
 import type { DsAnalysis, ContractLevel, FindingLevel } from "@/lib/ai/prompts/dsAnalysis";
 import { buildDsAnalysisPayload } from "@/lib/ai/dsAnalysis/payload";
+import { useStoredAnalysis, useInvalidateStoredAnalyses } from "@/hooks/useStoredAnalyses";
+import { isStale } from "@/lib/ai/dsAnalysis/stored";
 import type { IntervalCheck, BeltPumpCheck } from "@/lib/ai/prompts/maintenanceIntervals";
 import type { OilGradeCheck } from "@/lib/ai/prompts/oilGrade";
 import type { VehicleIdentity } from "@/lib/vehicle/identity";
@@ -110,6 +112,23 @@ export function DsAnalysisCard({
   // analysis: the result is on screen either way, this only reports whether it
   // was also written to the tracker.
   const [saved, setSaved] = useState<null | { ok: boolean; note: string }>(null);
+
+  // An analysis already paid for, read back from Mongo. Rendered as-is: the
+  // model is not called again just because the page was reopened, which is the
+  // whole reason /api/ds-history/analysis exists.
+  const { data: storedDoc } = useStoredAnalysis(imm);
+  const invalidateStored = useInvalidateStoredAnalyses();
+
+  // The history this card is looking at RIGHT NOW, against the history the
+  // stored analysis was based on. Different means the verdict predates work
+  // that has since happened, and the card says so instead of presenting it as
+  // current.
+  const storedIsStale =
+    storedDoc != null &&
+    isStale(storedDoc, {
+      entriesCount: items.length,
+      lastEntryDate: items[0]?.date_ds ?? null,
+    });
 
   // contracts[0], matching VehicleCard directly above this one (page.tsx:263).
   // Picking a different row — e.g. the first WITH a date — would flag one
@@ -226,6 +245,10 @@ export function DsAnalysisCard({
         return;
       }
       setResult(json);
+      // The route stored this analysis; drop the copy this card (and the list
+      // pages) read, so the next render shows the new one rather than the
+      // superseded one.
+      invalidateStored(imm);
       void saveSummary(json.analysis.summary);
     } catch {
       setError("Échec de l'analyse — vérifiez la connexion.");
@@ -268,7 +291,11 @@ export function DsAnalysisCard({
       <div className="px-5 py-4">
         <div className="flex flex-wrap items-center gap-3">
           <Button type="button" onClick={runAnalysis} disabled={loading || items.length === 0}>
-            {loading ? "Analyse en cours…" : result ? "Relancer l'analyse" : "Analyser"}
+            {loading
+              ? "Analyse en cours…"
+              : result || storedDoc
+                ? "Relancer l'analyse"
+                : "Analyser"}
           </Button>
           <span className="text-xs text-muted-foreground">
             {items.length} intervention{items.length > 1 ? "s" : ""}
@@ -283,6 +310,36 @@ export function DsAnalysisCard({
         </div>
 
         {error && <Alert className="mt-3">{error}</Alert>}
+
+        {/* A stored analysis, shown before (and instead of) any new call. */}
+        {!result && storedDoc && (
+          <div className="mt-3 space-y-2">
+            <p className="text-micro uppercase tracking-wide text-muted-foreground">
+              Analyse enregistrée du{" "}
+              {new Date(storedDoc.updatedAt).toLocaleDateString("fr-FR")}
+              {storedDoc.tier === "pro" ? " · modèle avancé" : ""}
+            </p>
+            {storedIsStale && (
+              <Alert className="text-xs">
+                L&apos;historique a changé depuis cette analyse
+                ({storedDoc.entriesCount} intervention{storedDoc.entriesCount > 1 ? "s" : ""} analysées,{" "}
+                {items.length} aujourd&apos;hui). Relancez-la pour la mettre à jour.
+              </Alert>
+            )}
+            {storedDoc.analysis.findings.map((f, i) => (
+              <div key={i} className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+                <p className="text-sm font-medium text-card-foreground">{f.title}</p>
+                <p className="mt-0.5 whitespace-pre-wrap text-sm text-muted-foreground">{f.detail}</p>
+              </div>
+            ))}
+            <div>
+              <p className="text-micro uppercase tracking-wide text-muted-foreground">Résumé</p>
+              <p className="whitespace-pre-wrap text-sm text-card-foreground">
+                {storedDoc.analysis.summary}
+              </p>
+            </div>
+          </div>
+        )}
 
         {result && (
           <div className="mt-4 space-y-3">

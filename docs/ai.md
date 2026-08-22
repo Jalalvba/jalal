@@ -458,6 +458,50 @@ Full behaviour: [`ds-history.md` §4.5](./ds-history.md#45-analyse-ia--the-ai-he
 
 ---
 
+## 6.6 `ds_analyses` — analyses are stored, not thrown away
+
+Before this collection existed, an analysis lived only in React state. Only
+the one-paragraph `summary` survived, written into the sheet's `gemini`
+column; the findings, the interval checks, the tier and the cost were lost the
+moment the page unmounted. Re-opening a vehicle meant paying for the same
+answer again — and on Suivi RL that is a real ~0.08 MAD per click.
+
+| | |
+|---|---|
+| Collection | `ds_analyses`, one document per plate, upserted |
+| Written by | `/api/ds-history/analyze`, after the guards, before responding |
+| Read by | `GET /api/ds-history/analysis` — `?imm=X` for one full document, no param for every summary with the findings stripped |
+| Index | `{ imm: 1 }` unique — `pnpm add-ds-analyses-index` |
+
+**One document per plate, not a log.** A re-analysis corrects the previous one
+(usually because new interventions landed); keeping every generation would make
+"what does the app think about this vehicle" a question with N answers.
+
+**Storing never blocks answering.** The save is awaited but wrapped: the call
+is already billed and the analysis already correct, so a Mongo failure costs a
+future re-run, not this response. The route reports it as `stored: false`
+rather than failing.
+
+**Staleness is counted, not dated.** `isStale()` compares the entry COUNT as
+well as the newest date, because a back-dated DS is routine in this data — "the
+newest entry is newer than the analysis" alone would miss an intervention
+inserted with an older date. DS History shows the stored analysis with a
+"l'historique a changé depuis cette analyse" banner rather than silently
+presenting a stale verdict as current.
+
+**The sheet write still happens.** The `gemini` column is the user's own
+artefact — read in Sheets, exported, edited around — so Mongo holds the full
+analysis for the app and the column holds the summary for the human. Where both
+exist, the card prefers the column: it is what the user sees in Sheets and may
+have edited by hand.
+
+**Empty state.** A vehicle with no analysis renders no panel at all, just the
+sparkle button that starts one. The previous placeholder was a bordered
+rectangle per row announcing its own emptiness — roughly 95 of them on Suivi
+RL.
+
+---
+
 ## 7. The deleted `generate-email` route
 
 `/api/generate-email` (added by `cb13749`, hardened by `6629251`) was a second,

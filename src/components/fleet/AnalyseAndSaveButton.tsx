@@ -48,6 +48,12 @@ type Props = {
    */
   pro?: boolean;
   /**
+   * Render as a bare sparkle icon rather than a labelled button. Used where
+   * there is no summary yet and therefore no panel to sit in — the icon IS the
+   * whole affordance, so it carries the label in its title/aria instead.
+   */
+  iconOnly?: boolean;
+  /**
    * Called with the summary AFTER it is written to the sheet. Exists so a page
    * already showing the gemini cell can refresh it — the write happened
    * server-side, so the caller's cached row is stale until it refetches. NOT a
@@ -56,7 +62,7 @@ type Props = {
   onSaved?: (summary: string) => void;
 };
 
-export function AnalyseAndSaveButton({ imm, className, regenerate, pro, onSaved }: Props) {
+export function AnalyseAndSaveButton({ imm, className, regenerate, pro, iconOnly, onSaved }: Props) {
   const [busy, setBusy] = useState(false);
 
   async function run() {
@@ -130,21 +136,25 @@ export function AnalyseAndSaveButton({ imm, className, regenerate, pro, onSaved 
     }
   }
 
+  const label = busy ? "Analyse…" : regenerate ? "Regénérer" : "Résumé IA";
+
   const button = (
     <Button
-      variant="secondary"
+      variant={iconOnly ? "ghost" : "secondary"}
       size="sm"
       onClick={regenerate ? undefined : run}
       disabled={busy}
-      className={className}
+      // Icon-only still needs a real hit area — 32px square, not a bare glyph.
+      className={`${iconOnly ? "h-8 w-8 p-0" : ""} ${className ?? ""}`}
+      aria-label={iconOnly ? `${label} — ${imm}` : undefined}
       title={
         regenerate
           ? `Relancer l'analyse IA et remplacer le résumé existant (${pro ? "appel payant, ~0,08 MAD" : "appel gratuit"})`
           : `Analyse IA de l'historique DS, puis enregistrement du résumé dans la colonne gemini de BDD (${pro ? "appel payant, ~0,08 MAD" : "appel gratuit"})`
       }
     >
-      <Sparkles className="h-3.5 w-3.5" />
-      {busy ? "Analyse…" : regenerate ? "Regénérer" : "Résumé IA"}
+      <Sparkles className={busy ? "h-3.5 w-3.5 animate-pulse" : "h-3.5 w-3.5"} />
+      {!iconOnly && label}
     </Button>
   );
 

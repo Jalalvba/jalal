@@ -24,7 +24,6 @@ import { log, serializeError } from "@/lib/http/logger";
 import {
   buildDsAnalysisPrompt,
   computeContractStatus,
-  isDsAnalysisShape,
   dsAnalysisShapeError,
   ungroundedDates,
   ungroundedSuppliers,
@@ -48,6 +47,7 @@ import {
   formatRulesReference,
 } from "@/lib/ai/prompts/maintenanceIntervals";
 import { checkOilGrade, formatOilGradeCheck } from "@/lib/ai/prompts/oilGrade";
+import { saveAnalysis } from "@/lib/mongo/dsAnalyses";
 
 // Lower than bdd-reformulate's 20/min: each call carries a whole vehicle
 // history (~4k input tokens vs ~200) and is a deliberate one-at-a-time action,
@@ -290,9 +290,31 @@ export async function POST(request: Request) {
       );
     }
 
+    // Stored so the next reader gets this answer for free. Awaited but never
+    // fatal: the call is already paid for and the analysis is already correct,
+    // so a Mongo failure costs a future re-run, not this response.
+    let stored = false;
+    try {
+      stored = await saveAnalysis({
+        imm: parsed.imm,
+        analysis,
+        tier,
+        model: TIERS[tier].model,
+        costUsd: costInfo.costUsd,
+        entriesCount: parsed.entries.length,
+        lastEntryDate: parsed.entries[0]?.date ?? null,
+      });
+    } catch (e) {
+      log("warn", "ds-analysis", "Could not store the analysis", {
+        imm: parsed.imm,
+        ...serializeError(e),
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       analysis,
+      stored,
       intervalChecks,
       beltPumpCheck,
       oilGradeCheck,

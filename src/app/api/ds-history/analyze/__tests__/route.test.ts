@@ -2,6 +2,11 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Mocked before importing the route (vitest hoists vi.mock above imports).
 vi.mock("@/lib/http/rateLimit", () => ({ rateLimitOrNull: vi.fn().mockResolvedValue(null) }));
+// Real Mongo is not reachable from a unit test, and the route AWAITS the
+// store — so without this every success-path test hangs to its timeout. That
+// is the point of awaiting it: a silent fire-and-forget would have made the
+// storage failure invisible here and in production alike.
+vi.mock("@/lib/mongo/dsAnalyses", () => ({ saveAnalysis: vi.fn().mockResolvedValue(true) }));
 vi.mock("@/lib/ai", async () => {
   const actual = await vi.importActual<typeof import("@/lib/ai")>("@/lib/ai");
   return { ...actual, callAI: vi.fn() };
@@ -9,9 +14,11 @@ vi.mock("@/lib/ai", async () => {
 
 import { POST } from "@/app/api/ds-history/analyze/route";
 import { callAI, AiCallError } from "@/lib/ai";
+import { saveAnalysis } from "@/lib/mongo/dsAnalyses";
 import { MAX_ENTRIES } from "@/lib/ai/prompts/dsAnalysis";
 
 const mockedCallAI = vi.mocked(callAI);
+const mockedSave = vi.mocked(saveAnalysis);
 
 const COST = {
   model: "gemini-flash-lite-latest",
@@ -52,7 +59,10 @@ function resolveWith(obj: unknown) {
   mockedCallAI.mockResolvedValue({ text: JSON.stringify(obj), costInfo: COST });
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockedSave.mockResolvedValue(true);
+});
 
 describe("POST /api/ds-history/analyze — input validation", () => {
   it("rejects a non-JSON body", async () => {
@@ -194,6 +204,41 @@ describe("POST /api/ds-history/analyze — grounding", () => {
   });
 });
 
+
+describe("POST /api/ds-history/analyze — storage", () => {
+  it("stores the analysis so the next reader gets it without paying again", async () => {
+    resolveWith(GOOD);
+    const res = await POST(req({ ...BASE, quality: "pro" }));
+    expect(mockedSave).toHaveBeenCalledTimes(1);
+    const saved = mockedSave.mock.calls[0][0];
+    expect(saved.imm).toBe("39357-B-7");
+    expect(saved.tier).toBe("pro");
+    expect(saved.entriesCount).toBe(1);
+    // The freshness markers isStale() compares against — without them a stored
+    // analysis could never be known to be out of date.
+    expect(saved.lastEntryDate).toBe("2025-01-15T00:00:00.000Z");
+    expect((await res.json()).stored).toBe(true);
+  });
+
+  it("still returns the analysis when storing it fails", async () => {
+    // The call is already billed and the answer is already correct. Losing it
+    // over a database hiccup would be the worst of both.
+    resolveWith(GOOD);
+    mockedSave.mockRejectedValue(new Error("mongo down"));
+    const res = await POST(req(BASE));
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.analysis.summary).toBe("Récurrence turbo.");
+    expect(json.stored).toBe(false);
+  });
+
+  it("does not store a follow-up answer — it is prose, not an analysis", async () => {
+    mockedCallAI.mockResolvedValue({ text: "Réponse.", costInfo: COST });
+    await POST(req({ ...BASE, followUp: { question: "pourquoi ?", previousAnalysis: GOOD } }));
+    expect(mockedSave).not.toHaveBeenCalled();
+  });
+});
 
 describe("POST /api/ds-history/analyze — tiers", () => {
   // The paid tier exists because it is measurably more accurate, and it is
