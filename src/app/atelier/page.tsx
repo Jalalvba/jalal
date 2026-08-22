@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import type { AtelierRow, ParkingAddResultItem, AtelierEditableField } from "@/types";
 import { ZONE_COLORS } from "@/config/zones";
 import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
@@ -246,6 +246,14 @@ export default function AtelierPage() {
     return rows.filter((r) => r.imm.includes(term));
   })();
 
+  // Rendered at lower priority than the keystroke that changed it — same
+  // reasoning as Suivi RL's: this page renders one dense card per vehicle (84
+  // live today), and re-rendering them all inside the keystroke's own commit
+  // is what made typing feel late. Only the render is deferred; `searched`
+  // itself is still computed synchronously.
+  const deferredRows = useDeferredValue(searched);
+
+
   const displayError = error || (rowsQuery.error instanceof Error ? rowsQuery.error.message : "");
 
   return (
@@ -309,7 +317,7 @@ export default function AtelierPage() {
         )}
 
         <div className="flex flex-col gap-2.5">
-          {searched.map((row) => (
+          {deferredRows.map((row) => (
             <AtelierCard key={row.rowIndex} row={row} onFieldCommit={handleFieldCommit} onDelete={handleDelete} />
           ))}
         </div>

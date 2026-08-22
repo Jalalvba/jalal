@@ -1,5 +1,12 @@
 import { buildPlateVariants } from "@/lib/utils/plateVariants";
-import { getSheetsClient, serialToUTCDate, fmtDateOnlySlash, withCache, invalidateCache } from "@/lib/sheets/googleSheetsClient";
+import {
+  ROWS_CACHE_TTL_MS,
+  fmtDateOnlySlash,
+  getSheetsClient,
+  invalidateCache,
+  serialToUTCDate,
+  withCache,
+} from "@/lib/sheets/googleSheetsClient";
 
 // Reads the "RL" tab (véhicule de remplacement / replacement-vehicle data)
 // via the authenticated service-account Sheets API — replacing the
@@ -143,7 +150,7 @@ async function fetchRlReunionRows(): Promise<RlReunionRow[]> {
 }
 
 export async function getRlReunionRows(immFilter?: string): Promise<RlReunionRow[]> {
-  const rows = await withCache(RL_REUNION_ROWS_CACHE_KEY, 15_000, fetchRlReunionRows);
+  const rows = await withCache(RL_REUNION_ROWS_CACHE_KEY, ROWS_CACHE_TTL_MS, fetchRlReunionRows);
 
   if (!immFilter) return rows;
 

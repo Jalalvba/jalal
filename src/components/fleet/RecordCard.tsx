@@ -58,7 +58,9 @@ export function RecordCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card data-testid="record-card" className={cn("space-y-3", className)}>
+    // "list-card" (globals.css) skips layout/paint while the card is off
+    // screen. Applied in the shell rather than per page so every list gets it.
+    <Card data-testid="record-card" className={cn("list-card space-y-3", className)}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

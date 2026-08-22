@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import type { DepotRow, ParkingAddResultItem } from "@/types";
 import { ZONE_COLORS } from "@/config/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
@@ -151,6 +151,14 @@ export default function DepotPage() {
     return rows.filter((r) => r.imm.includes(term));
   })();
 
+  // Rendered at lower priority than the keystroke that changed it — same
+  // reasoning as Suivi RL's: this page renders one dense card per vehicle (84
+  // live today), and re-rendering them all inside the keystroke's own commit
+  // is what made typing feel late. Only the render is deferred; `searched`
+  // itself is still computed synchronously.
+  const deferredRows = useDeferredValue(searched);
+
+
   const displayError = error || (rowsQuery.error instanceof Error ? rowsQuery.error.message : "");
 
   return (
@@ -195,7 +203,7 @@ export default function DepotPage() {
         )}
 
         <div className="flex flex-col gap-2.5">
-          {searched.map((row) => (
+          {deferredRows.map((row) => (
             <DepotCard key={row.rowIndex} row={row} onActionCommit={handleActionCommit} onDelete={handleDelete} />
           ))}
         </div>

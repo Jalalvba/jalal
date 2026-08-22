@@ -53,7 +53,11 @@ test.describe("DS History — Analyse IA", () => {
     // The card renders as soon as DS entries load, before any AI call.
     await expect(page.getByText("ANALYSE IA")).toBeVisible({ timeout: 30_000 });
 
-    const analyse = page.getByRole("button", { name: "Analyser" });
+    // Either label: this plate may already carry a stored analysis from an
+    // earlier run, in which case the button offers a re-run instead of a first
+    // run. Pinning "Analyser" made the test depend on the state of a live
+    // collection.
+    const analyse = page.getByRole("button", { name: /^(Analyser|Relancer l'analyse)$/ });
     await expect(analyse).toBeEnabled();
     await analyse.click();
 

@@ -8,13 +8,14 @@ import {
 import { buildPlateVariants } from "@/lib/utils/plateVariants";
 import { getIMMListSafe, resolveIMM } from "@/lib/sheets/googleSheetsParking";
 import {
-  getSheetsClient,
-  serialToUTCDate,
-  fmtDateOnlySlash,
-  withCache,
-  invalidateCache,
-  verifyRowIdentity,
+  ROWS_CACHE_TTL_MS,
   columnIndexToLetter,
+  fmtDateOnlySlash,
+  getSheetsClient,
+  invalidateCache,
+  serialToUTCDate,
+  verifyRowIdentity,
+  withCache,
 } from "@/lib/sheets/googleSheetsClient";
 
 const ROWS_CACHE_KEY = "rows:BDD";
@@ -115,7 +116,7 @@ function formatCellValue(header: string, raw: unknown): string | number {
  * that read see the write.
  */
 export async function getSheetRows(immFilter?: string, fresh = false): Promise<BddRow[]> {
-  const rows = await withCache(ROWS_CACHE_KEY, 15_000, () => fetchSheetRows(), { bypass: fresh });
+  const rows = await withCache(ROWS_CACHE_KEY, ROWS_CACHE_TTL_MS, () => fetchSheetRows(), { bypass: fresh });
   if (!immFilter) return rows;
 
   const variants = new Set(buildPlateVariants(immFilter));

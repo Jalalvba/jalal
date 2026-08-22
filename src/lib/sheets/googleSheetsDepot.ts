@@ -2,15 +2,16 @@ import { type sheets_v4 } from "googleapis";
 import { getIMMListSafe, resolveIMM } from "@/lib/sheets/googleSheetsParking";
 import type { DepotRow, ParkingAddResponse, ParkingAddResultItem } from "@/types";
 import {
-  getSheetsClient,
-  serialToUTCDate,
-  nowToSerial,
+  ROWS_CACHE_TTL_MS,
+  columnIndexToLetter,
   fmtDateOnlyDash,
   fmtDateTime,
-  withCache,
+  getSheetsClient,
   invalidateCache,
+  nowToSerial,
+  serialToUTCDate,
   verifyRowIdentity,
-  columnIndexToLetter,
+  withCache,
 } from "@/lib/sheets/googleSheetsClient";
 
 const ROWS_CACHE_KEY = "rows:DEPOT";
@@ -85,7 +86,7 @@ async function getDepotSheetProps(sheets: sheets_v4.Sheets): Promise<{ sheetId: 
  * that read see the write.
  */
 export async function getDepotRows(fresh = false): Promise<DepotRow[]> {
-  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchDepotRows(), { bypass: fresh });
+  return withCache(ROWS_CACHE_KEY, ROWS_CACHE_TTL_MS, () => fetchDepotRows(), { bypass: fresh });
 }
 
 /** Called by src/app/api/depot/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */

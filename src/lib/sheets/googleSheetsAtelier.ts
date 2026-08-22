@@ -8,15 +8,16 @@ import type {
 } from "@/types";
 import { ATELIER_EDITABLE_FIELDS } from "@/types";
 import {
-  getSheetsClient,
-  serialToUTCDate,
-  nowToSerial,
-  fmtDateTime,
-  fmtDateOnlyDash,
-  withCache,
-  invalidateCache,
-  verifyRowIdentity,
+  ROWS_CACHE_TTL_MS,
   columnIndexToLetter,
+  fmtDateOnlyDash,
+  fmtDateTime,
+  getSheetsClient,
+  invalidateCache,
+  nowToSerial,
+  serialToUTCDate,
+  verifyRowIdentity,
+  withCache,
 } from "@/lib/sheets/googleSheetsClient";
 
 const ROWS_CACHE_KEY = "rows:ATELIER";
@@ -99,7 +100,7 @@ async function getAtelierSheetProps(
  * that read see the write.
  */
 export async function getAtelierRows(fresh = false): Promise<AtelierRow[]> {
-  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchAtelierRows(), { bypass: fresh });
+  return withCache(ROWS_CACHE_KEY, ROWS_CACHE_TTL_MS, () => fetchAtelierRows(), { bypass: fresh });
 }
 
 /** Called by src/app/api/atelier/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */

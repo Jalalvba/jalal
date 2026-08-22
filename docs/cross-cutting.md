@@ -208,6 +208,45 @@ Display and Geist were both dropped deliberately** — don't reintroduce either.
 
 ---
 
+## 9.5 List-page rendering performance
+
+These pages render one dense card per vehicle — 84 on Parking, ~101 on Suivi
+RL — each with inline editors, zone badges, the AI summary block and two
+reference-field lists. Three changes keep that from feeling slow, all measured
+with `e2e/perfLoad.spec.ts` (production build, 4x CPU throttle, a stubbed
+full analysis store):
+
+| | keystroke in the plate filter | main-thread block |
+|---|---|---|
+| Before | 493 ms | 244 ms |
+| After | 352 ms (Suivi RL) / 150 ms (Parking, 84 cards) | 52 ms / none |
+
+1. **`useDeferredValue` on the rendered list.** The keystroke and the list
+   re-render no longer compete in one blocking commit — the input paints
+   immediately, the list catches up. Only the RENDER is deferred; the filtering
+   itself stays synchronous, so exports and the filter summary never see a
+   stale set. This is the change that did the work.
+2. **`content-visibility: auto` on every card** (`.list-card` in `globals.css`,
+   applied in `RecordCard`). The browser skips layout, style and paint for
+   cards scrolled out of view. `contain-intrinsic-size: auto 280px` keeps the
+   scrollbar honest — without a size hint, skipped cards measure 0 and the page
+   collapses.
+3. **A stable `select` in `useStoredAnalyses`.** TanStack Query re-runs
+   `select` whenever its identity changes, so an inline arrow rebuilt a Map of
+   every stored analysis on every render of every card, and handed back a new
+   object identity that re-rendered the lot. It is now a module-level function
+   over a WeakMap keyed by the response.
+
+**Measure before optimising, and measure against a production build.** The
+first pass of this work was measured against `next dev` and read 1 237 ms per
+keystroke; the same code on a production build read 493 ms. React's
+development build is not the thing users run, and tuning against it points at
+the wrong costs. `React.memo` on the card was measured at ~7% and kept only
+because it is free — the filter changes which cards MOUNT, and no memo helps
+with mounting.
+
+---
+
 ## 10. Testing
 
 See [`TESTING.md`](../TESTING.md). 26 test files: Vitest for unit/integration

@@ -122,3 +122,22 @@ textarea, input {
 }
 
 .animate-spin { animation: spin 0.7s linear infinite; }
+
+/*
+ * Long list pages render one card per vehicle — 84 on Parking, ~101 on Suivi
+ * RL — and each card is dense (inline editors, zone badges, the AI summary,
+ * two reference-field lists). `content-visibility: auto` lets the browser skip
+ * layout, style and paint for the cards currently scrolled out of view, which
+ * is most of them.
+ *
+ * `contain-intrinsic-size` is what keeps the scrollbar honest: without a size
+ * hint a skipped card measures 0, the page collapses, and scrolling jumps as
+ * cards enter the viewport and suddenly take up space. The value is a
+ * measured typical card height, not a guess at a nice round number, and `auto`
+ * makes the browser remember each card's real height once it has rendered
+ * once.
+ */
+.list-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
+}

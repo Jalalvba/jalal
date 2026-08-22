@@ -26,6 +26,23 @@ declare global {
  * before writing) can burn through the 60 req/min per-service-account quota
  * fast for what a human perceives as one action.
  */
+/**
+ * How long a full-tab row read stays cached, for every tab.
+ *
+ * Raised from 15s: every one of these caches is stale-while-revalidate (see
+ * invalidateCache() below), so an expired entry is served instantly and
+ * refreshed in the background — a longer TTL costs freshness for a reader who
+ * edits the spreadsheet DIRECTLY, not latency. What it buys is fewer reads
+ * against the 60 req/min service-account quota, which four tabs' worth of
+ * zone-badge fan-out plus a handful of mutations can otherwise burn through
+ * for what a human experiences as one action.
+ *
+ * Edits made THROUGH the app are unaffected: those bypass the cache entirely
+ * on the refetch that follows the write (`fresh`), and the "Actualiser" button
+ * does the same on demand.
+ */
+export const ROWS_CACHE_TTL_MS = 60_000;
+
 export async function withCache<T>(
   key: string,
   ttlMs: number,

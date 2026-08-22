@@ -2,13 +2,14 @@ import { type sheets_v4 } from "googleapis";
 import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult } from "@/types";
 import { RDV_EDITABLE_FIELDS } from "@/types";
 import {
-  getSheetsClient,
-  serialToUTCDate,
-  fmtDateOnlySlash,
-  isoDateToSerial,
-  withCache,
-  invalidateCache,
+  ROWS_CACHE_TTL_MS,
   columnIndexToLetter,
+  fmtDateOnlySlash,
+  getSheetsClient,
+  invalidateCache,
+  isoDateToSerial,
+  serialToUTCDate,
+  withCache,
 } from "@/lib/sheets/googleSheetsClient";
 import { addAppointmentToMonthlyTab, updateAppointmentInMonthlyTab, clearAppointmentInMonthlyTab } from "@/lib/sheets/googleSheetsRdvMonthly";
 import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY, RdvIdentityError } from "@/lib/sheets/rdvIdentity";
@@ -83,7 +84,7 @@ function strOrEmpty(row: unknown[], col: number | undefined): string {
  * sort convention.
  */
 export async function getRdvRows(): Promise<RdvRow[]> {
-  return withCache(ROWS_CACHE_KEY, 15_000, () => fetchRdvRows());
+  return withCache(ROWS_CACHE_KEY, ROWS_CACHE_TTL_MS, () => fetchRdvRows());
 }
 
 /** Called by src/app/api/rdv/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */

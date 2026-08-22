@@ -21,14 +21,35 @@ async function fetchJson<T extends { ok: boolean; error?: string }>(url: string)
 /**
  * Every stored summary, keyed by plate. ONE request for the whole page — a
  * card looks its own plate up in the map rather than fetching for itself.
+ *
+ * `select` MUST be this module-level function, never an inline arrow.
+ * TanStack Query re-runs select whenever its identity changes, so an inline
+ * one runs on every render of every subscriber: on a 100-card page that is 100
+ * fresh Maps of 100 entries per render pass, and — worse — a new object
+ * identity each time, which tells every card its data changed and re-renders
+ * the lot. Stable identity + the WeakMap below means the Map is built once per
+ * server response and shared by every card.
  */
+const mapCache = new WeakMap<object, Map<string, DsAnalysisSummary>>();
+
+function toMap(data: { summaries: DsAnalysisSummary[] }): Map<string, DsAnalysisSummary> {
+  const cached = mapCache.get(data);
+  if (cached) return cached;
+  const built = new Map(data.summaries.map((s) => [s.imm.trim().toUpperCase(), s]));
+  mapCache.set(data, built);
+  return built;
+}
+
 export function useStoredAnalyses() {
   return useQuery({
     queryKey: STORED_ANALYSES_KEY,
     queryFn: () =>
       fetchJson<{ ok: true; summaries: DsAnalysisSummary[] }>("/api/ds-history/analysis"),
-    select: (data) =>
-      new Map(data.summaries.map((s) => [s.imm.trim().toUpperCase(), s])),
+    select: toMap,
+    // Analyses change only when someone runs one, and the code that runs one
+    // invalidates this key itself (useInvalidateStoredAnalyses). Re-fetching
+    // this on every mount buys nothing and costs a request per page visit.
+    staleTime: 5 * 60_000,
   });
 }
 

@@ -11,6 +11,7 @@
     "check-parc-coverage": "npx tsx scripts/check-parc-coverage.ts",
     "audit-ds-analysis": "npx tsx scripts/audit-ds-analysis.ts",
     "add-ds-analyses-index": "npx tsx scripts/add-ds-analyses-index.ts",
+    "verify-pipeline": "npx tsx scripts/verify-pipeline.ts",
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
