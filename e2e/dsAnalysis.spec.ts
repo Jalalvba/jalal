@@ -58,7 +58,10 @@ test.describe("DS History — Analyse IA", () => {
     await analyse.click();
 
     // The analysis itself — generous timeout, this is a real model round trip.
-    await expect(page.getByText("Résumé")).toBeVisible({ timeout: 60_000 });
+    // exact: true — the save-status line under the button now also contains the
+    // word ("… résumé non enregistré"), so a loose match is ambiguous and fails
+    // on strict mode rather than on anything being wrong.
+    await expect(page.getByText("Résumé", { exact: true })).toBeVisible({ timeout: 60_000 });
 
     // A contract flag is always rendered, whatever the level.
     await expect(page.getByText(/Contrat/).first()).toBeVisible();
@@ -92,7 +95,7 @@ test.describe("DS History — Analyse IA", () => {
 
     // The exchange is APPENDED — the original analysis must still be there.
     await expect(page.getByText(/^Q — /)).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText("Résumé")).toBeVisible();
+    await expect(page.getByText("Résumé", { exact: true })).toBeVisible();
 
     // The String() coercion on part designations exists because real Mongo
     // values do not honour their declared types; a regression there throws in
