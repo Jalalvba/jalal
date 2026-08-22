@@ -156,7 +156,9 @@ function ParkingCard({
           className="h-auto py-2 text-micro"
         />
       </Field>
-      <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
+      <ReadonlyFieldList
+        fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: String(row[f.key] ?? "") }))}
+      />
       {/* This tab has its own gemini column, so the value is passed straight
           in — no BDD lookup, and it shows even for a vehicle with no BDD row. */}
       <GeminiSummaryBlock imm={row.imm} summary={row.gemini} className="mt-2" saveTo="parking" hideButton />
@@ -236,8 +238,15 @@ export default function ParkingPage() {
   // tab holds rather than a fixed roster that drifts from it. Live today:
   // DISPONIBLE_À LIVERER (66), depot-ATV (8), depot-rempalcmemnt (6),
   // AVIS-PIERRE-PARENT (3).
+  // String(... ?? "") throughout, NOT r.zoning.trim(): ParkingRow says
+  // `zoning: string`, but that type describes the CURRENT server. Rows
+  // restored from the persisted client cache were written before the column
+  // existed and carry no `zoning` at all — which crashed this page on load
+  // with "Cannot read properties of undefined (reading 'trim')". Same rule as
+  // the rest of the app: a payload field is runtime-optional whatever its type
+  // says (see docs/cross-cutting.md §8.1).
   const visibleZonings = useMemo(
-    () => [...new Set(rows.map((r) => r.zoning.trim()).filter(Boolean))].sort(),
+    () => [...new Set(rows.map((r) => String(r.zoning ?? "").trim()).filter(Boolean))].sort(),
     [rows]
   );
 
@@ -247,8 +256,8 @@ export default function ParkingPage() {
     // vehicle losing its zone is exactly what someone would come here to find,
     // and a chip that only appears once the problem exists cannot be used to
     // check for it.
-    if (activeZoning === UNASSIGNED_ZONING) return rows.filter((r) => !r.zoning.trim());
-    return rows.filter((r) => r.zoning.trim() === activeZoning);
+    if (activeZoning === UNASSIGNED_ZONING) return rows.filter((r) => !String(r.zoning ?? "").trim());
+    return rows.filter((r) => String(r.zoning ?? "").trim() === activeZoning);
   }, [rows, activeZoning]);
 
   // What the report's "Filtres actifs" line says. A search term bypasses the

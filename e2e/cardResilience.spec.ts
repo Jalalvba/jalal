@@ -98,3 +98,44 @@ test.describe("card resilience — one bad card must not blank the page", () => 
     expect(body.length).toBeGreaterThan(1000); // not the 70-char blank page
   });
 });
+
+// The exact crash this page shipped with: rows restored from the persisted
+// client cache were written before the ZONING column existed, so `zoning` was
+// undefined while ParkingRow says `string`. `r.zoning.trim()` threw during
+// render and took the whole page down — "Cannot read properties of undefined
+// (reading 'trim')" — before a single card appeared.
+test("Parking survives rows that predate a newly-added column", async ({ page, context, baseURL }) => {
+  test.setTimeout(120_000);
+  const pageErrors: string[] = [];
+  page.on("pageerror", (e) => pageErrors.push(String(e)));
+  await context.addCookies([await authenticatedCookie(baseURL!)]);
+
+  // Serve the real rows with `zoning` stripped, exactly as an older cache
+  // entry (or an older deploy) would.
+  await page.route("**/api/parking**", async (route) => {
+    const res = await route.fetch();
+    const json = (await res.json()) as { ok: boolean; rows?: Record<string, unknown>[] };
+    const rows = (json.rows ?? []).map((r) => {
+      const rest = { ...r };
+      delete rest.zoning;
+      return rest;
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ...json, rows }),
+    });
+  });
+
+  await page.goto("/parking");
+
+  // The page renders, the chip row renders, and "Non assigné" now matches
+  // every row rather than throwing on the way there.
+  await expect(page.getByTestId("record-card").first()).toBeVisible({ timeout: 60_000 });
+  // ToggleGroupItem renders as a radio, not a button (same selector Atelier's
+  // chip tests use).
+  await page.getByRole("radio", { name: "Non assigné", exact: true }).click();
+  await expect(page.getByTestId("record-card").first()).toBeVisible();
+
+  expect(pageErrors).toEqual([]);
+});

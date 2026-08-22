@@ -10,7 +10,12 @@
  * the two blending together.
  */
 export function ReadonlyFieldList({ fields, title }: { fields: { label: string; value: string }[]; title?: string }) {
-  const populated = fields.filter((f) => f.value.trim());
+  // String(... ?? "") rather than f.value.trim(): the values come from network
+  // payloads whose declared types describe the current server, not the deploy
+  // (or the persisted client cache) that produced the row in hand. A column
+  // added after a cache entry was written arrives as undefined here and used to
+  // throw, taking the whole list down with it.
+  const populated = fields.filter((f) => String(f.value ?? "").trim());
   if (populated.length === 0) return null;
 
   return (
@@ -19,7 +24,7 @@ export function ReadonlyFieldList({ fields, title }: { fields: { label: string; 
       {populated.map((f) => (
         <div key={f.label} className="whitespace-pre-line text-micro leading-snug text-muted-foreground">
           <span className="mr-1 text-micro font-bold uppercase text-muted-foreground">{f.label}:</span>
-          {f.value}
+          {String(f.value ?? "")}
         </div>
       ))}
     </div>
