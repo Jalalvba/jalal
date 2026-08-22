@@ -107,7 +107,14 @@ export type DsAnalysisInput = {
   imm: string;
   /** ISO date, or null when the vehicle has no contract record. */
   contractEnd: string | null;
-  vehicle: { brand?: string; model?: string; state?: string };
+  vehicle: {
+    brand?: string;
+    model?: string;
+    /** The tab's own ETAT VÉHICULE — LLD, ATV, Remplacement, En stock, LCD. */
+    state?: string;
+    /** cp's contract `statut` — "Livré", "Arret facturation", "Restitué". */
+    cpStatus?: string;
+  };
   replacements: DsAnalysisReplacement[];
   entries: DsAnalysisEntry[];
 };
@@ -390,7 +397,10 @@ export function buildDsAnalysisPrompt(
 
   const lines: string[] = [];
   lines.push(`Véhicule: ${input.imm}${input.vehicle.brand ? ` — ${input.vehicle.brand}` : ""}${input.vehicle.model ? ` ${input.vehicle.model}` : ""}`);
-  if (input.vehicle.state) lines.push(`État: ${input.vehicle.state}`);
+  // Both statuses are printed whenever known: they decide whether work should
+  // be done on this vehicle AT ALL, which outranks anything the history says.
+  if (input.vehicle.state) lines.push(`ETAT VÉHICULE (onglet): ${input.vehicle.state}`);
+  if (input.vehicle.cpStatus) lines.push(`Statut du contrat (cp): ${input.vehicle.cpStatus}`);
   lines.push(`Statut du contrat (déjà calculé, à reprendre): ${contractStatus.level} — ${contractStatus.label}`);
 
   if (input.replacements.length > 0) {

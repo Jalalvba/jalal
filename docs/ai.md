@@ -551,6 +551,36 @@ left exactly as it was. A vehicle with nothing to do gets an empty string, not
 "RAS": writing a placeholder over someone's note would destroy a real value to
 say nothing.
 
+**The vehicle's status outranks its history (rule A0).** Two values are read
+per plate and put at the top of the prompt: the tab's own `ETAT VÉHICULE` and
+`cp.statut`. A vehicle the company should not be repairing gets no repair
+order, however good the technical case:
+
+| Status | Work order |
+|---|---|
+| `cp.statut` = `Arret facturation` or `Restitué` | **empty** — the vehicle has left the billed fleet |
+| `ETAT VÉHICULE` = `ATV` | one line only: `Envoyer en zone dépôt ATV` — no workshop visit |
+| `ETAT VÉHICULE` = `Remplacement` | the repairs **plus** a final `Envoyer en zone dépôt Remplacement` — it is a customer's courtesy car and must be fixed |
+| `LLD`, `LCD`, `En stock`, `Livré`, unknown | normal work order |
+
+The vocabulary is the live one, not invented: `ETAT VÉHICULE` holds LLD (62),
+ATV (8), Remplacement (6), En stock (4), LCD (3); `cp.statut` holds Livré
+(5 673), Arret facturation (4 546), Restitué (11). All five branches were
+verified against one vehicle with real outstanding work (52722-B-7, two filters
+never recorded at 50 504 km), varying only the status.
+
+**One operation per line, in one cell.** `formatWorkOrder()` joins with
+newlines and `updateAction()` sets the cell's `wrapStrategy: WRAP` whenever the
+value is multi-line — without it Sheets keeps the newlines but renders the cell
+clipped to a single line, and the advisor sees the first operation with the
+rest invisible until they click in.
+
+**Columns are resolved by header NAME, never by position.** The PARKING tab was
+restructured mid-session — `ACTION` moved from column B to column D and a
+`ZONING` column appeared — and nothing broke, because every read and write goes
+through `colMap["ACTION"]`. Positional fallbacks exist only for a tab whose
+header row is unreadable.
+
 **Two prompts, one rulebook.** `prompt.ts` exports `DS_GROUNDING_RULES` — the
 three axes and rules 1 to 17, which govern how the model may read this data —
 and both documents are built on it. What differs is everything after: DS

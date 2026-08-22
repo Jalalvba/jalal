@@ -29,6 +29,19 @@ describe("the two prompts are separate documents on one set of rules", () => {
     }
   });
 
+  it("makes the vehicle's status outrank its history", () => {
+    const p = DS_PARKING_WORKORDER_PROMPT;
+    // Live vocabulary, not invented: PARKING's ETAT VÉHICULE holds LLD (62),
+    // ATV (8), Remplacement (6), En stock (4), LCD (3); cp.statut holds
+    // "Livré" (5 673), "Arret facturation" (4 546), "Restitué" (11).
+    expect(p).toContain("Arret facturation");
+    expect(p).toContain("Restitué");
+    expect(p).toContain("Envoyer en zone dépôt ATV");
+    expect(p).toContain("Envoyer en zone dépôt Remplacement");
+    // A0 has to be read before the rules that would otherwise fill the list.
+    expect(p.indexOf("LE STATUT DÉCIDE")).toBeLessThan(p.indexOf("A1. Chaque action"));
+  });
+
   it("keeps the imposed order of a work order", () => {
     const p = DS_PARKING_WORKORDER_PROMPT;
     // The complaint the vehicle came in with must be the first line the

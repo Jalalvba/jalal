@@ -30,6 +30,7 @@ import { GET as dsHistoryGET } from "@/app/api/ds/history/route";
 import { buildDsAnalysisPayload } from "@/lib/ai/dsAnalysis/payload";
 import { canonicalizeSuppliers } from "@/lib/ai/prompts/dsAnalysis";
 import { runDsAnalysis, resolveTier } from "@/lib/ai/dsAnalysis/run";
+import { resolveCpStatus } from "@/lib/vehicle/contractEnd";
 import { DS_PARKING_WORKORDER_PROMPT } from "@/lib/ai/dsAnalysis/prompt-parking";
 import { getAnalysis, recordActionText } from "@/lib/mongo/dsAnalyses";
 import { isStale } from "@/lib/ai/dsAnalysis/stored";
@@ -102,7 +103,17 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const raw = buildDsAnalysisPayload({ imm, items });
+      // Both statuses travel with the payload: they decide whether the
+      // workshop should be booking anything on this vehicle at all, which
+      // outranks whatever the maintenance history says.
+      const raw = buildDsAnalysisPayload({
+        imm,
+        items,
+        vehicle: {
+          state: String(row.etatVehicule ?? "").trim() || undefined,
+          cpStatus: (await resolveCpStatus(imm)) ?? undefined,
+        },
+      });
       const input = { ...raw, entries: canonicalizeSuppliers(raw.entries) };
 
       // Reuse before spending — but only an analysis that can actually answer

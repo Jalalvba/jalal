@@ -80,3 +80,31 @@ export async function resolveContractEnd(imm: string, fromClient: string | null)
 
   return null;
 }
+
+/**
+ * The vehicle's contract `statut` in cp — "Livré", "Arret facturation" or
+ * "Restitué" (the only three values live, 5 673 / 4 546 / 11).
+ *
+ * Read for the Parking work order, where it decides whether any work should be
+ * ordered at all: a vehicle whose billing has stopped is not one the workshop
+ * should be booking operations on.
+ *
+ * Same contract as resolveContractEnd(): `imm`, not `immatriculation`, and
+ * never throws — an unknown status simply means the prompt is not told one.
+ */
+export async function resolveCpStatus(imm: string): Promise<string | null> {
+  const plate = imm.trim();
+  if (!plate) return null;
+  try {
+    const cp = await getCollection("cp");
+    const doc = await cp.findOne(
+      { imm: plate, statut: { $ne: null } },
+      { projection: { statut: 1 }, sort: { date_fin_contrat: -1 } }
+    );
+    const statut = doc?.statut;
+    return statut ? String(statut).trim() : null;
+  } catch (e) {
+    log("warn", "contract-end", "cp statut lookup failed", { imm: plate, error: String(e) });
+    return null;
+  }
+}

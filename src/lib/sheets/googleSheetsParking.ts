@@ -418,6 +418,16 @@ export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
 
 // ─── updateActionFromWeb ───────────────────────────────────────────────────
 
+/**
+ * Writes one row's ACTION cell (and stamps TIMESTAMP).
+ *
+ * `action` may be MULTI-LINE — the AI work order is one operation per line —
+ * so this also sets the cell's wrap strategy to WRAP. Without it Sheets keeps
+ * the newlines in the value but renders the cell on a single clipped line, and
+ * the advisor sees "1. Remplacer le filtre à gasoil (jamais enre…" with the
+ * rest invisible until they click into it. The value is unchanged either way;
+ * this is purely how the cell displays.
+ */
 export async function updateAction(rowIndex: number, action: string, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
@@ -433,16 +443,50 @@ export async function updateAction(rowIndex: number, action: string, expectedImm
     expectedImm
   );
 
+  const text = action.trim();
+
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: spreadsheetId!,
     requestBody: {
       valueInputOption: "USER_ENTERED",
       data: [
-        { range: `'${PARKING_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`, values: [[action.trim()]] },
+        { range: `'${PARKING_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`, values: [[text]] },
         { range: `'${PARKING_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`, values: [[nowToSerial()]] },
       ],
     },
   });
+
+  // Only for a multi-line value, and never fatal: the text IS written by the
+  // call above, so a formatting failure must not report the write as failed
+  // and make a caller retry it.
+  if (text.includes("\n")) {
+    try {
+      const { sheetId } = await getParkingSheetProps(sheets);
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: spreadsheetId!,
+        requestBody: {
+          requests: [
+            {
+              repeatCell: {
+                range: {
+                  sheetId,
+                  startRowIndex: rowIndex - 1, // API rows are 0-based, half-open
+                  endRowIndex: rowIndex,
+                  startColumnIndex: actionCol - 1,
+                  endColumnIndex: actionCol,
+                },
+                cell: { userEnteredFormat: { wrapStrategy: "WRAP", verticalAlignment: "TOP" } },
+                fields: "userEnteredFormat.wrapStrategy,userEnteredFormat.verticalAlignment",
+              },
+            },
+          ],
+        },
+      });
+    } catch (e) {
+      console.warn(`[parking] ACTION written but cell wrap could not be set (row ${rowIndex}):`, e);
+    }
+  }
+
   invalidateCache(ROWS_CACHE_KEY);
 }
 
