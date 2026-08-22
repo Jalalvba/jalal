@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { enforceActionStyle, formatWorkOrder, mayOverwrite } from "@/lib/ai/dsAnalysis/workOrder";
+import { enforceActionStyle, formatWorkOrder, mayOverwrite, statusWorkOrder } from "@/lib/ai/dsAnalysis/workOrder";
 import type { DsAnalysis } from "@/lib/ai/prompts/dsAnalysis";
 
 const analysis = (actions?: string[]): DsAnalysis => ({
@@ -91,5 +91,36 @@ describe("enforceActionStyle — the column takes instructions, not evidence", (
 
   it("drops an action that was nothing but decoration", () => {
     expect(enforceActionStyle(["(2025-01-04)", "   "])).toEqual([]);
+  });
+});
+
+describe("statusWorkOrder — a vehicle with no history still has to go somewhere", () => {
+  it("sends an ATV vehicle to its depot zone", () => {
+    // 79878-B-7 exactly: ETAT ATV, zero DS lines, and previously no ACTION at
+    // all because the batch stopped at "aucune intervention DS à analyser".
+    expect(statusWorkOrder({ etat: "ATV" })).toEqual(["À envoyer vers depot-ATV"]);
+  });
+
+  it("sends a Remplacement vehicle to its depot zone", () => {
+    expect(statusWorkOrder({ etat: "Remplacement" })).toEqual(["À envoyer vers depot-rempalcmemnt"]);
+  });
+
+  it("sends an AVIS vehicle to Pierre Parent", () => {
+    expect(statusWorkOrder({ etat: "LLD", isAvis: true })).toEqual(["À envoyer au garage Pierre Parent"]);
+  });
+
+  it("lets ETAT outrank ownership — the zone says where the car physically goes", () => {
+    expect(statusWorkOrder({ etat: "ATV", isAvis: true })).toEqual(["À envoyer vers depot-ATV"]);
+  });
+
+  it("otherwise says the vehicle is ready to be delivered", () => {
+    expect(statusWorkOrder({ etat: "LLD" })).toEqual(["Disponible — à livrer au client"]);
+    expect(statusWorkOrder({})).toEqual(["Disponible — à livrer au client"]);
+  });
+
+  it("never returns an empty list — that is the whole point", () => {
+    for (const etat of ["", "ATV", "Remplacement", "LCD", "En stock", "inconnu"]) {
+      expect(statusWorkOrder({ etat }).length).toBeGreaterThan(0);
+    }
   });
 });

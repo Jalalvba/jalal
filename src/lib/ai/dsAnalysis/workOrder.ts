@@ -89,3 +89,38 @@ export function enforceActionStyle(actions: readonly string[] | undefined): stri
   }
   return out;
 }
+
+/**
+ * The work order a vehicle gets from its STATUS alone, with no maintenance
+ * history to reason about.
+ *
+ * 3 of the 83 vehicles on the live tab have zero DS lines, and the batch used
+ * to stop at "aucune intervention DS à analyser" and write nothing — which is
+ * exactly the outcome the ACTION column must never produce. A car with no
+ * service history is not a car with nothing to do: it is still sitting in the
+ * parking, and somebody still has to move it somewhere.
+ *
+ * Computed in code, not asked of the model: with no history there is nothing to
+ * analyse, so a model call would be paying for a lookup table. It doubles as
+ * the floor under the model's own answer — see the call site.
+ *
+ * Order matters. ETAT VÉHICULE decides where the car physically goes, so it
+ * outranks ownership; a closed contract does NOT suppress it, because billing
+ * stopping is a reason not to REPAIR a vehicle, not a reason to leave it parked
+ * where it should not be.
+ */
+export function statusWorkOrder(v: {
+  /** The tab's ETAT VÉHICULE — ATV, Remplacement, LLD, LCD, En stock. */
+  etat?: string;
+  /** AVIS's own fleet — see googleSheetsParc.ts. */
+  isAvis?: boolean;
+}): string[] {
+  const etat = String(v.etat ?? "").trim().toUpperCase();
+
+  // The zone names are the ZONING column's own values, misspelling included:
+  // the instruction has to name the zone as it exists in the sheet.
+  if (etat === "ATV") return ["À envoyer vers depot-ATV"];
+  if (etat === "REMPLACEMENT") return ["À envoyer vers depot-rempalcmemnt"];
+  if (v.isAvis) return ["À envoyer au garage Pierre Parent"];
+  return ["Disponible — à livrer au client"];
+}

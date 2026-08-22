@@ -34,7 +34,7 @@ import { resolveCpStatus } from "@/lib/vehicle/contractEnd";
 import { DS_PARKING_WORKORDER_PROMPT } from "@/lib/ai/dsAnalysis/prompt-parking";
 import { getAnalysis, recordActionText } from "@/lib/mongo/dsAnalyses";
 import { isStale } from "@/lib/ai/dsAnalysis/stored";
-import { formatWorkOrder, mayOverwrite } from "@/lib/ai/dsAnalysis/workOrder";
+import { formatWorkOrder, mayOverwrite, statusWorkOrder } from "@/lib/ai/dsAnalysis/workOrder";
 import { getParkingRows, updateAction } from "@/lib/sheets/googleSheetsParking";
 import type { DsHistoryItem } from "@/types";
 
@@ -98,8 +98,28 @@ export async function POST(request: Request) {
         new Request(`http://internal/api/ds/history?imm=${encodeURIComponent(imm)}`)
       );
       const items = ((await histRes.json()) as { items?: DsHistoryItem[] }).items ?? [];
+
+      // No maintenance history is not "nothing to do" — the vehicle is still
+      // in the parking and still has to go somewhere. Decided in code from its
+      // status: there is nothing to analyse, so a model call here would be
+      // paying for a lookup table. 3 of the 83 live vehicles are in this state
+      // and used to get no ACTION at all.
       if (items.length === 0) {
-        results.push({ imm, outcome: "no-history" });
+        const text = formatWorkOrder({
+          contractFlag: { level: "unknown", label: "" },
+          actions: statusWorkOrder({ etat: String(row.etatVehicule ?? ""), isAvis: row.isAvis }),
+          findings: [],
+          summary: "",
+          insufficientData: true,
+        });
+        const stored0 = await getAnalysis(imm);
+        if (!mayOverwrite(String(row.action ?? ""), stored0?.actionText)) {
+          results.push({ imm, outcome: "manual" });
+          continue;
+        }
+        await updateAction(row.rowIndex, text, row.imm);
+        await recordActionText(imm, text);
+        results.push({ imm, outcome: "written", actions: 1 });
         continue;
       }
 
@@ -149,7 +169,16 @@ export async function POST(request: Request) {
         : (await runDsAnalysis(input, tier, DS_PARKING_WORKORDER_PROMPT)).analysis;
       const costUsd = fresh ? 0 : undefined;
 
-      const text = formatWorkOrder(analysis);
+      // The model's answer, with the status-only work order as a FLOOR: rule
+      // A4b makes an empty list impossible in every case but a closed
+      // contract, and this is what keeps that true when the model slips or
+      // when the grounding guards drop its last action.
+      const modelActions = analysis.actions ?? [];
+      const text = formatWorkOrder(
+        modelActions.length > 0
+          ? analysis
+          : { ...analysis, actions: statusWorkOrder({ etat: String(row.etatVehicule ?? ""), isAvis: row.isAvis }) }
+      );
       if (!text) {
         results.push({ imm, outcome: "no-action" });
         continue;

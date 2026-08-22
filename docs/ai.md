@@ -592,6 +592,27 @@ per plate and put at the top of the prompt: the tab's own `ETAT VÉHICULE` and
 `cp.statut`. A vehicle the company should not be repairing gets no repair
 order, however good the technical case:
 
+**A vehicle with no DS history still gets one.** 3 of the 83 live vehicles have
+zero DS lines, and the batch used to stop at "aucune intervention DS à
+analyser" and write nothing — the outcome this column must never produce. A car
+with no service history is not a car with nothing to do: it is still parked
+somewhere it should not be. `statusWorkOrder()` decides from status alone, in
+code — with no history there is nothing to analyse, so a model call would be
+paying for a lookup table:
+
+| | |
+|---|---|
+| `ETAT VÉHICULE` = ATV | `À envoyer vers depot-ATV` |
+| `ETAT VÉHICULE` = Remplacement | `À envoyer vers depot-rempalcmemnt` |
+| AVIS / Scal Avis | `À envoyer au garage Pierre Parent` |
+| anything else | `Disponible — à livrer au client` |
+
+ETAT outranks ownership, and a closed contract does not suppress it: billing
+stopping is a reason not to REPAIR a vehicle, not a reason to leave it parked
+in the wrong place. The same function is the floor under the model's own
+answer, so a slip or a guard-dropped last action cannot empty the column
+either.
+
 **Never an empty work order.** A vehicle sitting in the parking is always
 waiting for something from someone, so rule A4b makes the list non-empty in
 every case but one — a closed contract (`Arret facturation` / `Restitué`). The
