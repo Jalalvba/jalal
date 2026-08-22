@@ -36,8 +36,11 @@ describe("the two prompts are separate documents on one set of rules", () => {
     // "Livré" (5 673), "Arret facturation" (4 546), "Restitué" (11).
     expect(p).toContain("Arret facturation");
     expect(p).toContain("Restitué");
-    expect(p).toContain("Envoyer en zone dépôt ATV");
-    expect(p).toContain("Envoyer en zone dépôt Remplacement");
+    // Verbatim strings: the prompt tells the model to copy them word for word,
+    // so a change here is a change to what lands in the sheet.
+    expect(p).toContain("À envoyer vers dépôt zone ATV");
+    expect(p).toContain("À envoyer vers dépôt zone Remplacement");
+    expect(p).toContain("Véhicule appartenant à AVIS — à envoyer au garage Pierre Parent");
     // A0 has to be read before the rules that would otherwise fill the list.
     expect(p.indexOf("LE STATUT DÉCIDE")).toBeLessThan(p.indexOf("A1. Chaque action"));
   });

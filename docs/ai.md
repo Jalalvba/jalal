@@ -581,9 +581,15 @@ order, however good the technical case:
 | Status | Work order |
 |---|---|
 | `cp.statut` = `Arret facturation` or `Restitué` | **empty** — the vehicle has left the billed fleet |
-| `ETAT VÉHICULE` = `ATV` | one line only: `Envoyer en zone dépôt ATV` — no workshop visit |
-| `ETAT VÉHICULE` = `Remplacement` | the repairs **plus** a final `Envoyer en zone dépôt Remplacement` — it is a customer's courtesy car and must be fixed |
-| `LLD`, `LCD`, `En stock`, `Livré`, unknown | normal work order |
+| `ETAT VÉHICULE` = `ATV` | one line only: `À envoyer vers dépôt zone ATV` — no workshop visit |
+| `ETAT VÉHICULE` = `Remplacement` | the repairs **plus** a final `À envoyer vers dépôt zone Remplacement` — it is a customer's courtesy car and must be fixed |
+| `ETAT VÉHICULE` = `LCD` | the repairs **plus** a final `Véhicule appartenant à AVIS — à envoyer au garage Pierre Parent` |
+| `LLD`, `En stock`, `Livré`, unknown | normal work order |
+
+Those three status lines are copied WORD FOR WORD from the prompt — they are
+the only actions written without a figure in brackets, because they follow from
+the status rather than from the history. `promptParking.test.ts` asserts each
+string, so changing one here is a deliberate change to what lands in the sheet.
 
 The vocabulary is the live one, not invented: `ETAT VÉHICULE` holds LLD (62),
 ATV (8), Remplacement (6), En stock (4), LCD (3); `cp.statut` holds Livré
