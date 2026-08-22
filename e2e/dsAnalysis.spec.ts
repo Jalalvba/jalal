@@ -103,3 +103,74 @@ test.describe("DS History — Analyse IA", () => {
     expect(pageErrors).toEqual([]);
   });
 });
+
+// NOT gated by RUN_AI_E2E: it must never reach a model, and it asserts exactly
+// that. The whole value of ds_analyses is that a vehicle already analysed
+// costs nothing to look at again, so "the analyze route was not called" is the
+// assertion, not a side note.
+test("a stored analysis renders on arrival, without calling the model", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  test.setTimeout(120_000);
+  const pageErrors: string[] = [];
+  page.on("pageerror", (e) => pageErrors.push(String(e)));
+  await context.addCookies([await authenticatedCookie(baseURL!)]);
+
+  const STORED = {
+    imm: PLATE,
+    tier: "pro",
+    model: "gemini-flash-latest",
+    costUsd: 0.008,
+    entriesCount: 62,
+    lastEntryDate: "2026-01-01T00:00:00.000Z",
+    createdAt: "2026-08-22T00:00:00.000Z",
+    updatedAt: "2026-08-22T00:00:00.000Z",
+    analysis: {
+      contractFlag: { level: "unknown", label: "Date de fin de contrat indisponible" },
+      findings: [
+        // Title and detail share no substring — otherwise a getByText on the
+        // title also matches the detail and trips strict mode.
+        { level: "warn", title: "Turbo moteur récurrent", detail: "Trois remplacements en 2025." },
+      ],
+      summary: "RÉSUMÉ ENREGISTRÉ — relu depuis Mongo, sans nouvel appel.",
+      insufficientData: false,
+    },
+  };
+
+  await page.route("**/api/ds-history/analysis**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, analysis: STORED }),
+    })
+  );
+
+  let analyzeCalls = 0;
+  await page.route("**/api/ds-history/analyze", async (route) => {
+    analyzeCalls++;
+    await route.abort();
+  });
+
+  await page.goto("/ds-history");
+  await page.getByPlaceholder("ex: 48070 / 832223WW").fill(PLATE);
+  await page.getByRole("option", { name: PLATE }).click();
+  await page.getByRole("button", { name: "Rechercher" }).click();
+
+  // The stored summary and finding appear on their own — no click involved.
+  await expect(page.getByText(STORED.analysis.summary)).toBeVisible({ timeout: 40_000 });
+  await expect(page.getByText("Turbo moteur récurrent")).toBeVisible();
+  await expect(page.getByText("Trois remplacements en 2025.")).toBeVisible();
+  await expect(page.getByText(/Analyse enregistrée du/)).toBeVisible();
+
+  // The history moved under it (62 stored vs whatever the live data holds), so
+  // the card must say so rather than present the verdict as current.
+  await expect(page.getByText(/l'historique a changé/i)).toBeVisible();
+
+  // And the button offers a re-run rather than a first run.
+  await expect(page.getByRole("button", { name: "Relancer l'analyse" })).toBeVisible();
+
+  expect(analyzeCalls, "showing a stored analysis must not call the model").toBe(0);
+  expect(pageErrors).toEqual([]);
+});
