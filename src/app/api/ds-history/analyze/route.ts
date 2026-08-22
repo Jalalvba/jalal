@@ -187,11 +187,16 @@ export async function POST(request: Request) {
   // established grade — see oilGrade.ts for why a plain change-detector is not
   // usable on this data.
   const oilGradeCheck = checkOilGrade(parsed.entries);
-  const prompt = buildDsAnalysisPrompt(parsed, contractStatus, [
+  // Built once and reused: these same lines go INTO the prompt and are also
+  // source text for the supplier guard — the model is told to quote them, so
+  // quoting them cannot count as fabrication. Passing a second, separately
+  // built copy is what would let the two drift.
+  const checkLines = [
     ...formatIntervalChecks(intervalChecks),
     ...formatBeltPumpCheck(beltPumpCheck),
     ...formatOilGradeCheck(oilGradeCheck),
-  ]);
+  ];
+  const prompt = buildDsAnalysisPrompt(parsed, contractStatus, checkLines);
 
   try {
     // validate runs inside callAI, after the response arrives — Gemini's
@@ -247,7 +252,7 @@ export async function POST(request: Request) {
 
     // Same treatment for invented supplier names — an unsupported claim about
     // a named garage is the one this feature adds, so it gets the same guard.
-    const badSuppliers = ungroundedSuppliers(analysis, parsed);
+    const badSuppliers = ungroundedSuppliers(analysis, parsed, checkLines);
     if (badSuppliers.length > 0) {
       log("warn", "ds-analysis", "Model emitted supplier-like names absent from the source data", {
         imm: parsed.imm,

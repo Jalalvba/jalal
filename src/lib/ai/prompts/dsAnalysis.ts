@@ -287,7 +287,27 @@ export function ungroundedDates(analysis: DsAnalysis, input: DsAnalysisInput): s
  */
 const CAPS_RUN_RE = /\b[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9'().-]{2,}(?:\s+[A-ZÀ-ÖØ-Þ0-9'().-]{2,})+\b/g;
 
-export function ungroundedSuppliers(analysis: DsAnalysis, input: DsAnalysisInput): string[] {
+export function ungroundedSuppliers(
+  analysis: DsAnalysis,
+  input: DsAnalysisInput,
+  /**
+   * The computed check lines that were put in the prompt — formatIntervalChecks()
+   * & co. They are SOURCE TEXT: the prompt orders the model to reproduce them
+   * (rules 11-15 say "reprends", rule 15 says VERBATIM), so a phrase quoted out
+   * of them is grounded by definition.
+   *
+   * Omitting them was a live defect, not a nicety. Those lines contain
+   * upper-case runs — "JAMAIS ENREGISTRÉ", "DÉPASSÉ", "NON VÉRIFIÉ" — that the
+   * caps-run heuristic reads as supplier-like names. And because `\b` in this
+   * regex is ASCII-only, "ENREGISTRÉ" truncates to the fragment "JAMAIS
+   * ENREGISTR", which matches nothing in the entries either. The route then
+   * dropped every finding containing that fragment: measured over three full
+   * 100-vehicle audit runs, **19% of vehicles silently lost at least one
+   * finding**, and they were the load-bearing ones — "filtre à gasoil jamais
+   * enregistré", "distribution / pompe à eau jamais enregistré".
+   */
+  checkLines: readonly string[] = []
+): string[] {
   const norm = (s: string) => s.toUpperCase().replace(/\s+/g, " ").trim();
 
   // Everything we actually sent, as one normalized haystack.
@@ -295,6 +315,7 @@ export function ungroundedSuppliers(analysis: DsAnalysis, input: DsAnalysisInput
     input.entries
       .flatMap((e) => [e.supplier ?? "", e.description ?? "", ...e.parts])
       .concat(input.replacements.map((r) => r.motif ?? ""))
+      .concat(checkLines)
       .join(" | ")
   );
 

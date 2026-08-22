@@ -319,6 +319,31 @@ describe("ungroundedSuppliers — an invented garage reads as authoritative", ()
     expect(ungroundedSuppliers(a, src)).toEqual([]);
   });
 
+  it("does not flag a computed check line the model was told to quote", () => {
+    // "JAMAIS ENREGISTRÉ" is upper-case, so the caps-run heuristic reads it as
+    // a name; `\b` being ASCII-only truncates it to "JAMAIS ENREGISTR", which
+    // matches nothing in the entries. Before the check lines were treated as
+    // source text, the route deleted the finding quoting it — measured at 19%
+    // of vehicles across three full audit runs, and always the load-bearing
+    // findings.
+    const a = analysis({
+      findings: [
+        {
+          level: "critical",
+          title: "Filtre à gasoil jamais enregistré",
+          detail: "Le filtre à gasoil est JAMAIS ENREGISTRÉ dans l'historique fourni (compteur actuel 151 648 km).",
+        },
+      ],
+    });
+    const src = input({ entries: [{ parts: ["Filtre a huile"], origin: "interne" }] });
+    const checkLines = [
+      "- Filtre à gasoil (intervalle 40 000 km) : JAMAIS ENREGISTRÉ dans l'historique fourni (compteur actuel 151 648 km).",
+    ];
+    expect(ungroundedSuppliers(a, src, checkLines)).toEqual([]);
+    // …and without them it is flagged, which is the bug this guards against.
+    expect(ungroundedSuppliers(a, src)).not.toEqual([]);
+  });
+
   it("returns nothing when the vehicle has no external work at all", () => {
     const a = analysis({ findings: [{ level: "info", title: "RIEN A SIGNALER", detail: "" }] });
     const noExt = input({ entries: [{ parts: [], origin: "interne" }] });
