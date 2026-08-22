@@ -208,6 +208,25 @@ Display and Geist were both dropped deliberately** — don't reintroduce either.
 
 ---
 
+## 9.4 `cp` keys on `imm`, everything else on `immatriculation`
+
+One collection names the plate field differently. `ds` and `parc` use
+`immatriculation`; **`cp` uses `imm`** (and `ww` for a temporary
+registration). A query written with the wrong spelling does not fail — it
+matches nothing, for every vehicle, forever, and reads as "the data isn't
+there". That is exactly how a contract lookup shipped reporting all 101 Suivi
+RL vehicles as having no contract while `cp` held a date for 97 of them.
+
+`pnpm verify-field-names` now catches this: alongside `"$field"` references it
+reads the top-level keys of any object literal passed straight to `findOne`,
+`find`, `countDocuments`, `updateOne`, `deleteOne`, `distinct` and friends, and
+checks them against `field_registry.json` for whichever collections that file
+touches. Bare object keys elsewhere are still skipped — indistinguishable from
+any other JS object — but the first argument of a Mongo query method is
+unambiguously a set of field names.
+
+---
+
 ## 9.5 List-page rendering performance
 
 These pages render one dense card per vehicle — 84 on Parking, ~101 on Suivi

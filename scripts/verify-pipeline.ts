@@ -19,6 +19,7 @@ import { GET as dsHistoryGET } from "@/app/api/ds/history/route";
 import { GET as storedGET } from "@/app/api/ds-history/analysis/route";
 import { buildDsAnalysisPayload } from "@/lib/ai/dsAnalysis/payload";
 import { computeIntervalChecks, checkBeltPump } from "@/lib/ai/prompts/maintenanceIntervals";
+import { parseSheetDate } from "@/lib/vehicle/contractEnd";
 import { checkOilGrade } from "@/lib/ai/prompts/oilGrade";
 import type { DsHistoryItem } from "@/types";
 
@@ -119,6 +120,60 @@ async function main() {
   timings.sort((a, b) => a - b);
   console.log(`   ${totalItems} DS, ${totalLines} lines`);
   console.log(`   /api/ds/history per plate: median ${Math.round(timings[Math.floor(timings.length / 2)])}ms, p90 ${Math.round(timings[Math.floor(timings.length * 0.9)])}ms, max ${Math.round(timings[timings.length - 1])}ms`);
+
+  console.log(`\n=== 2b. Contract end coverage ===`);
+  // "Date de fin de contrat indisponible" is only honest when no source has
+  // one. Both sources are checked here because each alone leaves vehicles
+  // uncovered, and because a query written against the wrong field name
+  // reports "no contract" for every vehicle rather than failing (cp keys on
+  // `imm`, ds and parc on `immatriculation`).
+  const cpCol = await getCollection("cp");
+  let fromCp = 0, fromSheet = 0, resolvable = 0, unknown = 0, disagree = 0;
+  for (const r of rows) {
+    const imm = String(r.IMM ?? "").trim();
+    if (!imm) continue;
+    const sheetIso = parseSheetDate((r as Record<string, unknown>).date_fin_contrat);
+    const doc = await cpCol.findOne({ imm, date_fin_contrat: { $ne: null } }, { projection: { date_fin_contrat: 1 } });
+    const cpIso = doc?.date_fin_contrat ? new Date(doc.date_fin_contrat as Date).toISOString() : null;
+    if (cpIso) fromCp++;
+    if (sheetIso) fromSheet++;
+    if (cpIso || sheetIso) resolvable++; else unknown++;
+    if (cpIso && sheetIso && cpIso.slice(0, 10) !== sheetIso.slice(0, 10)) {
+      disagree++;
+      note("contract", imm, `cp says ${cpIso.slice(0, 10)}, BDD sheet says ${sheetIso.slice(0, 10)}`);
+    }
+  }
+  console.log(`   cp has a date: ${fromCp}   BDD sheet has one: ${fromSheet}   resolvable: ${resolvable}/${rows.length}   genuinely unknown: ${unknown}`);
+  console.log(`   sources disagreeing: ${disagree}`);
+
+  console.log(`\n=== 2c. Odometer coherence ===`);
+  // A reading lower than the one before it is a data-entry error in the
+  // source. The interval checks refuse to compute across one (INDÉTERMINÉ)
+  // rather than reporting a distance they cannot trust, so this is reported,
+  // never worked around.
+  let platesWithRecul = 0, reculReadings = 0;
+  const worst: { imm: string; km: number; date: string }[] = [];
+  for (const imm of plates) {
+    const res2 = await dsHistoryGET(new Request(`http://x/api/ds/history?imm=${encodeURIComponent(imm)}`));
+    const items2 = ((await res2.json()) as { items?: DsHistoryItem[] }).items ?? [];
+    if (!items2.length) continue;
+    const chron = buildDsAnalysisPayload({ imm, items: items2 }).entries.slice().reverse();
+    let prev: number | null = null, w = 0, when = "";
+    for (const e of chron) {
+      if (e.km == null) continue;
+      if (prev != null && e.km < prev) {
+        reculReadings++;
+        if (prev - e.km > w) { w = prev - e.km; when = e.date?.slice(0, 10) ?? "?"; }
+      }
+      prev = e.km;
+    }
+    if (w > 0) { platesWithRecul++; worst.push({ imm, km: w, date: when }); }
+  }
+  console.log(`   plates with a backwards odometer reading: ${platesWithRecul}/${plates.length}`);
+  console.log(`   backwards readings in total            : ${reculReadings}`);
+  for (const w of worst.sort((a, b) => b.km - a.km).slice(0, 8)) {
+    console.log(`     ${w.imm.padEnd(12)} -${String(Math.round(w.km)).padStart(7)} km at ${w.date}`);
+  }
 
   console.log(`\n=== 3. Stored analyses (ds_analyses) ===`);
   t = performance.now();

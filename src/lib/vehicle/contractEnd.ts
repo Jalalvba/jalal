@@ -50,8 +50,14 @@ export async function resolveContractEnd(imm: string, fromClient: string | null)
 
   try {
     const cp = await getCollection("cp");
+    // `imm`, NOT `immatriculation`. cp is the one collection that names the
+    // plate field differently — ds and parc use `immatriculation`, and
+    // src/app/api/cp/route.ts has always matched on `imm`. Querying it with
+    // the other spelling returns nothing, silently, for every vehicle: the
+    // first version of this file did exactly that and the fallback looked like
+    // "cp simply has no contract for these plates".
     const doc = await cp.findOne(
-      { immatriculation: plate, date_fin_contrat: { $ne: null } },
+      { imm: plate, date_fin_contrat: { $ne: null } },
       { projection: { date_fin_contrat: 1 }, sort: { date_fin_contrat: -1 } }
     );
     const cpDate = doc?.date_fin_contrat;

@@ -106,6 +106,15 @@ function main() {
   // common case (a plain field read) from ever being verified.
   const LOCAL_FIELD_COMPUTED_RE = /["'`]?([A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_]*)["'`]?\s*:\s*\{\s*\$/g;
   const LOCAL_FIELD_ALIAS_RE = /["'`]?([A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_]*)["'`]?\s*:\s*["'`]\$([A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_ ]*)["'`]/g;
+  // Query-filter keys: `col.findOne({ imm: plate })`. A bare object key is
+  // normally indistinguishable from any other JS object literal, which is why
+  // this checker skipped them — but the key of a filter passed DIRECTLY to a
+  // Mongo query method is unambiguously a field name, and getting it wrong is
+  // silent: the query matches nothing, forever, and reads as "the data isn't
+  // there". That is exactly how a cp lookup written as
+  // `{ immatriculation: plate }` (cp keys on `imm`) shipped and reported every
+  // vehicle as having no contract.
+  const QUERY_CALL_RE = /\.(findOne|find|countDocuments|deleteOne|deleteMany|updateOne|updateMany|distinct)\(\s*(?:["'`][^"'`]*["'`]\s*,\s*)?\{/g;
   const ALLOW_RE = /verify-field-names:allow\s+(\S+)/g;
 
   const errors = [];
@@ -147,6 +156,37 @@ function main() {
       errors.push(
         `${rel}:${line}  "$${field}" — not in field_registry.json for {${[...collectionsInFile].join(", ")}}`
       );
+    }
+
+    // Top-level keys of a query filter passed straight to a Mongo method.
+    // Only the FIRST level is read: nested objects are operator bodies
+    // ({ $ne: null }), and $-prefixed keys are operators, not fields.
+    for (const m of src.matchAll(QUERY_CALL_RE)) {
+      const open = m.index + m[0].length - 1;
+      let depth = 0;
+      let end = open;
+      for (let i = open; i < src.length; i++) {
+        if (src[i] === "{") depth++;
+        else if (src[i] === "}") { depth--; if (depth === 0) { end = i; break; } }
+      }
+      const body = src.slice(open + 1, end);
+      // Strip nested braces so only this level's keys remain.
+      let flat = "";
+      let d = 0;
+      for (const ch of body) {
+        if (ch === "{" || ch === "[") d++;
+        else if (ch === "}" || ch === "]") d--;
+        else if (d === 0) flat += ch;
+      }
+      for (const km of flat.matchAll(/(?:^|,)\s*["'`]?([A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_.]*)["'`]?\s*:/g)) {
+        const field = km[1].split(".")[0]; // "a.b" is a path into field `a`
+        if (field === "_id") continue;
+        if (allowed.has(field) || fileAllowMarkers.has(field)) continue;
+        const line = src.slice(0, m.index).split("\n").length;
+        errors.push(
+          `${rel}:${line}  query filter key "${field}" — not in field_registry.json for {${[...collectionsInFile].join(", ")}}`
+        );
+      }
     }
 
     for (const m of src.matchAll(BRACKET_FIELD_RE)) {
