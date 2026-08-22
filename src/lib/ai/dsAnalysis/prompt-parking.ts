@@ -1,0 +1,72 @@
+// The PARKING work-order prompt.
+//
+// A different document from ./prompt.ts, on purpose, because it answers a
+// different question for a different reader. DS History's prompt produces
+// findings and a summary for someone reading a vehicle's story; this one
+// produces the list of operations a service advisor books, which lands
+// verbatim in the tab's ACTION column and is copied into an ordre de
+// réparation.
+//
+// What the two share is DS_GROUNDING_RULES — the axes and rules 1 to 17, which
+// govern how the model may read this data. Those must never drift apart: a
+// work order built on a hallucinated date is worse than a report built on one,
+// because somebody books the work. What they do NOT share is everything below,
+// and that difference is the reason this file exists rather than a flag on the
+// other prompt.
+
+import { DS_GROUNDING_RULES } from "@/lib/ai/dsAnalysis/prompt";
+
+export const DS_PARKING_WORKORDER_PROMPT = [
+  ...DS_GROUNDING_RULES,
+  "TU PRODUIS UN ORDRE DE TRAVAIL, PAS UN RAPPORT. Le lecteur est un conseiller",
+  "service qui va copier tes lignes dans un ordre de réparation. Le champ",
+  "`actions` est donc la partie la plus importante de ta réponse :",
+  "",
+  "A1. Chaque action est une CONSIGNE À EXÉCUTER À L'ATELIER, à l'infinitif, en",
+  "    commençant par le verbe : « Remplacer... », « Vidanger... », « Contrôler... »,",
+  "    « Vérifier... ». Jamais un constat (« le filtre est dépassé »), jamais une",
+  "    phrase d'analyse, jamais de recommandation commerciale.",
+  "A2. Une ligne = une opération. Courte : la consigne, puis entre parenthèses le",
+  "    fait chiffré qui la justifie, repris tel quel des données fournies.",
+  "    Exemple : « Remplacer le filtre à gasoil (jamais enregistré, 144 878 km) ».",
+  "A3. ORDRE IMPOSÉ, du plus urgent au moins urgent :",
+  "    1) LA PLAINTE EN COURS — si la dernière intervention (la plus récente) ne",
+  "       porte aucune pièce et décrit un symptôme, c'est le motif d'entrée du",
+  "       véhicule : elle DOIT être la première action, sous la forme",
+  "       « Diagnostiquer <symptôme repris tel quel> (entrée du <date>) ».",
+  "    2) Les entretiens DÉPASSÉS ou JAMAIS ENREGISTRÉS (vidange, filtres,",
+  "       distribution / pompe à eau), un par ligne.",
+  "    3) Les organes qui reviennent (règles 2b/2d) : « Contrôler <organe> »,",
+  "       avec le nombre d'occurrences et les dates.",
+  "    4) Le grade d'huile s'il t'est signalé.",
+  "A4. N'invente AUCUNE opération : si rien dans les données ne la justifie, elle",
+  "    n'existe pas. Un véhicule sans rien à faire reçoit une liste vide — c'est",
+  "    une réponse valable, pas un échec.",
+  "A5. Maximum 8 actions. Pas de doublon : si un organe est déjà couvert par un",
+  "    entretien dépassé, ne le répète pas en récurrence.",
+  "",
+  "FORMAT DE SORTIE — recopie EXACTEMENT ces noms de champs, en anglais, sans en",
+  "renommer ni en abréger aucun. Un objet de findings comporte TOUJOURS les trois",
+  "clés level, title et detail, écrites en toutes lettres :",
+  "",
+  "{",
+  '  "contractFlag": { "level": "unknown", "label": "Date de fin de contrat indisponible" },',
+  '  "actions": [',
+  '    "Diagnostiquer manque de puissance et témoin moteur allumé (entrée du 2026-08-13)",',
+  '    "Remplacer le filtre à gasoil (jamais enregistré, 144 878 km)",',
+  '    "Contrôler les injecteurs (3 interventions : 2025-01-04, 2025-06-12, 2026-02-03)"',
+  "  ],",
+  '  "findings": [',
+  '    { "level": "warn", "title": "Récurrence : injecteurs", "detail": "Les injecteurs reviennent 3 fois : le 2025-01-04, le 2025-06-12 et le 2026-02-03." }',
+  "  ],",
+  '  "summary": "…",',
+  '  "insufficientData": false',
+  "}",
+  "",
+  "Champs attendus :",
+  '- contractFlag: { level: "ok"|"warn"|"expired"|"unknown", label: string } — reprends le statut fourni.',
+  '- findings: [{ level: "info"|"warn"|"critical", title: string, detail: string }] — jusqu\'à 10 éléments. Couvre LES TROIS AXES quand les données le permettent : contrôles d\'entretien non conformes, récurrences de pièces/organes (règle 2b), récurrences de prestataires (règle 9).',
+  "- actions: [string] — LA LISTE DE TRAVAIL, règles A1 à A5. Jusqu'à 8 consignes à l'infinitif, dans l'ordre imposé. Tableau vide si le véhicule n'appelle aucune opération.",
+  "- summary: un seul paragraphe court résumant l'état du véhicule.",
+  "- insufficientData: true si les données ne permettent pas de conclure.",
+].join("\n");

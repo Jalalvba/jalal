@@ -30,6 +30,7 @@ import { GET as dsHistoryGET } from "@/app/api/ds/history/route";
 import { buildDsAnalysisPayload } from "@/lib/ai/dsAnalysis/payload";
 import { canonicalizeSuppliers } from "@/lib/ai/prompts/dsAnalysis";
 import { runDsAnalysis, resolveTier } from "@/lib/ai/dsAnalysis/run";
+import { DS_PARKING_WORKORDER_PROMPT } from "@/lib/ai/dsAnalysis/prompt-parking";
 import { getAnalysis, recordActionText } from "@/lib/mongo/dsAnalyses";
 import { isStale } from "@/lib/ai/dsAnalysis/stored";
 import { formatWorkOrder, mayOverwrite } from "@/lib/ai/dsAnalysis/workOrder";
@@ -74,6 +75,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "imms est requis" }, { status: 400 });
   }
   const tier = resolveTier(b.quality);
+  // Re-analyse even when a usable stored answer exists. For the vehicle whose
+  // work order looks wrong — not a default, because the whole point of the
+  // store is that the second pass over the tab is free.
+  const force = b.force === true;
 
   // One read for the whole batch: rows carry both the sheet row index the
   // write needs and the current ACTION text the overwrite rule needs.
@@ -100,14 +105,32 @@ export async function POST(request: Request) {
       const raw = buildDsAnalysisPayload({ imm, items });
       const input = { ...raw, entries: canonicalizeSuppliers(raw.entries) };
 
-      // Reuse before spending: only a vehicle whose history has moved since
-      // its stored analysis needs the model again.
+      // Reuse before spending — but only an analysis that can actually answer
+      // THIS question. Two conditions, and both are needed:
+      //
+      //   the history has not moved   (isStale)
+      //   it was produced by a prompt that was asked for actions
+      //
+      // The second one is not pedantry. ds_analyses is shared with DS History,
+      // whose prompt produces findings and a summary and no actions at all,
+      // and it also holds analyses written before `actions` existed. Reusing
+      // one of those returns a work order of nothing and reports the vehicle
+      // as having no work to do — which is what happened on 48083-B-7 and
+      // 52722-B-7, both of which have real operations outstanding. An `actions`
+      // array that is present but EMPTY is a genuine "nothing to do" and is
+      // reused; an absent one means nobody ever asked.
       const stored = await getAnalysis(imm);
       const fresh =
+        !force &&
         stored != null &&
+        Array.isArray(stored.analysis?.actions) &&
         !isStale(stored, { entriesCount: input.entries.length, lastEntryDate: input.entries[0]?.date ?? null });
 
-      const analysis = fresh ? stored!.analysis : (await runDsAnalysis(input, tier)).analysis;
+      // Parking's OWN prompt — not DS History's. Same data, same grounding
+      // rules, different output: a work order rather than a report.
+      const analysis = fresh
+        ? stored!.analysis
+        : (await runDsAnalysis(input, tier, DS_PARKING_WORKORDER_PROMPT)).analysis;
       const costUsd = fresh ? 0 : undefined;
 
       const text = formatWorkOrder(analysis);

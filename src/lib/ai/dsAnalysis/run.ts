@@ -94,7 +94,19 @@ export type AnalysisRun = {
  * a card that knows only a plate no longer reports "contrat inconnu" for a
  * vehicle whose contract end we hold.
  */
-export async function runDsAnalysis(input: DsAnalysisInput, tier: Tier): Promise<AnalysisRun> {
+export async function runDsAnalysis(
+  input: DsAnalysisInput,
+  tier: Tier,
+  /**
+   * Which prompt document to run. DS History's analysis is the default;
+   * Parking passes DS_PARKING_WORKORDER_PROMPT, which asks the same model,
+   * about the same data, under the same grounding rules, for a work order
+   * instead of a report. Passed in rather than branched on a mode flag: the
+   * prompts are separate documents (see prompt-parking.ts's header) and this
+   * keeps the runner unaware of how many there are.
+   */
+  systemPrompt: string = DS_ANALYSIS_SYSTEM_PROMPT
+): Promise<AnalysisRun> {
   input.contractEnd = await resolveContractEnd(input.imm, input.contractEnd);
 
   const contractStatus = computeContractStatus(input.contractEnd);
@@ -115,7 +127,7 @@ export async function runDsAnalysis(input: DsAnalysisInput, tier: Tier): Promise
     action: "ds-history-analysis",
     model: TIERS[tier].model,
     prompt: buildDsAnalysisPrompt(input, contractStatus, checkLines),
-    systemPrompt: DS_ANALYSIS_SYSTEM_PROMPT,
+    systemPrompt,
     maxTokens: TIERS[tier].maxTokens,
     temperature: TEMPERATURE,
     timeoutMs: REQUEST_TIMEOUT_MS,

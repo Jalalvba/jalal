@@ -536,7 +536,8 @@ never-recorded maintenance, then recurring organs, then the oil grade.
 
 | | |
 |---|---|
-| Route | `POST /api/parking/actions`, batches of ≤8 plates |
+| Prompt | **`src/lib/ai/dsAnalysis/prompt-parking.ts`** — its own document, not DS History's |
+| Route | `POST /api/parking/actions`, batches of ≤8 plates (`force: true` re-analyses instead of reusing) |
 | Tier | **standard (free)** — `pro` stays exclusive to Suivi RL |
 | Model calls | only for vehicles whose history moved since their stored analysis; the rest are reused from `ds_analyses` for free |
 | Writes | `updateAction()`, so `verifyRowIdentity()` runs on every one |
@@ -550,8 +551,30 @@ left exactly as it was. A vehicle with nothing to do gets an empty string, not
 "RAS": writing a placeholder over someone's note would destroy a real value to
 say nothing.
 
-Verified against the live tab: two empty cells written, one `DISPONIBLE` cell
-untouched.
+**Two prompts, one rulebook.** `prompt.ts` exports `DS_GROUNDING_RULES` — the
+three axes and rules 1 to 17, which govern how the model may read this data —
+and both documents are built on it. What differs is everything after: DS
+History asks for findings and a summary, Parking asks for a work order and
+carries rules A1–A5 (verb first, one operation per line, the imposed order:
+current complaint → overdue maintenance → recurring organs → oil grade). The
+grounding rules must never drift apart, because a work order built on a
+hallucinated date is worse than a report built on one — somebody books the
+work — and `promptParking.test.ts` fails if a rule appears in one and not the
+other.
+
+**Reuse requires an answer to THIS question.** A stored analysis is reused only
+when the history has not moved AND `actions` is an array. That second condition
+is not pedantry: `ds_analyses` is shared with DS History, whose prompt produces
+no actions at all, and it also holds analyses written before the field existed.
+Reusing one of those returns an empty work order and reports a vehicle as
+having nothing to do — measured on 52722-B-7, which has two filters never
+recorded at 50 504 km. An `actions` array that is present but empty is a
+genuine "nothing to do"; an absent one means nobody ever asked.
+
+Verified against the live tab: work orders written (including
+`1. Contrôler les plaquettes AV (2 interventions : 2024-04-12, 2025-12-03)` on
+a vehicle whose periodic maintenance is entirely up to date), and a manual
+`DISPONIBLE` cell left untouched.
 
 ---
 

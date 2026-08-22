@@ -8,19 +8,24 @@
 // buildDsAnalysisPrompt() in prompts/dsAnalysis.ts, because that logic belongs
 // next to the data it renders.
 //
-// Sibling: ./followUpPrompt.ts. The two are deliberately NOT factored into
-// shared fragments — see the note at the top of that file.
+// Siblings: ./followUpPrompt.ts, and ./prompt-parking.ts — the Parking work
+// order, which is a DIFFERENT document for a different reader. The two prompts
+// share DS_GROUNDING_RULES below and nothing else: the grounding rules are what
+// keep the model honest and must not drift apart, while what to DO with the
+// data is exactly what distinguishes the two.
 
 /**
- * The seven grounding rules are the load-bearing part of this file. They exist
- * because the source data is genuinely poor in one specific way, measured
- * against production: DS `description` values are terse French shop notes and
- * are often content-free ("pb", "."), while the part designations
- * (designation_consommation, e.g. "turbo moteur") carry the real signal. A
- * model handed both without being told this will confidently narrate a story
- * out of "pb".
+ * The axes and the grounding rules — everything that governs how the model may
+ * read this data, shared by every prompt built on it.
+ *
+ * They are the load-bearing part of this file. They exist because the source
+ * data is genuinely poor in one specific way, measured against production: DS
+ * `description` values are terse French shop notes and are often content-free
+ * ("pb", "."), while the part designations (designation_consommation, e.g.
+ * "turbo moteur") carry the real signal. A model handed both without being told
+ * this will confidently narrate a story out of "pb".
  */
-export const DS_ANALYSIS_SYSTEM_PROMPT = [
+export const DS_GROUNDING_RULES: readonly string[] = [
   "Tu analyses l'historique de maintenance d'un véhicule de flotte (société AVIS Maroc).",
   "Tu réponds UNIQUEMENT en JSON valide, sans texte autour, au format demandé.",
   "",
@@ -56,45 +61,17 @@ export const DS_ANALYSIS_SYSTEM_PROMPT = [
   "15. Le contrôle du GRADE D'HUILE t'est fourni déjà calculé. Il ne se déclenche que dans un cas : le véhicule est déjà passé à un grade de référence, puis une intervention ULTÉRIEURE en a utilisé un autre. Cette application ne connaît AUCUN grade prescrit par le constructeur : n'affirme jamais qu'un grade est le bon ou le mauvais pour ce moteur, ne recalcule rien, et présente le constat comme un écart à vérifier par un humain. COMMENCE ce constat par la liste des grades distincts telle qu'elle t'est fournie (« Grades utilisés : ... (N grades différents) »), reprise VERBATIM : ne recompte pas les grades toi-même et ne déduis pas cette liste de la chronologie. Le détail chronologique vient ensuite, en appui. Si ce contrôle ne figure pas dans les données fournies, n'en parle pas et n'en déduis rien.",
   "16. NE PARLE JAMAIS D'UN CONTRÔLE QUI NE T'A PAS ÉTÉ FOURNI. Le bloc « Contrôles d'intervalle d'entretien » contient TOUT ce qui a été calculé pour ce véhicule, et rien d'autre ne l'a été. Si le grade d'huile, la distribution / pompe à eau ou un filtre n'y figure pas, ce contrôle N'EXISTE PAS pour ce véhicule : n'en produis aucun constat, même formulé prudemment, et ne reconstitue pas son résultat à partir des désignations de pièces. Sur 6 véhicules d'un audit réel, un constat « Grades utilisés : ... » entièrement inventé a été produit alors qu'aucun contrôle de grade n'avait été calculé — c'est exactement ce que cette règle interdit.",
   "17. Écris toute date au format JJ/MM/AAAA ou AAAA-MM-JJ, jamais avec la partie horaire : « 2024-01-07 », pas « 2024-01-07T00:00:00.000Z ».",
-  "",
-  "TU PRODUIS UN ORDRE DE TRAVAIL, PAS UN RAPPORT. Le lecteur est un conseiller",
-  "service qui va copier tes lignes dans un ordre de réparation. Le champ",
-  "`actions` est donc la partie la plus importante de ta réponse :",
-  "",
-  "A1. Chaque action est une CONSIGNE À EXÉCUTER À L'ATELIER, à l'infinitif, en",
-  "    commençant par le verbe : « Remplacer... », « Vidanger... », « Contrôler... »,",
-  "    « Vérifier... ». Jamais un constat (« le filtre est dépassé »), jamais une",
-  "    phrase d'analyse, jamais de recommandation commerciale.",
-  "A2. Une ligne = une opération. Courte : la consigne, puis entre parenthèses le",
-  "    fait chiffré qui la justifie, repris tel quel des données fournies.",
-  "    Exemple : « Remplacer le filtre à gasoil (jamais enregistré, 144 878 km) ».",
-  "A3. ORDRE IMPOSÉ, du plus urgent au moins urgent :",
-  "    1) LA PLAINTE EN COURS — si la dernière intervention (la plus récente) ne",
-  "       porte aucune pièce et décrit un symptôme, c'est le motif d'entrée du",
-  "       véhicule : elle DOIT être la première action, sous la forme",
-  "       « Diagnostiquer <symptôme repris tel quel> (entrée du <date>) ».",
-  "    2) Les entretiens DÉPASSÉS ou JAMAIS ENREGISTRÉS (vidange, filtres,",
-  "       distribution / pompe à eau), un par ligne.",
-  "    3) Les organes qui reviennent (règles 2b/2d) : « Contrôler <organe> »,",
-  "       avec le nombre d'occurrences et les dates.",
-  "    4) Le grade d'huile s'il t'est signalé.",
-  "A4. N'invente AUCUNE opération : si rien dans les données ne la justifie, elle",
-  "    n'existe pas. Un véhicule sans rien à faire reçoit une liste vide — c'est",
-  "    une réponse valable, pas un échec.",
-  "A5. Maximum 8 actions. Pas de doublon : si un organe est déjà couvert par un",
-  "    entretien dépassé, ne le répète pas en récurrence.",
-  "",
+  "",];
+
+/** DS History's analysis: findings and a summary, for someone reading the vehicle's story. */
+export const DS_ANALYSIS_SYSTEM_PROMPT = [
+  ...DS_GROUNDING_RULES,
   "FORMAT DE SORTIE — recopie EXACTEMENT ces noms de champs, en anglais, sans en",
   "renommer ni en abréger aucun. Un objet de findings comporte TOUJOURS les trois",
   "clés level, title et detail, écrites en toutes lettres :",
   "",
   "{",
   '  "contractFlag": { "level": "unknown", "label": "Date de fin de contrat indisponible" },',
-  '  "actions": [',
-  '    "Diagnostiquer manque de puissance et témoin moteur allumé (entrée du 2026-08-13)",',
-  '    "Remplacer le filtre à gasoil (jamais enregistré, 144 878 km)",',
-  '    "Contrôler les injecteurs (3 interventions : 2025-01-04, 2025-06-12, 2026-02-03)"',
-  "  ],",
   '  "findings": [',
   '    { "level": "warn", "title": "Récurrence : injecteurs", "detail": "Les injecteurs reviennent 3 fois : le 2025-01-04, le 2025-06-12 et le 2026-02-03." }',
   "  ],",
@@ -105,7 +82,6 @@ export const DS_ANALYSIS_SYSTEM_PROMPT = [
   "Champs attendus :",
   '- contractFlag: { level: "ok"|"warn"|"expired"|"unknown", label: string } — reprends le statut fourni.',
   '- findings: [{ level: "info"|"warn"|"critical", title: string, detail: string }] — jusqu\'à 10 éléments. Couvre LES TROIS AXES quand les données le permettent : contrôles d\'entretien non conformes, récurrences de pièces/organes (règle 2b), récurrences de prestataires (règle 9).',
-  "- actions: [string] — LA LISTE DE TRAVAIL, règles A1 à A5. Jusqu'à 8 consignes à l'infinitif, dans l'ordre imposé. Tableau vide si le véhicule n'appelle aucune opération.",
   "- summary: un seul paragraphe court résumant l'état du véhicule.",
   "- insufficientData: true si les données ne permettent pas de conclure.",
 ].join("\n");
