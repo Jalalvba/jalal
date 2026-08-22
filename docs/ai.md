@@ -513,6 +513,48 @@ RL.
 
 ---
 
+## 6.7 Parking — the work order in the ACTION column
+
+Suivi RL's card answers "what is going on with this vehicle" in a paragraph.
+Parking answers a different question, for a different reader: a service advisor
+who needs the list of operations to book, in the column they already read.
+
+**"Actions IA"** in the Parking header analyses every vehicle currently listed
+and writes each one's work order into its own `ACTION` cell:
+
+```
+1. Diagnostiquer pb démarrage (entrée du 2026-08-17)
+2. Remplacer le filtre à gasoil (jamais enregistré, 78 053 km)
+```
+
+Numbered operations, verb first, with the figure that justifies each one — and
+nothing else, because anything that is not an instruction is something the
+advisor has to delete before pasting into an ordre de réparation. The order is
+imposed by the prompt (rules A1–A5): the current complaint first (the most
+recent DS, when it carries no parts and describes a symptom), then overdue or
+never-recorded maintenance, then recurring organs, then the oil grade.
+
+| | |
+|---|---|
+| Route | `POST /api/parking/actions`, batches of ≤8 plates |
+| Tier | **standard (free)** — `pro` stays exclusive to Suivi RL |
+| Model calls | only for vehicles whose history moved since their stored analysis; the rest are reused from `ds_analyses` for free |
+| Writes | `updateAction()`, so `verifyRowIdentity()` runs on every one |
+
+**The ACTION column is not ours.** It holds values typed by the team —
+`DISPONIBLE` on 8 of the 84 live rows. A cell is written only when it is empty,
+or when it still holds this app's own previous output byte for byte
+(`mayOverwrite`, comparing against `actionText` recorded on the stored
+analysis after a successful write). Anything else comes back as `manual` and is
+left exactly as it was. A vehicle with nothing to do gets an empty string, not
+"RAS": writing a placeholder over someone's note would destroy a real value to
+say nothing.
+
+Verified against the live tab: two empty cells written, one `DISPONIBLE` cell
+untouched.
+
+---
+
 ## 7. The deleted `generate-email` route
 
 `/api/generate-email` (added by `cb13749`, hardened by `6629251`) was a second,

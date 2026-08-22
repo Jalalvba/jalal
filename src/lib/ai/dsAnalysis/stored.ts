@@ -26,6 +26,16 @@ export type StoredDsAnalysis = {
   entriesCount: number;
   /** ISO date of the most recent intervention that was analysed. */
   lastEntryDate: string | null;
+  /**
+   * The exact text this app last wrote into PARKING's ACTION cell for this
+   * plate, when it did.
+   *
+   * Kept so a re-run can tell ITS OWN previous output apart from something a
+   * human typed. Without it the batch has two bad options: never refresh (an
+   * action list goes stale the moment new work is logged) or always overwrite
+   * (and one day it erases a note somebody meant to keep).
+   */
+  actionText?: string;
   createdAt: Date;
   updatedAt: Date;
 };

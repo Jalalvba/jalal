@@ -90,3 +90,16 @@ export async function getAllSummaries(): Promise<DsAnalysisSummary[]> {
     summary: d.analysis?.summary ?? "",
   }));
 }
+
+/**
+ * Records what was written into PARKING's ACTION cell for this plate.
+ *
+ * Separate from saveAnalysis() because it happens AFTER the sheet write
+ * succeeds: storing it beforehand would claim a cell holds text that a failed
+ * write never put there, and the next run would then treat a human's note as
+ * its own and overwrite it.
+ */
+export async function recordActionText(imm: string, actionText: string): Promise<void> {
+  const col = await getCollection<StoredDsAnalysis>(COLLECTION);
+  await col.updateOne({ imm: normalizeImm(imm) }, { $set: { actionText, updatedAt: new Date() } });
+}

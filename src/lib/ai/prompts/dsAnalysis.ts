@@ -121,6 +121,17 @@ export type DsAnalysisFinding = { level: FindingLevel; title: string; detail: st
 
 export type DsAnalysis = {
   contractFlag: { level: ContractLevel; label: string };
+  /**
+   * The work order: imperative one-liners a service advisor copies straight
+   * into an ordre de réparation ("Remplacer le filtre à gasoil (jamais
+   * enregistré, 144 878 km)"). This is what the reader acts on; `findings` is
+   * the evidence behind it and `summary` is one sentence of context.
+   *
+   * Optional at runtime, not by design: an analysis stored before this field
+   * existed has none, and the browser can hold newer client JS than the
+   * deploy that answered it. Read it as possibly-absent everywhere.
+   */
+  actions?: string[];
   findings: DsAnalysisFinding[];
   summary: string;
   /** True when the data is too thin to conclude anything — see rule 6. */
@@ -186,6 +197,17 @@ export function dsAnalysisShapeError(v: unknown): string | null {
     if (typeof fo.detail !== "string") return `findings[${i}].detail not a string`;
   }
 
+  // Absent is tolerated (older stored analyses predate the field); present but
+  // wrong-shaped is not.
+  if (o.actions !== undefined) {
+    if (!Array.isArray(o.actions)) return "actions not an array";
+    for (let i = 0; i < o.actions.length; i++) {
+      if (typeof o.actions[i] !== "string" || !(o.actions[i] as string).trim()) {
+        return `actions[${i}] not a non-empty string`;
+      }
+    }
+  }
+
   if (typeof o.summary !== "string" || !o.summary.trim()) return "summary empty";
   if (typeof o.insufficientData !== "boolean") return `insufficientData=${JSON.stringify(o.insufficientData)}`;
   return null;
@@ -207,6 +229,11 @@ export function isDsAnalysisShape(v: unknown): v is DsAnalysis {
     if (!FINDING_LEVELS.includes(fo.level as FindingLevel)) return false;
     if (typeof fo.title !== "string" || !fo.title.trim()) return false;
     if (typeof fo.detail !== "string") return false;
+  }
+
+  if (o.actions !== undefined) {
+    if (!Array.isArray(o.actions)) return false;
+    if (o.actions.some((a) => typeof a !== "string" || !a.trim())) return false;
   }
 
   if (typeof o.summary !== "string" || !o.summary.trim()) return false;
@@ -260,6 +287,7 @@ export function ungroundedDates(analysis: DsAnalysis, input: DsAnalysisInput): s
   const text = [
     analysis.summary,
     analysis.contractFlag.label,
+    ...(analysis.actions ?? []),
     ...analysis.findings.flatMap((f) => [f.title, f.detail]),
   ].join(" \n ");
 
@@ -326,10 +354,13 @@ export function ungroundedSuppliers(
   // because it is not a name at all. The route then dropped every finding
   // whose text contained it — i.e. the sound finding this fabricated
   // "supplier" was spliced out of. Observed live on 23625-T-6.
-  const candidates = analysis.findings.flatMap((f) => [
-    ...(f.title.match(CAPS_RUN_RE) ?? []),
-    ...(f.detail.match(CAPS_RUN_RE) ?? []),
-  ]);
+  const candidates = [
+    ...(analysis.actions ?? []).flatMap((a) => a.match(CAPS_RUN_RE) ?? []),
+    ...analysis.findings.flatMap((f) => [
+      ...(f.title.match(CAPS_RUN_RE) ?? []),
+      ...(f.detail.match(CAPS_RUN_RE) ?? []),
+    ]),
+  ];
 
   return [...new Set(candidates.map(norm).filter((c) => !haystack.includes(c)))];
 }

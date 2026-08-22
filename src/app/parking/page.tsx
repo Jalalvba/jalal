@@ -10,6 +10,7 @@ import { PlateFilterInput } from "@/components/fleet/PlateFilterInput";
 import { AddResultsList } from "@/components/fleet/AddResultsList";
 import { RecordCard } from "@/components/fleet/RecordCard";
 import { GeminiSummaryBlock } from "@/components/fleet/GeminiSummaryBlock";
+import { GenerateActionsButton } from "@/components/fleet/GenerateActionsButton";
 import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
@@ -191,6 +192,16 @@ export default function ParkingPage() {
         {addResults && <AddResultsList results={addResults} />}
 
         <PlateFilterInput value={search} onChange={setSearch} />
+
+        {/* Acts on what is CURRENTLY listed, not on the whole tab: with a
+            filter applied, "Actions IA" means "these vehicles", which is what
+            the count next to it says. */}
+        <div className="flex justify-end">
+          <GenerateActionsButton
+            imms={searched.map((r) => r.imm)}
+            onDone={() => void refreshMutation.mutateAsync()}
+          />
+        </div>
       </ListPageHeader>
 
       <div className="px-3 py-3">
