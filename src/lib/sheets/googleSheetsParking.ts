@@ -128,6 +128,7 @@ async function fetchParkingRows(): Promise<ParkingRow[]> {
   const techniceinCol = colMap["TECHNICEIN"];
   const founisseurCol = colMap["FOUNISSEUR"];
   const geminiCol = colMap["GEMINI"];
+  const zoningCol = colMap["ZONING"];
 
   const rows: ParkingRow[] = [];
 
@@ -178,6 +179,7 @@ async function fetchParkingRows(): Promise<ParkingRow[]> {
       technicein: strOrEmpty(techniceinCol),
       founisseur: strOrEmpty(founisseurCol),
       gemini: strOrEmpty(geminiCol),
+      zoning: strOrEmpty(zoningCol),
     });
   }
 

@@ -9,6 +9,9 @@ export const maxDuration = 30;
 import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
 import { toErrorResponse } from "@/lib/http/apiError";
+// Shared with /api/parking/export — see src/lib/pdf/text.ts for why these are
+// not two copies.
+import { truncate, wrapText } from "@/lib/pdf/text";
 
 // Same rate-limit bucket shape as src/app/api/export/route.ts's DS-history
 // export (20 req / 5min) — this is a read-only report generator, not a
@@ -173,75 +176,12 @@ async function buildPdf(
     page.drawLine({ start: { x: ML, y: Y(y) }, end: { x: ML + PW, y: Y(y) }, color: BORD, thickness: 0.4 });
   };
 
-  const sanitize = (s: string): string =>
-    String(s ?? "")
-      .replace(/[\r\n\t\x00-\x1f\x7f]/g, " ")
-      // \x80-\x9f (the C1 control range) sits inside \x00-\xff but is NOT
-      // encodable by pdf-lib's WinAnsi StandardFonts — the final catch-all
-      // below used to let it through untouched (only \x00-\x1f/\x7f were
-      // treated as control characters), so a Commentaire/IMM/search term
-      // containing one of these (e.g. from a Windows-1252-mangled paste)
-      // crashed the whole export with an opaque "BDD export failed" 500.
-      .replace(/[\x80-\x9f]/g, " ")
-      .replace(new RegExp("[\\u202f\\u00a0\\u2007\\u2009\\u200a\\u3000]", "g"), " ")
-      .replace(new RegExp("[\\u2018\\u2019\\u02bc]", "g"), "'")
-      .replace(new RegExp("[\\u201c\\u201d\\u00ab\\u00bb]", "g"), '"')
-      .replace(new RegExp("[\\u2013\\u2212]", "g"), "-")
-      .replace(new RegExp("[\\u2014\\u2015]", "g"), "--")
-      .replace(new RegExp("[\\u2026]", "g"), "...")
-      .replace(/[^\x20-\xff]/g, "?");
-
-  const truncate = (s: string, font: typeof fontR, size: number, maxW: number): string => {
-    const str = sanitize(s);
-    if (font.widthOfTextAtSize(str, size) <= maxW) return str;
-    let t = str;
-    while (t.length > 1 && font.widthOfTextAtSize(t + "...", size) > maxW) t = t.slice(0, -1);
-    return t + "...";
-  };
-
   const drawText = (
     s: string, x: number, y: number, maxW: number,
     font: typeof fontR, size: number, color: ReturnType<typeof rgb>
   ) => {
     const safe = truncate(s, font, size, maxW);
     page.drawText(safe, { x, y: Y(y + size * 0.8), font, size, color });
-  };
-
-  // Word-wraps (no truncation) into as many lines as needed — used only for
-  // Commentaire, the one column allowed to grow a row instead of clipping.
-  // Falls back to hard character-breaking for a single word wider than the
-  // column (rare, but a run-on comment with no spaces would otherwise never
-  // fit at all).
-  const wrapText = (s: string, font: typeof fontR, size: number, maxW: number): string[] => {
-    const words = sanitize(s).split(/\s+/).filter(Boolean);
-    if (words.length === 0) return [""];
-    const lines: string[] = [];
-    let current = "";
-    for (const word of words) {
-      const candidate = current ? `${current} ${word}` : word;
-      if (font.widthOfTextAtSize(candidate, size) <= maxW) {
-        current = candidate;
-        continue;
-      }
-      if (current) lines.push(current);
-      if (font.widthOfTextAtSize(word, size) <= maxW) {
-        current = word;
-      } else {
-        let chunk = "";
-        for (const ch of word) {
-          const next = chunk + ch;
-          if (font.widthOfTextAtSize(next, size) <= maxW) {
-            chunk = next;
-          } else {
-            lines.push(chunk);
-            chunk = ch;
-          }
-        }
-        current = chunk;
-      }
-    }
-    if (current) lines.push(current);
-    return lines;
   };
 
   // ── Title + meta ──

@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { ParkingRow, ParkingAddResultItem } from "@/types";
 import { ZONE_COLORS } from "@/config/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
@@ -13,6 +14,7 @@ import { GeminiSummaryBlock } from "@/components/fleet/GeminiSummaryBlock";
 import { GenerateActionsButton } from "@/components/fleet/GenerateActionsButton";
 import { ParkingRowAiButtons } from "@/components/fleet/ParkingRowAiButtons";
 import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
@@ -28,20 +30,85 @@ import {
 import { useVehicleSuggestionList } from "@/hooks/useVehicleSuggestionList";
 import { useStableRowOrder } from "@/hooks/useStableRowOrder";
 
-// ─── Read-only reference fields — the 9 sheet-side XLOOKUP columns, exact
-// header spelling (TECHNICEIN/FOUNISSEUR are sic, matching the real sheet) ──
+// ─── Read-only reference fields — the sheet-side columns, exact header
+// spelling (TECHNICEIN/FOUNISSEUR are sic, matching the real sheet). ZONING is
+// the tab's own column, added to the live sheet 2026-08, and is also the
+// page's chip filter. ──
 
-const READONLY_FIELDS: { key: keyof Pick<ParkingRow, "rlReunion" | "motif" | "etatVehicule" | "bdd" | "dateDs" | "ds" | "parts" | "technicein" | "founisseur">; label: string }[] = [
+const READONLY_FIELDS: { key: keyof Pick<ParkingRow, "rlReunion" | "motif" | "etatVehicule" | "bdd" | "dateDs" | "ds" | "zoning" | "parts" | "technicein" | "founisseur">; label: string }[] = [
   { key: "rlReunion", label: "RL_REUNION" },
   { key: "motif", label: "MOTIF" },
   { key: "etatVehicule", label: "ETAT VÉHICULE" },
   { key: "bdd", label: "BDD" },
   { key: "dateDs", label: "DATE_DS" },
   { key: "ds", label: "DS" },
+  { key: "zoning", label: "ZONING" },
   { key: "parts", label: "PARTS" },
   { key: "technicein", label: "TECHNICEIN" },
   { key: "founisseur", label: "FOUNISSEUR" },
 ];
+
+/**
+ * Exports exactly what is on screen — the filtered, searched list — as a PDF.
+ *
+ * Seven columns (IMM, TIMESTAMP, ACTION, ZONING, MARQUE, MODEL, gemini), which
+ * is why the report is landscape; see /api/parking/export. Sends only those
+ * fields, String()-coerced: sheet cells do not honour their declared types (a
+ * numeric MODEL comes through as a number, and one such row would fail the
+ * route's strict row check and reject the WHOLE batch — the same footgun
+ * 77f9eef fixed in the BDD export).
+ */
+async function downloadParkingPdf(
+  rows: ParkingRow[],
+  activeFilters: { label: string; value: string }[],
+  searchTerm: string,
+  setExporting: (v: boolean) => void
+) {
+  setExporting(true);
+  try {
+    const res = await fetch("/api/parking/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: rows.map((r) => ({
+          imm: String(r.imm ?? ""),
+          timestamp: String(r.timestamp ?? ""),
+          action: String(r.action ?? ""),
+          zoning: String(r.zoning ?? ""),
+          marque: String(r.marque ?? ""),
+          model: String(r.model ?? ""),
+          gemini: String(r.gemini ?? ""),
+        })),
+        activeFilters,
+        searchTerm: searchTerm || undefined,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error ?? `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const dateSlug = new Date().toISOString().slice(0, 10);
+    const filterSlug = activeFilters
+      .map((f) => f.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""))
+      .filter(Boolean)
+      .join("-");
+    a.download = `parking-${dateSlug}${filterSlug ? `-${filterSlug}` : ""}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    toast.error(`Erreur export PDF : ${e instanceof Error ? e.message : e}`);
+  } finally {
+    setExporting(false);
+  }
+}
+
+// A value no real ZONING cell can hold, so it can share the single-select
+// chip group with the real ones. Same device as Atelier's UNASSIGNED_TECHNICIEN.
+const UNASSIGNED_ZONING = "__UNASSIGNED__";
 
 // ─── Parking card (per row) ────────────────────────────────────────────────
 
@@ -109,6 +176,8 @@ export default function ParkingPage() {
   const refreshMutation = useRefreshParkingRows();
 
   const [search, setSearch] = useState("");
+  const [activeZoning, setActiveZoning] = useState("TOUS");
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [rawInput, setRawInput] = useState("");
   const [error, setError] = useState("");
   const [addResults, setAddResults] = useState<ParkingAddResultItem[] | null>(null);
@@ -163,9 +232,39 @@ export default function ParkingPage() {
     }
   }
 
+  // Distinct ZONING values actually present, so the chip row shows what the
+  // tab holds rather than a fixed roster that drifts from it. Live today:
+  // DISPONIBLE_À LIVERER (66), depot-ATV (8), depot-rempalcmemnt (6),
+  // AVIS-PIERRE-PARENT (3).
+  const visibleZonings = useMemo(
+    () => [...new Set(rows.map((r) => r.zoning.trim()).filter(Boolean))].sort(),
+    [rows]
+  );
+
+  const zoningFiltered = useMemo(() => {
+    if (activeZoning === "TOUS") return rows;
+    // "Non assigné" is offered even when no row is currently unassigned: a
+    // vehicle losing its zone is exactly what someone would come here to find,
+    // and a chip that only appears once the problem exists cannot be used to
+    // check for it.
+    if (activeZoning === UNASSIGNED_ZONING) return rows.filter((r) => !r.zoning.trim());
+    return rows.filter((r) => r.zoning.trim() === activeZoning);
+  }, [rows, activeZoning]);
+
+  // What the report's "Filtres actifs" line says. A search term bypasses the
+  // chip (see below), so the chip is only reported when it is what actually
+  // shaped the list.
+  const activeFilters = useMemo(() => {
+    if (search.trim() || activeZoning === "TOUS") return [];
+    return [{ label: "Zoning", value: activeZoning === UNASSIGNED_ZONING ? "Non assigné" : activeZoning }];
+  }, [search, activeZoning]);
+
+  // Plate search bypasses the ZONING chip entirely — same convention as the
+  // other list pages: chips browse, search finds one specific plate whatever
+  // is currently selected.
   const searched = (() => {
     const term = search.trim().toUpperCase();
-    if (!term) return rows;
+    if (!term) return zoningFiltered;
     return rows.filter((r) => r.imm.includes(term));
   })();
 
@@ -208,6 +307,27 @@ export default function ParkingPage() {
 
         <PlateFilterInput value={search} onChange={setSearch} />
 
+        {rows.length > 0 && (
+          <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
+            <span className="mr-1 flex-shrink-0 text-micro font-bold uppercase text-muted-foreground">
+              Zoning
+            </span>
+            <ToggleGroup type="single" value={activeZoning} onValueChange={(v) => v && setActiveZoning(v)}>
+              <ToggleGroupItem value="TOUS">TOUS</ToggleGroupItem>
+              {/* Offered even when every row is currently assigned: a vehicle
+                  losing its zone is exactly what someone would come here to
+                  check, and a chip that only appears once the problem exists
+                  cannot be used to look for it. */}
+              <ToggleGroupItem value={UNASSIGNED_ZONING}>Non assigné</ToggleGroupItem>
+              {visibleZonings.map((z) => (
+                <ToggleGroupItem key={z} value={z}>
+                  {z}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+        )}
+
         {/* Acts on what is CURRENTLY listed, not on the whole tab: with a
             filter applied, "Actions IA" means "these vehicles", which is what
             the count next to it says. */}
@@ -215,7 +335,16 @@ export default function ParkingPage() {
             vehicle's history says); "Actions IA" fills `ACTION` (what the
             workshop should do). Both act on what is CURRENTLY listed, which is
             what the count beside the title says. */}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => void downloadParkingPdf(searched, activeFilters, search.trim(), setExportingPdf)}
+            disabled={searched.length === 0 || exportingPdf}
+            title={searched.length === 0 ? "Aucune ligne à exporter" : "Exporter la liste filtrée en PDF"}
+            className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-400"
+          >
+            {exportingPdf ? "Génération…" : `Export PDF (${searched.length})`}
+          </button>
           <GenerateActionsButton
             imms={searched.map((r) => r.imm)}
             variant="analyse"

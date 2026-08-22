@@ -489,6 +489,12 @@ export type ParkingRow = {
   founisseur: string;
   /** The AI analysis summary, from this tab's own `gemini` column. */
   gemini: string;
+  /**
+   * Which zone the vehicle is assigned to, from the tab's own ZONING column
+   * (added to the live sheet 2026-08). Blank is a real state — "not yet
+   * assigned" — and is filterable as such on the page, not hidden.
+   */
+  zoning: string;
 };
 
 export type ParkingAddStatus = "added" | "updated";

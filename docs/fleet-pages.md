@@ -46,6 +46,37 @@ are sheet-side XLOOKUP formulas, read-only here.
   in `cdbfcd7` where it queried the wrong Mongo field and **always returned
   `[]`**.
 
+### 2.1 ZONING, the filter, and the PDF export
+
+The tab gained a `ZONING` column (live values: `DISPONIBLE_À LIVERER` 66,
+`depot-ATV` 8, `depot-rempalcmemnt` 6, `AVIS-PIERRE-PARENT` 3). It is read
+into `ParkingRow.zoning`, shown on each card, and drives a single-select chip
+row in the header.
+
+**"Non assigné" is always offered**, even when every row currently has a zone.
+A vehicle losing its zone is exactly what someone would come here to check, and
+a chip that only appears once the problem exists cannot be used to look for it.
+The plate search bypasses the chip, same convention as the other list pages:
+chips browse, search finds one plate whatever is selected.
+
+**Export PDF** renders the filtered view — `POST /api/parking/export`, seven
+columns: IMM, TIMESTAMP, ACTION, ZONING, MARQUE, MODEL, gemini.
+
+- **Landscape A4**, unlike the BDD report's portrait: two of these columns are
+  long free text, and portrait squeezes the work order into a column too narrow
+  to read.
+- **ACTION keeps its own line breaks** (`wrapPreservingBreaks`). It holds a
+  numbered work order, one operation per line, and re-flowing it into a
+  paragraph would undo the one thing that makes it copy-pasteable.
+- Column widths were measured against real values, not guessed: at the first
+  pass TIMESTAMP clipped to `17/08/2026 17:...` and MODEL to `MG3 Hybride P...`.
+  Every text column now wraps, so an unexpectedly long value grows its row
+  instead of losing its tail.
+- The text helpers (`sanitize`, `truncate`, `wrapText`) are shared with the BDD
+  export via `src/lib/pdf/text.ts` — each rule in `sanitize` is a real crash or
+  mangling seen in this data, and a second copy would inherit the rules but not
+  the corrections.
+
 ## 3. Atelier
 
 `src/app/atelier/page.tsx` · `src/lib/sheets/googleSheetsAtelier.ts` · `/api/atelier/*`
