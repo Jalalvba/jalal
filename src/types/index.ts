@@ -294,6 +294,7 @@ export const OPTION_KEYS = [
   "TECHNICIEN_OPTIONS",
   "PRESTATAIRE_OPTIONS",
   "RDV_CONVOYEURS",
+  "ZONING_OPTIONS",
 ] as const;
 export type OptionKey = (typeof OPTION_KEYS)[number];
 
@@ -309,6 +310,7 @@ export const OPTION_LABELS: Record<OptionKey, string> = {
   TECHNICIEN_OPTIONS: "Technicien",
   PRESTATAIRE_OPTIONS: "Prestataire",
   RDV_CONVOYEURS: "RDV — Convoyeurs",
+  ZONING_OPTIONS: "Parking — Zoning",
 };
 
 /** The shape /api/config/options returns, and what useSheetFieldOptions() exposes to every page that used to import a *_OPTIONS constant directly. */
@@ -320,12 +322,33 @@ export type AllSheetFieldOptions = {
   TECHNICIEN_OPTIONS: string[];
   PRESTATAIRE_OPTIONS: ColoredOption[];
   RDV_CONVOYEURS: string[];
+  ZONING_OPTIONS: string[];
 };
 
 // Sheet-confirmed dropdown values for the manual "Emplacement" field — a
 // human's assessment of the vehicle's real physical location, exact order
 // as given by the sheet owner. Fallback only — see note above.
 export const EMPLACEMENT_OPTIONS_FALLBACK = ["ATELIER", "PARKING", "INTROUVABLE", "DEPOT", "EXTERNE"];
+
+/**
+ * The PARKING tab's ZONING values, in the order the sheet owner gave them.
+ *
+ * "depot-rempalcmemnt" is spelled exactly as the live sheet spells it. That is
+ * deliberate: this list feeds a dropdown that WRITES into the column, and a
+ * corrected spelling here would create a second, near-identical value that no
+ * existing row matches and that the chip filter would show as its own bucket.
+ * Fix the sheet first, then this — never the other way round.
+ *
+ * Fallback only: the live list is admin-editable at /admin/config like every
+ * other option set.
+ */
+export const ZONING_OPTIONS_FALLBACK = [
+  "depot-rempalcmemnt",
+  "depot-ATV",
+  "ATELIER",
+  "DISPONIBLE_À LIVERER",
+  "AVIS-PIERRE-PARENT",
+];
 
 // Named handle for the one EMPLACEMENT_OPTIONS_FALLBACK value that
 // src/app/suivi-rl/page.tsx and src/app/ds-history/page.tsx treat specially (red

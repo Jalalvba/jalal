@@ -69,6 +69,29 @@ export function useUpdateParkingAction() {
   });
 }
 
+/**
+ * Sets a row's ZONING. Separate from the ACTION mutation on purpose — that one
+ * also stamps TIMESTAMP, and a zone change is not workshop activity.
+ */
+export function useUpdateParkingZoning() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ rowIndex, zoning, imm }: { rowIndex: number; zoning: string; imm: string }) =>
+      fetchJson<{ ok: true }>("/api/parking/zoning", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex, zoning, imm }),
+      }),
+    meta: { successMessage: "Zoning mis à jour" },
+    onSuccess: () => {
+      // markFresh first: invalidating alone reads back the pre-write value,
+      // because the sheet cache is stale-while-revalidate (see freshFetch.ts).
+      markFresh("parking");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
+  });
+}
+
 export function useDeleteParkingRow() {
   const queryClient = useQueryClient();
   return useMutation({

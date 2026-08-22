@@ -38,8 +38,12 @@ describe("the two prompts are separate documents on one set of rules", () => {
     expect(p).toContain("Restitué");
     // Verbatim strings: the prompt tells the model to copy them word for word,
     // so a change here is a change to what lands in the sheet.
-    expect(p).toContain("À envoyer vers dépôt zone ATV");
-    expect(p).toContain("À envoyer vers dépôt zone Remplacement");
+    // The zone names are the sheet's ZONING values verbatim, misspelling
+    // included ("depot-rempalcmemnt"): the action has to name the zone as it
+    // exists, not as it should be spelled, or it points at a bucket the column
+    // does not have.
+    expect(p).toContain("À envoyer vers depot-ATV");
+    expect(p).toContain("À envoyer vers depot-rempalcmemnt");
     expect(p).toContain("À envoyer au garage Pierre Parent");
     // A0 has to be read before the rules that would otherwise fill the list.
     expect(p.indexOf("LE STATUT DÉCIDE")).toBeLessThan(p.indexOf("A1. Chaque action"));
@@ -69,5 +73,19 @@ describe("the two prompts are separate documents on one set of rules", () => {
     // advisor reads, before any periodic maintenance.
     expect(p.indexOf("LA PLAINTE EN COURS")).toBeLessThan(p.indexOf("Les entretiens DÉPASSÉS"));
     expect(p.indexOf("Les entretiens DÉPASSÉS")).toBeLessThan(p.indexOf("Les organes qui reviennent"));
+  });
+});
+
+describe("the zone actions name real ZONING values", () => {
+  it("uses only values from the configured option list", async () => {
+    const { ZONING_OPTIONS_FALLBACK } = await import("@/types");
+    const { DS_PARKING_WORKORDER_PROMPT: p } = await import("@/lib/ai/dsAnalysis/prompt-parking");
+    // Every zone the prompt tells the model to write must be a value the
+    // ZONING column (and its filter chips) actually recognises — otherwise the
+    // work order sends a vehicle to a zone that does not exist.
+    for (const zone of ["depot-ATV", "depot-rempalcmemnt"]) {
+      expect(ZONING_OPTIONS_FALLBACK).toContain(zone);
+      expect(p).toContain(zone);
+    }
   });
 });

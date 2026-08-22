@@ -34,6 +34,7 @@ import {
 import { checkOilGrade, formatOilGradeCheck, type OilGradeCheck } from "@/lib/ai/prompts/oilGrade";
 import { resolveContractEnd } from "@/lib/vehicle/contractEnd";
 import { saveAnalysis } from "@/lib/mongo/dsAnalyses";
+import { enforceActionStyle } from "@/lib/ai/dsAnalysis/workOrder";
 
 /**
  * Two tiers, chosen by NAME. A client may ask for "pro"; it may never name a
@@ -150,6 +151,12 @@ export async function runDsAnalysis(
   });
 
   const analysis = JSON.parse(stripFence(text)) as DsAnalysis;
+
+  // BEFORE the guards: an action carrying a date is a style violation the
+  // prompt already forbids, and leaving it in means ungroundedDates() deletes
+  // the whole instruction instead of the decoration. Stripping first keeps the
+  // guard's job (unsupported CLAIMS) separate from formatting.
+  if (analysis.actions) analysis.actions = enforceActionStyle(analysis.actions);
 
   // Drop anything carrying a date absent from the source. The whole item goes,
   // not just the date: a claim stripped of its invented evidence is not a

@@ -14,6 +14,7 @@ const FIXTURE_OPTIONS = {
   TECHNICIEN_OPTIONS: ["ALI ELGHORABI"],
   PRESTATAIRE_OPTIONS: [{ value: "SCAL", color: null }],
   RDV_CONVOYEURS: ["KHACHI Taha"],
+  ZONING_OPTIONS: ["depot-ATV", "ATELIER"],
 };
 
 test("admin/config: no editable UI (no Ajouter button) is rendered while the options fetch is still pending — C2 regression guard", async ({

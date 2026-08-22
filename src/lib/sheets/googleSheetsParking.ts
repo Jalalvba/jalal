@@ -506,6 +506,40 @@ export async function updateAction(rowIndex: number, action: string, expectedImm
   invalidateCache(ROWS_CACHE_KEY);
 }
 
+/**
+ * Writes one row's ZONING cell.
+ *
+ * Same shape as updateAction(): verifyRowIdentity() first, so a row that
+ * shifted under the client's feet is refused rather than mis-targeted
+ * (AGENTS.md rule 3). No TIMESTAMP stamp — that column tracks the ACTION
+ * workflow, and touching it here would make a zone change look like workshop
+ * activity in every view that sorts or reads by it.
+ */
+export async function updateZoning(rowIndex: number, zoning: string, expectedImm: string): Promise<void> {
+  const sheets = getSheetsClient();
+  const colMap = buildColMap(await getHeaderRow(sheets));
+  const immCol = colMap["IMM"] ?? 1;
+  const zoningCol = colMap["ZONING"];
+  if (!zoningCol) throw new Error("Colonne ZONING introuvable sur l'onglet PARKING");
+
+  await verifyRowIdentity(
+    sheets,
+    spreadsheetId!,
+    `'${PARKING_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    expectedImm
+  );
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: spreadsheetId!,
+    range: `'${PARKING_TAB}'!${columnIndexToLetter(zoningCol)}${rowIndex}`,
+    // RAW, not USER_ENTERED: these are literal labels ("depot-ATV"), and
+    // USER_ENTERED reinterprets what it is given.
+    valueInputOption: "RAW",
+    requestBody: { values: [[zoning.trim()]] },
+  });
+  invalidateCache(ROWS_CACHE_KEY);
+}
+
 // ─── deleteIMMFromWeb ──────────────────────────────────────────────────────
 
 /** Genuinely deletes the row (Sheets "delete row" — DeleteDimensionRequest),

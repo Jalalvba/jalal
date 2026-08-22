@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatWorkOrder, mayOverwrite } from "@/lib/ai/dsAnalysis/workOrder";
+import { enforceActionStyle, formatWorkOrder, mayOverwrite } from "@/lib/ai/dsAnalysis/workOrder";
 import type { DsAnalysis } from "@/lib/ai/prompts/dsAnalysis";
 
 const analysis = (actions?: string[]): DsAnalysis => ({
@@ -56,5 +56,40 @@ describe("mayOverwrite — the ACTION column belongs to the team too", () => {
 
   it("does not overwrite an edited version of its own output", () => {
     expect(mayOverwrite("1. Remplacer le filtre à gasoil — FAIT le 12/08", "1. Remplacer le filtre à gasoil")).toBe(false);
+  });
+});
+
+describe("enforceActionStyle — the column takes instructions, not evidence", () => {
+  it("strips the parenthetical justification", () => {
+    expect(enforceActionStyle(["Remplacer le filtre à gasoil (jamais enregistré, 144 878 km)"])).toEqual([
+      "Remplacer le filtre à gasoil",
+    ]);
+  });
+
+  it("strips dates, which would otherwise get the whole action deleted", () => {
+    // The real failure: ungroundedDates() drops any action carrying a date not
+    // in the source, so 48083-B-7 lost "Contrôler les plaquettes" entirely and
+    // its work order read "Disponible — à livrer au client".
+    expect(
+      enforceActionStyle(["Contrôler les plaquettes AV : 2024-04-12, 2025-12-03"])
+    ).toEqual(["Contrôler les plaquettes AV"]);
+  });
+
+  it("strips a trailing km count written without parentheses", () => {
+    expect(enforceActionStyle(["Vidange moteur — 12 000 km"])).toEqual(["Vidange moteur"]);
+  });
+
+  it("keeps a clean instruction untouched", () => {
+    expect(enforceActionStyle(["À envoyer vers depot-ATV"])).toEqual(["À envoyer vers depot-ATV"]);
+  });
+
+  it("drops duplicates left behind by the stripping", () => {
+    expect(
+      enforceActionStyle(["Remplacer le filtre à air (30 000 km)", "Remplacer le filtre à air"])
+    ).toEqual(["Remplacer le filtre à air"]);
+  });
+
+  it("drops an action that was nothing but decoration", () => {
+    expect(enforceActionStyle(["(2025-01-04)", "   "])).toEqual([]);
   });
 });

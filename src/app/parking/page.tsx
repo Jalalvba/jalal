@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { ParkingRow, ParkingAddResultItem } from "@/types";
+import { ZONING_OPTIONS_FALLBACK, type ParkingRow, type ParkingAddResultItem } from "@/types";
 import { ZONE_COLORS } from "@/config/zones";
 import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";
@@ -18,14 +18,18 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
+import { cn } from "@/lib/utils/cn";
 import { useEditableState } from "@/hooks/useEditableState";
+import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
+import { InlineEditSelect, type InlineEditTriggerState } from "@/components/fleet/InlineEditSelect";
 import {
-  useParkingRows,
   useAddParkingPlates,
-  useUpdateParkingAction,
-  useDeleteParkingRow,
   useClearParkingAll,
+  useDeleteParkingRow,
+  useParkingRows,
   useRefreshParkingRows,
+  useUpdateParkingAction,
+  useUpdateParkingZoning,
 } from "@/hooks/useParkingRows";
 import { useVehicleSuggestionList } from "@/hooks/useVehicleSuggestionList";
 import { useStableRowOrder } from "@/hooks/useStableRowOrder";
@@ -114,12 +118,16 @@ const UNASSIGNED_ZONING = "__UNASSIGNED__";
 
 function ParkingCard({
   row,
+  zoningOptions,
   onActionCommit,
+  onZoningCommit,
   onDelete,
   onAiDone,
 }: {
   row: ParkingRow;
+  zoningOptions: string[];
   onActionCommit: (rowIndex: number, action: string, imm: string) => void;
+  onZoningCommit: (rowIndex: number, zoning: string, imm: string) => Promise<void>;
   onDelete: (rowIndex: number, imm: string) => void;
   /** Refetch after an AI button wrote into this row's ACTION or gemini cell. */
   onAiDone: () => void;
@@ -155,6 +163,29 @@ function ParkingCard({
         />
       </div>
 
+      <Field label="Zoning">
+        <InlineEditSelect
+          value={String(row.zoning ?? "")}
+          options={zoningOptions}
+          label="Zoning"
+          onCommit={(v) => onZoningCommit(row.rowIndex, v, row.imm)}
+          renderTrigger={({ value, pending, justSaved, onOpen }: InlineEditTriggerState) => (
+            <button
+              type="button"
+              onClick={onOpen}
+              disabled={pending}
+              className={cn(
+                "w-full rounded-lg border border-border bg-input px-2 py-2 text-left text-micro transition",
+                pending && "opacity-60",
+                justSaved && "border-emerald-400"
+              )}
+            >
+              {value || <span className="text-muted-foreground">— Choisir une zone —</span>}
+            </button>
+          )}
+        />
+      </Field>
+
       <Field label="Action">
         <Input
           value={action}
@@ -186,6 +217,8 @@ export default function ParkingPage() {
   const deleteMutation = useDeleteParkingRow();
   const clearAllMutation = useClearParkingAll();
   const refreshMutation = useRefreshParkingRows();
+  const zoningMutation = useUpdateParkingZoning();
+  const { options } = useSheetFieldOptions();
 
   const [search, setSearch] = useState("");
   const [activeZoning, setActiveZoning] = useState("TOUS");
@@ -218,6 +251,13 @@ export default function ParkingPage() {
       setError(e instanceof Error ? e.message : "Erreur réseau");
       setTimeout(() => setError(""), 5000);
     }
+  }
+
+  // Awaited, unlike handleActionCommit's fire-and-forget: InlineEditSelect
+  // shows its pending/saved state from this promise, so returning early would
+  // flash "saved" before the sheet had taken the write.
+  async function handleZoningCommit(rowIndex: number, zoning: string, imm: string) {
+    await zoningMutation.mutateAsync({ rowIndex, zoning, imm });
   }
 
   async function handleActionCommit(rowIndex: number, action: string, imm: string) {
@@ -393,7 +433,11 @@ export default function ParkingPage() {
             <ParkingCard
               key={row.rowIndex}
               row={row}
+              // Same reason as the route's fallback: a persisted client cache
+              // written before this key existed has no ZONING_OPTIONS.
+              zoningOptions={options.ZONING_OPTIONS ?? ZONING_OPTIONS_FALLBACK}
               onActionCommit={handleActionCommit}
+              onZoningCommit={handleZoningCommit}
               onDelete={handleDelete}
               onAiDone={() => void refreshMutation.mutateAsync()}
             />

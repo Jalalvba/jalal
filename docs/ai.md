@@ -592,6 +592,23 @@ per plate and put at the top of the prompt: the tab's own `ETAT VÉHICULE` and
 `cp.statut`. A vehicle the company should not be repairing gets no repair
 order, however good the technical case:
 
+**Never an empty work order.** A vehicle sitting in the parking is always
+waiting for something from someone, so rule A4b makes the list non-empty in
+every case but one — a closed contract (`Arret facturation` / `Restitué`). The
+levels are ADDITIVE, not first-match: the status zone line, the last DS's
+described problem (`Vérifier …`, whether or not that intervention carried
+parts), overdue maintenance, recurring organs. Only when all four produce
+nothing does the vehicle get `Disponible — à livrer au client` — which is a
+real instruction, not a placeholder: it is ready and someone has to deliver it.
+
+**Findings and actions must agree (A4c).** A recurrence of a wear-or-failure
+organ in `findings` must have its `Contrôler <organe>` in `actions`, and then
+`Disponible — à livrer au client` is forbidden. Measured before this rule:
+48083-B-7 reported four recurrences in its findings and a work order reading
+"Disponible" — the ACTION column's reader never sees the findings. Filters and
+oil changes are the deliberate exception: their return is normal servicing,
+already governed by the interval checks.
+
 **Actions carry no justification.** The instruction and nothing else —
 `Remplacer le filtre à gasoil`, not `Remplacer le filtre à gasoil (jamais
 enregistré, 144 878 km)`. The evidence is already in the `gemini` column the
@@ -614,12 +631,15 @@ Parent`. Live: 4 of the 83 Parking vehicles, one of them detected only through
 | Status | Work order |
 |---|---|
 | `cp.statut` = `Arret facturation` or `Restitué` | **empty** — the vehicle has left the billed fleet |
-| `ETAT VÉHICULE` = `ATV` | one line only: `À envoyer vers dépôt zone ATV` — no workshop visit |
-| `ETAT VÉHICULE` = `Remplacement` | the repairs **plus** a final `À envoyer vers dépôt zone Remplacement` — it is a customer's courtesy car and must be fixed |
+| `ETAT VÉHICULE` = `ATV` | one line only: `À envoyer vers depot-ATV` — no workshop visit |
+| `ETAT VÉHICULE` = `Remplacement` | the repairs **plus** a final `À envoyer vers depot-rempalcmemnt` — it is a customer's courtesy car and must be fixed |
 | `ETAT VÉHICULE` = `LCD` | the repairs **plus** a final `À envoyer au garage Pierre Parent` |
 | `LLD`, `En stock`, `Livré`, unknown | normal work order |
 
-Those three status lines are copied WORD FOR WORD from the prompt — they are
+The zone names are the ZONING column's own values, misspelling included — the
+action must name the zone as it exists, or it points at a bucket the column
+does not have. Those three status lines are copied WORD FOR WORD from the
+prompt — they are
 the only actions written without a figure in brackets, because they follow from
 the status rather than from the history. `promptParking.test.ts` asserts each
 string, so changing one here is a deliberate change to what lands in the sheet.
@@ -629,6 +649,14 @@ ATV (8), Remplacement (6), En stock (4), LCD (3); `cp.statut` holds Livré
 (5 673), Arret facturation (4 546), Restitué (11). All five branches were
 verified against one vehicle with real outstanding work (52722-B-7, two filters
 never recorded at 50 504 km), varying only the status.
+
+**The style is enforced in code, not just asked for.** `enforceActionStyle()`
+strips parentheses, dates and km counts from every action before the grounding
+guards run. Not cosmetic: `ungroundedDates()` DELETES an action carrying a date
+absent from the source, so a model slip turned "Contrôler les plaquettes" into
+nothing at all and left 48083-B-7 reading "Disponible — à livrer au client".
+Stripping is safe precisely because the decoration is forbidden — what is
+removed is never the instruction.
 
 **One operation per line, in one cell.** `formatWorkOrder()` joins with
 newlines and `updateAction()` sets the cell's `wrapStrategy: WRAP` whenever the

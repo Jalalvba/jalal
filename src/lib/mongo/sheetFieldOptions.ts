@@ -16,6 +16,7 @@ import {
   type OptionKey,
   type ColoredOption,
   type AllSheetFieldOptions,
+  ZONING_OPTIONS_FALLBACK,
 } from "@/types";
 
 // Stage 1 of the config-driven sheet-structure proposal (config-proposal
@@ -128,6 +129,7 @@ const FALLBACK: AllSheetFieldOptions = {
   TECHNICIEN_OPTIONS: TECHNICIEN_OPTIONS_FALLBACK,
   PRESTATAIRE_OPTIONS: PRESTATAIRE_OPTIONS_FALLBACK,
   RDV_CONVOYEURS: [...RDV_CONVOYEURS_FALLBACK],
+  ZONING_OPTIONS: [...ZONING_OPTIONS_FALLBACK],
 };
 
 /** Deep clone — FALLBACK's arrays/objects must never be handed out by reference, since a caller mutating its own "copy" would otherwise corrupt the process-wide fallback every other request also serves. */

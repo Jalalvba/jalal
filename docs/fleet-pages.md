@@ -59,6 +59,19 @@ a chip that only appears once the problem exists cannot be used to look for it.
 The plate search bypasses the chip, same convention as the other list pages:
 chips browse, search finds one plate whatever is selected.
 
+**The zone is editable from the card** — a dropdown per row, writing straight
+into the ZONING cell through `POST /api/parking/zoning` (`verifyRowIdentity()`
+first, like every other Sheets write; no TIMESTAMP stamp, because a zone change
+is not workshop activity). The values are the `ZONING_OPTIONS` option set,
+admin-editable at `/admin/config` like every other list, and the route refuses
+anything outside it: a free-text zone would create a bucket the chip filter and
+the work-order rules do not recognise.
+
+`depot-rempalcmemnt` is spelled as the live sheet spells it, in the option list
+AND in the work-order prompt. The action has to name the zone as it exists, not
+as it should be written — correcting the spelling here would send vehicles to a
+zone no row matches. Fix the sheet first, then the list.
+
 **Export PDF** renders the filtered view — `POST /api/parking/export`, seven
 columns: IMM, TIMESTAMP, ACTION, ZONING, MARQUE, MODEL, gemini.
 

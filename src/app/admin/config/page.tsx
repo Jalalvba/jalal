@@ -319,7 +319,11 @@ export default function AdminConfigPage() {
               <PlainOptionSet
                 key={key}
                 optionKey={key}
-                values={options[key] as string[]}
+                // `?? []` because a payload cached before this key existed has
+                // no entry for it, and reading through that gap used to blank
+                // the whole config screen — one newly added option set must not
+                // cost the page.
+                values={(options[key] as string[] | undefined) ?? []}
                 onSave={(next) => save(key, next)}
                 pending={mutation.isPending}
                 disabled={editingBlocked}
@@ -330,7 +334,7 @@ export default function AdminConfigPage() {
               <ColoredOptionSet
                 key={key}
                 optionKey={key}
-                values={options[key] as ColoredOption[]}
+                values={(options[key] as ColoredOption[] | undefined) ?? []}
                 onSave={(next) => save(key, next)}
                 pending={mutation.isPending}
                 allowNoneColor={key === "PRESTATAIRE_OPTIONS"}
