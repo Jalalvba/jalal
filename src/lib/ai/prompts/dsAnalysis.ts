@@ -114,6 +114,10 @@ export type DsAnalysisInput = {
     state?: string;
     /** cp's contract `statut` — "Livré", "Arret facturation", "Restitué". */
     cpStatus?: string;
+    /** Client, or the parc tab's Société when there is no client. */
+    owner?: string;
+    /** True for AVIS's own fleet (short-term rental). See googleSheetsParc.ts. */
+    isAvis?: boolean;
   };
   replacements: DsAnalysisReplacement[];
   entries: DsAnalysisEntry[];
@@ -401,6 +405,11 @@ export function buildDsAnalysisPrompt(
   // be done on this vehicle AT ALL, which outranks anything the history says.
   if (input.vehicle.state) lines.push(`ETAT VÉHICULE (onglet): ${input.vehicle.state}`);
   if (input.vehicle.cpStatus) lines.push(`Statut du contrat (cp): ${input.vehicle.cpStatus}`);
+  // The owner is a fact about the vehicle, and for AVIS's own fleet it changes
+  // what happens to it — hence the explicit marker rather than leaving the
+  // model to infer ownership from a company name it has never seen.
+  if (input.vehicle.owner) lines.push(`Propriétaire: ${input.vehicle.owner}`);
+  if (input.vehicle.isAvis) lines.push("Propriétaire : AVIS (parc propre / location courte durée)");
   lines.push(`Statut du contrat (déjà calculé, à reprendre): ${contractStatus.level} — ${contractStatus.label}`);
 
   if (input.replacements.length > 0) {

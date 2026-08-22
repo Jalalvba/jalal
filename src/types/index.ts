@@ -495,6 +495,19 @@ export type ParkingRow = {
    * assigned" — and is filterable as such on the page, not hidden.
    */
   zoning: string;
+  /**
+   * Owner, resolved from the spreadsheet's `parc` tab: the Client column when
+   * set, otherwise Société. 766 parc rows have an empty Client and record the
+   * owner only in Société, so without this fallback those vehicles show no
+   * client at all.
+   */
+  societe: string;
+  /**
+   * AVIS's own fleet (short-term rental) — matched on "AVIS" / "Scal Avis" in
+   * either Client or Société. Drives the card's badge and the extra work-order
+   * line, so it is resolved server-side once rather than re-derived per view.
+   */
+  isAvis: boolean;
 };
 
 export type ParkingAddStatus = "added" | "updated";

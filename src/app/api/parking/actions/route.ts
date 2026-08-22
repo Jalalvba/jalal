@@ -112,6 +112,11 @@ export async function POST(request: Request) {
         vehicle: {
           state: String(row.etatVehicule ?? "").trim() || undefined,
           cpStatus: (await resolveCpStatus(imm)) ?? undefined,
+          // Resolved on the row itself (parc tab: Client, else Société), so
+          // the model is told who owns the vehicle rather than being left to
+          // guess from a company name.
+          owner: String(row.client ?? "").trim() || undefined,
+          isAvis: row.isAvis === true,
         },
       });
       const input = { ...raw, entries: canonicalizeSuppliers(raw.entries) };

@@ -2,6 +2,7 @@ import { type sheets_v4 } from "googleapis";
 import { getCollection } from "@/lib/mongo/client";
 import type { ParkingRow, ParkingAddResponse, ParkingAddResultItem } from "@/types";
 import type { ZoneGeminiResult } from "@/lib/sheets/googleSheetsAtelier";
+import { getParcOwners } from "@/lib/sheets/googleSheetsParc";
 import {
   ROWS_CACHE_TTL_MS,
   columnIndexToLetter,
@@ -91,7 +92,10 @@ async function getParkingSheetProps(
  * that read see the write.
  */
 export async function getParkingRows(fresh = false): Promise<ParkingRow[]> {
-  return withCache(ROWS_CACHE_KEY, ROWS_CACHE_TTL_MS, () => fetchParkingRows(), { bypass: fresh });
+  // `fresh` is threaded into fetchParkingRows so the parc-tab ownership read
+  // is refreshed too: "Actualiser" that returned refreshed rows carrying
+  // stale owners would be a half-refresh, and the difference is invisible.
+  return withCache(ROWS_CACHE_KEY, ROWS_CACHE_TTL_MS, () => fetchParkingRows(fresh), { bypass: fresh });
 }
 
 /** Called by src/app/api/parking/refresh/route.ts — the user-triggered "Actualiser" button's hard refresh, so the next read is guaranteed live instead of waiting out the 15s TTL. */
@@ -99,7 +103,7 @@ export function invalidateParkingRowsCache(): void {
   invalidateCache(ROWS_CACHE_KEY);
 }
 
-async function fetchParkingRows(): Promise<ParkingRow[]> {
+async function fetchParkingRows(fresh = false): Promise<ParkingRow[]> {
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
@@ -129,6 +133,12 @@ async function fetchParkingRows(): Promise<ParkingRow[]> {
   const founisseurCol = colMap["FOUNISSEUR"];
   const geminiCol = colMap["GEMINI"];
   const zoningCol = colMap["ZONING"];
+
+  // Ownership comes from the `parc` TAB, not from this one: the CLIENT column
+  // here is an XLOOKUP into that tab's Client column, which is empty for every
+  // AVIS-owned vehicle — the owner is in its Société column. One cached read
+  // for the whole tab, not one per row.
+  const owners = await getParcOwners(fresh);
 
   const rows: ParkingRow[] = [];
 
@@ -168,7 +178,9 @@ async function fetchParkingRows(): Promise<ParkingRow[]> {
       action: strOrEmpty(actionCol),
       marque: strOrEmpty(marqueCol),
       model: strOrEmpty(modelCol),
-      client: strOrEmpty(clientCol),
+      // Falls back to the parc tab's Société when this row's CLIENT lookup is
+      // empty — which it is for every AVIS-owned vehicle.
+      client: strOrEmpty(clientCol) || (owners.get(imm)?.societe ?? ""),
       rlReunion: strOrEmpty(rlReunionCol),
       motif: strOrEmpty(motifCol),
       etatVehicule: strOrEmpty(etatVehiculeCol),
@@ -180,6 +192,8 @@ async function fetchParkingRows(): Promise<ParkingRow[]> {
       founisseur: strOrEmpty(founisseurCol),
       gemini: strOrEmpty(geminiCol),
       zoning: strOrEmpty(zoningCol),
+      societe: owners.get(imm)?.societe ?? "",
+      isAvis: owners.get(imm)?.isAvis ?? false,
     });
   }
 

@@ -40,9 +40,27 @@ describe("the two prompts are separate documents on one set of rules", () => {
     // so a change here is a change to what lands in the sheet.
     expect(p).toContain("À envoyer vers dépôt zone ATV");
     expect(p).toContain("À envoyer vers dépôt zone Remplacement");
-    expect(p).toContain("Véhicule appartenant à AVIS — à envoyer au garage Pierre Parent");
+    expect(p).toContain("À envoyer au garage Pierre Parent");
     // A0 has to be read before the rules that would otherwise fill the list.
     expect(p.indexOf("LE STATUT DÉCIDE")).toBeLessThan(p.indexOf("A1. Chaque action"));
+  });
+
+  it("forbids the justification the analysis column already carries", () => {
+    const p = DS_PARKING_WORKORDER_PROMPT;
+    expect(p).toContain("RIEN D'AUTRE");
+    expect(p).toContain("Pas de justification");
+    // The example pair is the instruction: show the bare consigne, show the
+    // rejected form next to it.
+    expect(p).toContain('Écris : « Remplacer le filtre à gasoil »');
+    expect(p).toContain("PAS   : « Remplacer le filtre à gasoil (jamais enregistré, 144 878 km) »");
+  });
+
+  it("sends an AVIS vehicle to Pierre Parent after a part change", () => {
+    const p = DS_PARKING_WORKORDER_PROMPT;
+    expect(p).toContain("VÉHICULE DU PARC AVIS");
+    expect(p).toContain("À envoyer au garage Pierre Parent");
+    // Once, never twice — the LCD rule writes the same line.
+    expect(p).toContain("jamais en double");
   });
 
   it("keeps the imposed order of a work order", () => {

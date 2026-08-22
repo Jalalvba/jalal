@@ -131,6 +131,16 @@ function ParkingCard({
       imm={row.imm}
       subtitle={[row.marque, row.model].filter(Boolean).join(" ") + (row.client ? ` | ${row.client}` : "")}
       timestamp={row.timestamp}
+      // AVIS's own fleet is handled differently from a customer's vehicle
+      // (it goes to the Pierre Parent garage after a part change), so it is
+      // called out where the eye lands first, not buried in the field list.
+      headerLeft={
+        row.isAvis ? (
+          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-micro font-bold uppercase tracking-wide text-white shadow-sm dark:bg-amber-600">
+            AVIS
+          </span>
+        ) : undefined
+      }
       onDelete={() => onDelete(row.rowIndex, row.imm)}
       deleteTitle="Supprimer cette ligne ?"
     >

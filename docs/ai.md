@@ -592,12 +592,31 @@ per plate and put at the top of the prompt: the tab's own `ETAT VÉHICULE` and
 `cp.statut`. A vehicle the company should not be repairing gets no repair
 order, however good the technical case:
 
+**Actions carry no justification.** The instruction and nothing else —
+`Remplacer le filtre à gasoil`, not `Remplacer le filtre à gasoil (jamais
+enregistré, 144 878 km)`. The evidence is already in the `gemini` column the
+reader has in front of them, and repeating it only lengthens what they have to
+retype into the ordre de réparation. The organ stays named precisely, because
+that is part of the instruction rather than the explanation.
+
+**AVIS's own fleet.** Ownership comes from the spreadsheet's `parc` TAB, not
+the Mongo collection: that tab carries a **Société** column (LOCAFINANCE 2848,
+PLF 659, AVIS 424, PSD 35, Divers 33) which the import does not map, and
+Mongo's `locataire` is not a stand-in — the AVIS plates read "Locafinance"
+there. 766 parc rows have an empty Client and record the owner only in
+Société, so `client` falls back to it (`src/lib/sheets/googleSheetsParc.ts`).
+A vehicle whose Client or Société matches AVIS / Scal gets a loud badge on its
+card, is named as AVIS-owned in the analysis, and — when its work order
+contains at least one part replacement — a final `À envoyer au garage Pierre
+Parent`. Live: 4 of the 83 Parking vehicles, one of them detected only through
+`Client = "Scal Avis"`.
+
 | Status | Work order |
 |---|---|
 | `cp.statut` = `Arret facturation` or `Restitué` | **empty** — the vehicle has left the billed fleet |
 | `ETAT VÉHICULE` = `ATV` | one line only: `À envoyer vers dépôt zone ATV` — no workshop visit |
 | `ETAT VÉHICULE` = `Remplacement` | the repairs **plus** a final `À envoyer vers dépôt zone Remplacement` — it is a customer's courtesy car and must be fixed |
-| `ETAT VÉHICULE` = `LCD` | the repairs **plus** a final `Véhicule appartenant à AVIS — à envoyer au garage Pierre Parent` |
+| `ETAT VÉHICULE` = `LCD` | the repairs **plus** a final `À envoyer au garage Pierre Parent` |
 | `LLD`, `En stock`, `Livré`, unknown | normal work order |
 
 Those three status lines are copied WORD FOR WORD from the prompt — they are
