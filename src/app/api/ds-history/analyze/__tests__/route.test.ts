@@ -7,6 +7,11 @@ vi.mock("@/lib/http/rateLimit", () => ({ rateLimitOrNull: vi.fn().mockResolvedVa
 // is the point of awaiting it: a silent fire-and-forget would have made the
 // storage failure invisible here and in production alike.
 vi.mock("@/lib/mongo/dsAnalyses", () => ({ saveAnalysis: vi.fn().mockResolvedValue(true) }));
+// Neither Mongo nor Sheets is reachable from a unit test; the fallback's own
+// behaviour is pinned in src/lib/__tests__/contractEnd.test.ts.
+vi.mock("@/lib/vehicle/contractEnd", () => ({
+  resolveContractEnd: vi.fn(async (_imm: string, fromClient: string | null) => fromClient),
+}));
 vi.mock("@/lib/ai", async () => {
   const actual = await vi.importActual<typeof import("@/lib/ai")>("@/lib/ai");
   return { ...actual, callAI: vi.fn() };

@@ -482,6 +482,17 @@ is already billed and the analysis already correct, so a Mongo failure costs a
 future re-run, not this response. The route reports it as `stored: false`
 rather than failing.
 
+**The contract end is resolved server-side.** A card that knows only a plate
+sent `contractEnd: null`, so the analysis announced "Date de fin de contrat
+indisponible" for vehicles whose BDD row states the date two lines further up
+the same card. `resolveContractEnd()` (src/lib/vehicle/contractEnd.ts) now
+fills the gap: whatever the client sent > `cp` > the BDD sheet, and null only
+when no source knows. `cp` alone is not enough — 71374-B-7 has a BDD contract
+running to 01/05/2028 and no `cp` document at all. The sheet's dd/mm/yyyy is
+parsed explicitly, never with `new Date()`, which reads "01/05/2028" as 5
+January in a US locale and would shift the contract flag by four months
+depending on where the code ran.
+
 **Staleness is counted, not dated.** `isStale()` compares the entry COUNT as
 well as the newest date, because a back-dated DS is routine in this data — "the
 newest entry is newer than the analysis" alone would miss an intervention

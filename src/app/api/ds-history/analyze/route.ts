@@ -48,6 +48,7 @@ import {
 } from "@/lib/ai/prompts/maintenanceIntervals";
 import { checkOilGrade, formatOilGradeCheck } from "@/lib/ai/prompts/oilGrade";
 import { saveAnalysis } from "@/lib/mongo/dsAnalyses";
+import { resolveContractEnd } from "@/lib/vehicle/contractEnd";
 
 // Lower than bdd-reformulate's 20/min: each call carries a whole vehicle
 // history (~4k input tokens vs ~200) and is a deliberate one-at-a-time action,
@@ -203,6 +204,12 @@ export async function POST(request: Request) {
     // would be worse than useless.
     return handleFollowUp(parsed, followUpRaw as Record<string, unknown>, tier);
   }
+
+  // Resolved server-side when the caller did not send one: the zone/BDD cards
+  // know a plate and nothing else, and cp does not cover every vehicle. See
+  // resolveContractEnd() — this is why "contrat inconnu" was appearing on
+  // vehicles whose BDD row states the end date.
+  parsed.contractEnd = await resolveContractEnd(parsed.imm, parsed.contractEnd);
 
   const contractStatus = computeContractStatus(parsed.contractEnd);
   // Computed here, never asked of the model — same rule as the contract date.
