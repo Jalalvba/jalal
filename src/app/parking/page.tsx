@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils/cn";
 import { useEditableState } from "@/hooks/useEditableState";
 import { useSheetFieldOptions } from "@/hooks/useSheetFieldOptions";
 import { InlineEditSelect, type InlineEditTriggerState } from "@/components/fleet/InlineEditSelect";
+import { InlineEditText } from "@/components/fleet/InlineEditText";
 import {
   useAddParkingPlates,
   useClearParkingAll,
@@ -30,6 +31,7 @@ import {
   useRefreshParkingRows,
   useUpdateParkingAction,
   useUpdateParkingZoning,
+  useUpdateParkingKm,
 } from "@/hooks/useParkingRows";
 import { useVehicleSuggestionList } from "@/hooks/useVehicleSuggestionList";
 import { useStableRowOrder } from "@/hooks/useStableRowOrder";
@@ -121,6 +123,7 @@ function ParkingCard({
   zoningOptions,
   onActionCommit,
   onZoningCommit,
+  onKmCommit,
   onDelete,
   onAiDone,
 }: {
@@ -128,6 +131,7 @@ function ParkingCard({
   zoningOptions: string[];
   onActionCommit: (rowIndex: number, action: string, imm: string) => void;
   onZoningCommit: (rowIndex: number, zoning: string, imm: string) => Promise<void>;
+  onKmCommit: (rowIndex: number, km: string, imm: string) => Promise<void>;
   onDelete: (rowIndex: number, imm: string) => void;
   /** Refetch after an AI button wrote into this row's ACTION or gemini cell. */
   onAiDone: () => void;
@@ -189,6 +193,21 @@ function ParkingCard({
         />
       </Field>
 
+      {/* The odometer the maintenance checks actually run against. Blank is the
+          normal state — the checks then use the DS history's highest reading.
+          Filling it in overrides that, which matters because the DS history
+          only knows the mileage of interventions that were BILLED. */}
+      <Field label="KM relevé">
+        <InlineEditText
+          value={row.manualKm != null ? String(row.manualKm) : ""}
+          resyncDeps={[row.rowIndex, row.manualKm]}
+          onCommit={(v) => onKmCommit(row.rowIndex, v, row.imm)}
+          placeholder="Vide = kilométrage issu de l'historique DS"
+          rows={1}
+          className="font-mono"
+        />
+      </Field>
+
       <Field label="Action">
         <Input
           value={action}
@@ -221,6 +240,7 @@ export default function ParkingPage() {
   const clearAllMutation = useClearParkingAll();
   const refreshMutation = useRefreshParkingRows();
   const zoningMutation = useUpdateParkingZoning();
+  const kmMutation = useUpdateParkingKm();
   const { options } = useSheetFieldOptions();
 
   const [search, setSearch] = useState("");
@@ -259,6 +279,13 @@ export default function ParkingPage() {
   // Awaited, unlike handleActionCommit's fire-and-forget: InlineEditSelect
   // shows its pending/saved state from this promise, so returning early would
   // flash "saved" before the sheet had taken the write.
+  // Awaited, like handleZoningCommit: InlineEditText shows pending/saved/error
+  // off the returned promise, so swallowing it would show a save that failed
+  // as one that succeeded.
+  async function handleKmCommit(rowIndex: number, km: string, imm: string) {
+    await kmMutation.mutateAsync({ rowIndex, km, imm });
+  }
+
   async function handleZoningCommit(rowIndex: number, zoning: string, imm: string) {
     await zoningMutation.mutateAsync({ rowIndex, zoning, imm });
   }
@@ -441,6 +468,7 @@ export default function ParkingPage() {
               zoningOptions={options.ZONING_OPTIONS ?? ZONING_OPTIONS_FALLBACK}
               onActionCommit={handleActionCommit}
               onZoningCommit={handleZoningCommit}
+              onKmCommit={handleKmCommit}
               onDelete={handleDelete}
               onAiDone={() => void refreshMutation.mutateAsync()}
             />

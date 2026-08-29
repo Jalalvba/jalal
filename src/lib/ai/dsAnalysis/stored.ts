@@ -50,6 +50,17 @@ export type StoredDsAnalysis = {
    * (and one day it erases a note somebody meant to keep).
    */
   actionText?: string;
+  /**
+   * The hand-entered odometer this analysis was computed against (Parking's KM
+   * column), when there was one.
+   *
+   * Stored for the same reason promptHash is: freshness is not only about the
+   * history. Changing the manual km changes every interval and belt/pump verdict
+   * without adding a single DS entry, so entriesCount/lastEntryDate are both
+   * unmoved and isStale() would happily reuse an answer computed against the
+   * old mileage — which is precisely the number the operator just corrected.
+   */
+  manualKm?: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -69,10 +80,14 @@ export type DsAnalysisSummary = Pick<
  * picture changed.
  */
 export function isStale(
-  stored: Pick<StoredDsAnalysis, "entriesCount" | "lastEntryDate">,
-  current: { entriesCount: number; lastEntryDate: string | null }
+  stored: Pick<StoredDsAnalysis, "entriesCount" | "lastEntryDate" | "manualKm">,
+  current: { entriesCount: number; lastEntryDate: string | null; manualKm?: number }
 ): boolean {
   if (current.entriesCount !== stored.entriesCount) return true;
+  // An analysis stored before this field existed has `undefined`, and a vehicle
+  // with no override also passes `undefined` — so the two compare equal and no
+  // existing stored answer is invalidated just by this field appearing.
+  if ((current.manualKm ?? null) !== (stored.manualKm ?? null)) return true;
   return (current.lastEntryDate ?? "") !== (stored.lastEntryDate ?? "");
 }
 

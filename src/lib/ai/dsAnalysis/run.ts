@@ -28,6 +28,8 @@ import {
   formatIntervalChecks,
   checkBeltPump,
   formatBeltPumpCheck,
+  resolveVehicleKm,
+  formatKmSourceLine,
   type IntervalCheck,
   type BeltPumpCheck,
 } from "@/lib/ai/prompts/maintenanceIntervals";
@@ -36,6 +38,7 @@ import { resolveContractEnd } from "@/lib/vehicle/contractEnd";
 import { saveAnalysis } from "@/lib/mongo/dsAnalyses";
 import { promptFingerprint } from "@/lib/ai/dsAnalysis/stored";
 import { enforceActionStyle } from "@/lib/ai/dsAnalysis/workOrder";
+import { DS_PARKING_WORKORDER_PROMPT } from "@/lib/ai/dsAnalysis/prompt-parking";
 
 /**
  * Two tiers, chosen by NAME. A client may ask for "pro"; it may never name a
@@ -66,7 +69,52 @@ export function resolveTier(v: unknown): Tier {
   return v === "pro" ? "pro" : "standard";
 }
 
+/**
+ * Default sampling temperature: the DS History analysis and the follow-up.
+ *
+ * Unchanged. Those produce prose for a human to read, and nothing in this
+ * project shows their quality suffering from it.
+ */
 export const TEMPERATURE = 0.2;
+
+/**
+ * The PARKING work order runs at 0 — greedy decoding.
+ *
+ * Its load-bearing output is a CLASSIFICATION, not prose: rule A0.5 picks one
+ * of nine zone values, and that value is written to a validated sheet column
+ * and acted on physically. There is no diversity to be gained from sampling a
+ * label, and variance there is a correctness bug rather than a style
+ * difference. Measured 2026-08-29 at 0.2, same vehicle, same input, four runs:
+ * 26845-T-6 returned DISPONIBLE-A-LIVRER, then ATELIER, then ATELIER, then
+ * AVIS-PIERRE-PARENT. One vehicle, three different destinations.
+ *
+ * It also cuts sheet churn. mayOverwrite() compares the ACTION cell against
+ * this app's own last output byte for byte, so an answer that reshuffles
+ * between runs rewrites the cell every pass; a stable one leaves it alone.
+ *
+ * 0 rather than 0.05: greedy decoding is the argmax, which is exactly what a
+ * classifier should return. A small non-zero value buys nothing here — it only
+ * reintroduces, at lower probability, the same failure. Note this makes the
+ * call as deterministic as the provider allows, not mathematically guaranteed:
+ * backend batching and hardware can still shift a token. Treat it as "stable",
+ * not "provably fixed".
+ */
+export const PARKING_WORKORDER_TEMPERATURE = 0;
+
+/**
+ * Which temperature a prompt runs at.
+ *
+ * Keyed on the prompt document rather than on the calling route, deliberately:
+ * /api/parking/analyse is a Parking route that runs the DS HISTORY prompt, so
+ * "is this parking?" is the wrong question and would have silently dropped that
+ * route's summaries to 0 as well. The prompt is the task; the task sets the
+ * temperature. A new prompt gets the default until it is listed here.
+ */
+export function temperatureFor(systemPrompt: string): number {
+  return systemPrompt === DS_PARKING_WORKORDER_PROMPT
+    ? PARKING_WORKORDER_TEMPERATURE
+    : TEMPERATURE;
+}
 // Median pro call 4.3s, slowest of 98 was 14.8s. 45s is headroom, not a guess.
 export const REQUEST_TIMEOUT_MS = 45_000;
 
@@ -113,13 +161,22 @@ export async function runDsAnalysis(
 
   const contractStatus = computeContractStatus(input.contractEnd);
   // Computed in code, never asked of the model — same rule as the contract date.
-  const intervalChecks = computeIntervalChecks(input.entries);
-  const beltPumpCheck = checkBeltPump(input.entries);
+  const intervalChecks = computeIntervalChecks(input.entries, input.manualKm);
+  const beltPumpCheck = checkBeltPump(input.entries, input.manualKm);
+  // No manualKm: this check does no km arithmetic at all (see oilGrade.ts's
+  // header), so an odometer override has nothing to act on here.
   const oilGradeCheck = checkOilGrade(input.entries);
+  const resolvedKm = resolveVehicleKm(input.manualKm, input.entries);
   // Built once: these lines go INTO the prompt and are also source text for the
   // supplier guard (the model is told to quote them, so quoting them cannot
   // count as fabrication). A second, separately built copy is what would drift.
   const checkLines = [
+    // FIRST, before the checks it explains: it names which odometer every line
+    // below was computed against. It is also guard source text — "KM DÉCLARÉ
+    // MANUELLEMENT" is an upper-case run that ungroundedSuppliers() would
+    // otherwise read as a fabricated supplier name and use to delete the very
+    // finding that quoted it (prompts/dsAnalysis.ts:332-347).
+    ...formatKmSourceLine(resolvedKm),
     ...formatIntervalChecks(intervalChecks),
     ...formatBeltPumpCheck(beltPumpCheck),
     ...formatOilGradeCheck(oilGradeCheck),
@@ -131,7 +188,7 @@ export async function runDsAnalysis(
     prompt: buildDsAnalysisPrompt(input, contractStatus, checkLines),
     systemPrompt,
     maxTokens: TIERS[tier].maxTokens,
-    temperature: TEMPERATURE,
+    temperature: temperatureFor(systemPrompt),
     timeoutMs: REQUEST_TIMEOUT_MS,
     validate: (t) => {
       // Names WHICH field failed. "failed validation" is impossible to act on
@@ -203,6 +260,10 @@ export async function runDsAnalysis(
       costUsd: costInfo.costUsd,
       entriesCount: input.entries.length,
       lastEntryDate: input.entries[0]?.date ?? null,
+      // Which odometer this answer was computed against — isStale() compares it
+      // so a corrected km forces a re-run, the same way promptHash does for a
+      // rules change.
+      manualKm: input.manualKm,
       // Which rules produced this. A later run under different rules must not
       // reuse it — see StoredDsAnalysis.promptHash.
       promptHash: promptFingerprint(systemPrompt),

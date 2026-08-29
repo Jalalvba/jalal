@@ -97,6 +97,12 @@ export async function POST(request: Request) {
           owner: String(row.client ?? "").trim() || undefined,
           isAvis: row.isAvis === true,
         },
+        // The tab's own KM column, when an operator filled it in. Takes
+        // priority over the DS-derived odometer in every interval and
+        // belt/pump check — see resolveVehicleKm() in
+        // lib/ai/prompts/maintenanceIntervals.ts, which is where that
+        // precedence is decided, not here.
+        manualKm: row.manualKm,
       });
       const input = { ...raw, entries: canonicalizeSuppliers(raw.entries) };
 
@@ -108,7 +114,13 @@ export async function POST(request: Request) {
         !force &&
         stored != null &&
         stored.promptHash === promptFingerprint(DS_ANALYSIS_SYSTEM_PROMPT) &&
-        !isStale(stored, { entriesCount: input.entries.length, lastEntryDate: input.entries[0]?.date ?? null });
+        !isStale(stored, {
+          entriesCount: input.entries.length,
+          lastEntryDate: input.entries[0]?.date ?? null,
+          // A corrected odometer changes every verdict without touching the
+          // history, so it has to participate in the reuse decision.
+          manualKm: input.manualKm,
+        });
 
       // No prompt argument: this is the DS History analysis, the default.
       const analysis = fresh ? stored!.analysis : (await runDsAnalysis(input, tier)).analysis;

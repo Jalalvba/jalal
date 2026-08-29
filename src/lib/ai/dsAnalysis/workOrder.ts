@@ -6,6 +6,7 @@
 // instruction is something they have to delete before pasting.
 
 import type { DsAnalysis } from "@/lib/ai/prompts/dsAnalysis";
+import { PARKING_ZONE_VALUES, ZONE, isValidZone } from "@/lib/ai/dsAnalysis/prompt-parking";
 
 /** A cell holding more than this is unusable in a spreadsheet UI anyway. */
 const MAX_CELL = 1500;
@@ -176,41 +177,171 @@ export function statusWorkOrder(v: {
 }): string[] {
   const etat = String(v.etat ?? "").trim().toUpperCase();
 
-  // The zone names are the ZONING column's own values, misspelling included:
-  // the instruction has to name the zone as it exists in the sheet.
-  if (etat === "ATV") return ["À envoyer vers depot-ATV"];
-  if (etat === "REMPLACEMENT") return ["À envoyer vers depot-rempalcmemnt"];
-  if (v.isAvis) return ["À envoyer au garage Pierre Parent"];
-  // No prefix: with nothing to control, the destination is not conditional on
-  // anything. The prompt writes "Si conforme : ..." only when checks precede it.
-  return ["À livrer au client"];
+  // A BARE ZONE VALUE, not a French sentence. These strings are now parsed back
+  // out as the destination and exact-matched against the sheet's dropdown
+  // (parseDestinationZone below), so anything this returns has to BE a real
+  // ZONING value — a sentence like "À envoyer vers depot-ATV" would fail its own
+  // guard and leave the fallback path unable to set a zone at all.
+  //
+  // They previously read "À envoyer vers depot-ATV" / "depot-rempalcmemnt",
+  // spellings from the dropdown as it stood before 2026-08-29. Both the
+  // sentence form and those spellings are gone.
+  if (etat === "ATV") return [ZONE.ATV];
+  if (etat === "REMPLACEMENT") return [ZONE.REMPLACEMENT];
+  if (v.isAvis) return [ZONE.PIERRE_PARENT];
+  return [ZONE.A_LIVRER];
 }
 
-/** Any phrasing of a destination line, current or from an older rule set. */
-const DESTINATION_RE =
-  /(à\s+livrer\s+au\s+client|disponible\s*[—-]\s*à\s+livrer|depot-ATV|depot-rempalcmemnt|garage\s+Pierre\s+Parent)/i;
+// Any phrasing of a destination line: a bare zone value, or one behind the
+// "Si conforme : " prefix. The older French sentence forms ("À envoyer vers
+// depot-ATV", "Disponible — à livrer") are still matched so that a REUSED
+// analysis stored under the pre-2026-08-29 rules is recognised as carrying a
+// destination and gets it replaced, rather than keeping a stale sentence and
+// having a second destination appended after it.
+const DESTINATION_RE = new RegExp(
+  "(" +
+    [
+      ...PARKING_ZONE_VALUES.map((z) => z.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+      "à\\s+livrer\\s+au\\s+client",
+      "disponible\\s*[—-]\\s*à\\s+livrer",
+      "à\\s+envoyer\\s+vers",
+      "garage\\s+Pierre\\s+Parent",
+      "depot-rempalcmemnt",
+    ].join("|") +
+    ")",
+  "i"
+);
+
+/** Strips the conditional prefix rule A3.5 puts in front of a destination. */
+const SI_CONFORME_RE = /^\s*si\s+conforme\s*:\s*/i;
 
 /**
- * Guarantees the work order ends on the destination the quality controller
- * will order — exactly once, in the canonical wording, and last.
+ * The destination zone the MODEL chose, read back out of its own actions list.
  *
- * The prompt asks for this (rule A3 point 5) and mostly complies, but "mostly"
- * leaves vehicles like 45802-B-7 with six checks and nowhere to send the car,
- * which is the one line the controller cannot do his job without. Doing it in
- * code also normalises the phrasing of REUSED answers written under older
- * rules, instead of leaving three spellings of the same instruction in one
- * column.
+ * The last line is the destination by construction (prompt rule A3 point 5),
+ * optionally behind "Si conforme : ". Returns null when the list is empty or
+ * the last line is not a destination at all — the caller decides what to do
+ * about that, because "the model gave no usable zone" is a reportable state,
+ * not something to paper over with a default.
  *
- * "Si conforme : " goes on only when something is checked first — a
- * destination with nothing before it is conditional on nothing.
+ * NOTE this does NOT validate against the real dropdown: it only extracts. The
+ * exact-match check lives at the write site so the failure can be surfaced to
+ * the operator with the offending string attached.
  */
+export function parseDestinationZone(actions: readonly string[]): string | null {
+  if (actions.length === 0) return null;
+  const last = String(actions[actions.length - 1] ?? "").replace(SI_CONFORME_RE, "").trim();
+  return last || null;
+}
+
+/**
+ * Ensures the work order ends on exactly one destination line, in last place.
+ *
+ * WHAT THIS NO LONGER DOES, deliberately (changed 2026-08-29): it used to
+ * DISCARD whatever destination the model chose and substitute
+ * statusWorkOrder()'s own four-outcome, etat/isAvis-driven answer. That threw
+ * away the whole of prompt rule A0.5 — its nine criteria covering carrosserie,
+ * prestataire externe, atelier and the rest could never reach the sheet, because
+ * this function overwrote the result with one of four French sentences.
+ *
+ * Now the model's own choice is kept. statusWorkOrder() survives only as the
+ * explicit fallback for a vehicle with no analysis to speak of (no DS history)
+ * or one whose destination line could not be parsed — passed in by the caller
+ * as `fallbackZone`, never reached for on its own here.
+ *
+ * "Si conforme : " goes on only when something is checked first — a destination
+ * with nothing before it is conditional on nothing.
+ */
+/** The vehicle facts every zone precondition is decided from. */
+export type ZoneVehicle = {
+  /** ETAT VÉHICULE, as stored. Compared case-insensitively. */
+  etat?: string;
+  /** AVIS's own fleet — see googleSheetsParc.ts. */
+  isAvis?: boolean;
+  /** cp's contract `statut` — "Livré" / "Arret facturation" / "Restitué". */
+  cpStatus?: string;
+};
+
+/** Contract states that mean the vehicle has left the billed fleet (A0.5.1). */
+const CLOSED_CONTRACT = ["ARRET FACTURATION", "RESTITUÉ"];
+
+/**
+ * THE single source of truth for "may this vehicle receive this zone".
+ *
+ * Returns a reason string when the zone's precondition is NOT met, null when it
+ * is. Both consumers call this one function — withDestination() for the ACTION
+ * text and the route's applyZone() for the ZONING cell — so the two columns can
+ * never disagree about whether a destination was permitted. Two independent
+ * copies of the same boolean is exactly how they would drift apart.
+ *
+ * WHY THESE CHECKS EXIST. Prompt rule A0.5 gates each zone on a criterion, and
+ * the model demonstrably applies a zone whose criterion does not hold. Measured
+ * live 2026-08-29 over 8 vehicles: 908977WW and 18148-T-6 were both sent to
+ * AVIS-PIERRE-PARENT with a non-AVIS owner AND no part-change action — neither
+ * of criterion A0.5.4's two conditions met. A wording fix to that criterion
+ * corrected 3 of 6 cases and pushed a previously correct vehicle into the
+ * failure set, which is what makes a prompt-only remedy insufficient.
+ *
+ * ONLY zones whose precondition is a plain fact about the row are here. Criteria
+ * 5 and 6 (carrosserie wording, prestataire recurrence) are genuine readings of
+ * the history and are deliberately absent — a code check there would re-decide
+ * the judgement the model exists to make, and would reject correct answers.
+ * Criteria 7, 8 and 9 are residual ("nothing above matched") and have no
+ * precondition to verify.
+ *
+ * NOTE the ATV and REMPLACEMENT entries are precautionary. The over-application
+ * was OBSERVED only on AVIS-PIERRE-PARENT; these two share its shape (a
+ * necessary, purely factual gate) but no measured failure. Documented as
+ * inference, not evidence.
+ */
+export function zonePreconditionFailure(zone: string, vehicle: ZoneVehicle): string | null {
+  const etat = String(vehicle.etat ?? "").trim().toUpperCase();
+  const cp = String(vehicle.cpStatus ?? "").trim().toUpperCase();
+  const isAvis = vehicle.isAvis === true;
+
+  if (zone === ZONE.PIERRE_PARENT && !(isAvis || etat === "LCD")) {
+    return "A0.5.4 exige un propriétaire AVIS / Scal Avis, ou A0.5.3 un ETAT « LCD »";
+  }
+  if (zone === ZONE.ATV && !(etat === "ATV" || CLOSED_CONTRACT.includes(cp))) {
+    return "A0.5.1 exige ETAT « ATV » ou un contrat « Arret facturation » / « Restitué »";
+  }
+  if (zone === ZONE.REMPLACEMENT && etat !== "REMPLACEMENT") {
+    return "A0.5.2 exige ETAT « Remplacement »";
+  }
+  return null;
+}
+
 export function withDestination(
   actions: readonly string[],
-  vehicle: { etat?: string; isAvis?: boolean }
+  vehicle: ZoneVehicle
 ): string[] {
   const checks = actions.filter((a) => !DESTINATION_RE.test(a));
-  const destination = statusWorkOrder(vehicle)[0];
-  return checks.length > 0
-    ? [...checks, `Si conforme : ${destination}`]
-    : [destination];
+
+  // The model's own destination, kept — but ONLY if the last line actually IS
+  // one. parseDestinationZone() returns the last line whatever it says, which
+  // is right for reporting an invalid zone back to the operator and wrong here:
+  // a model that forgot its destination (45802-B-7 shipped six checks and no
+  // destination) would otherwise have its last CHECK promoted into the
+  // destination slot and duplicated as "Si conforme : Contrôler le turbo".
+  // isValidZone, not DESTINATION_RE: the regex answers "is this line a
+  // destination", which is what filters `checks` above and deliberately also
+  // matches the pre-2026-08-29 sentence forms. Keeping a line requires the
+  // stricter question — "is this a real ZONING value" — so a legacy
+  // "Disponible — à livrer au client" from a stored answer is recognised as a
+  // destination, dropped, and re-emitted as DISPONIBLE-A-LIVRER rather than
+  // surviving as a second spelling of the same instruction.
+  //
+  // And kept only if this vehicle may actually RECEIVE it: a zone whose
+  // precondition fails is refused here too, not only on the ZONING write, so
+  // ACTION can never instruct the controller to send a car somewhere the zone
+  // column just refused to record. statusWorkOrder() is the fallback, and its
+  // four outcomes are precondition-safe by construction — ATV only when the
+  // ETAT is ATV, REMPLACEMENT only when it is Remplacement, PIERRE_PARENT only
+  // when isAvis, and DISPONIBLE-A-LIVRER otherwise, which is gated on nothing.
+  const last = parseDestinationZone(actions);
+  const usable =
+    last !== null && isValidZone(last) && zonePreconditionFailure(last, vehicle) === null;
+  const chosen = usable ? last : statusWorkOrder(vehicle)[0];
+
+  return checks.length > 0 ? [...checks, `Si conforme : ${chosen}`] : [chosen];
 }

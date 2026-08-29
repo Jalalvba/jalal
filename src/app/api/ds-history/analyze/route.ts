@@ -40,6 +40,8 @@ import {
   checkBeltPump,
   formatBeltPumpCheck,
   formatRulesReference,
+  resolveVehicleKm,
+  formatKmSourceLine,
 } from "@/lib/ai/prompts/maintenanceIntervals";
 import { checkOilGrade, formatOilGradeCheck } from "@/lib/ai/prompts/oilGrade";
 import {
@@ -124,6 +126,13 @@ function parseInput(body: unknown): DsAnalysisInput | string {
       return { date: str(r.date), motif: str(r.motif) };
     }),
     entries: canonicalizeSuppliers(entries),
+    // Only a real positive number survives. Anything else — a string, NaN, a
+    // negative, an absent field — falls through and the checks use the
+    // DS-derived odometer, which is the correct behaviour for every zone that
+    // has no KM column at all.
+    ...(typeof b.manualKm === "number" && Number.isFinite(b.manualKm) && b.manualKm > 0
+      ? { manualKm: b.manualKm }
+      : {}),
   };
 }
 
@@ -220,8 +229,10 @@ async function handleFollowUp(
   }
 
   const contractStatus = computeContractStatus(parsed.contractEnd);
-  const intervalChecks = computeIntervalChecks(parsed.entries);
-  const beltPumpCheck = checkBeltPump(parsed.entries);
+  // Same override the analysis turn used, from the same payload — the two
+  // turns must not disagree about which odometer they are talking about.
+  const intervalChecks = computeIntervalChecks(parsed.entries, parsed.manualKm);
+  const beltPumpCheck = checkBeltPump(parsed.entries, parsed.manualKm);
   const oilGradeCheck = checkOilGrade(parsed.entries);
 
   try {
@@ -232,6 +243,7 @@ async function handleFollowUp(
         input: parsed,
         contractStatus,
         intervalLines: [
+          ...formatKmSourceLine(resolveVehicleKm(parsed.manualKm, parsed.entries)),
           ...formatIntervalChecks(intervalChecks),
           ...formatBeltPumpCheck(beltPumpCheck),
           ...formatOilGradeCheck(oilGradeCheck),

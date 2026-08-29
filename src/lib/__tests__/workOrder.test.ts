@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { enforceActionStyle, formatWorkOrder, mayOverwrite, statusWorkOrder, withDestination } from "@/lib/ai/dsAnalysis/workOrder";
+import { enforceActionStyle, formatWorkOrder, mayOverwrite, statusWorkOrder, withDestination, zonePreconditionFailure } from "@/lib/ai/dsAnalysis/workOrder";
 import type { DsAnalysis } from "@/lib/ai/prompts/dsAnalysis";
 
 const analysis = (actions?: string[]): DsAnalysis => ({
@@ -56,7 +56,7 @@ describe("mayOverwrite — the ACTION column belongs to the team too", () => {
     // The no-history path used to write the cell without recording it, and
     // every later run then read this app's own text as a human's and refused
     // to touch it — permanently. Observed on 79878-B-7 and 72351-T-1.
-    const ours = "1. À envoyer vers depot-ATV";
+    const ours = "1. DEPOT-ATV";
     expect(mayOverwrite(ours, undefined, ours)).toBe(true);
     // …but only when it is genuinely identical.
     expect(mayOverwrite("DISPONIBLE", undefined, ours)).toBe(false);
@@ -94,7 +94,7 @@ describe("enforceActionStyle — the column takes instructions, not evidence", (
   });
 
   it("keeps a clean instruction untouched", () => {
-    expect(enforceActionStyle(["À envoyer vers depot-ATV"])).toEqual(["À envoyer vers depot-ATV"]);
+    expect(enforceActionStyle(["DEPOT-ATV"])).toEqual(["DEPOT-ATV"]);
   });
 
   it("drops duplicates left behind by the stripping", () => {
@@ -112,26 +112,26 @@ describe("statusWorkOrder — a vehicle with no history still has to go somewher
   it("sends an ATV vehicle to its depot zone", () => {
     // 79878-B-7 exactly: ETAT ATV, zero DS lines, and previously no ACTION at
     // all because the batch stopped at "aucune intervention DS à analyser".
-    expect(statusWorkOrder({ etat: "ATV" })).toEqual(["À envoyer vers depot-ATV"]);
+    expect(statusWorkOrder({ etat: "ATV" })).toEqual(["DEPOT-ATV"]);
   });
 
   it("sends a Remplacement vehicle to its depot zone", () => {
-    expect(statusWorkOrder({ etat: "Remplacement" })).toEqual(["À envoyer vers depot-rempalcmemnt"]);
+    expect(statusWorkOrder({ etat: "Remplacement" })).toEqual(["DEPOT-REMPLACEMENT"]);
   });
 
   it("sends an AVIS vehicle to Pierre Parent", () => {
-    expect(statusWorkOrder({ etat: "LLD", isAvis: true })).toEqual(["À envoyer au garage Pierre Parent"]);
+    expect(statusWorkOrder({ etat: "LLD", isAvis: true })).toEqual(["AVIS-PIERRE-PARENT"]);
   });
 
   it("lets ETAT outrank ownership — the zone says where the car physically goes", () => {
-    expect(statusWorkOrder({ etat: "ATV", isAvis: true })).toEqual(["À envoyer vers depot-ATV"]);
+    expect(statusWorkOrder({ etat: "ATV", isAvis: true })).toEqual(["DEPOT-ATV"]);
   });
 
   it("otherwise says the vehicle is ready to be delivered", () => {
     // No "Si conforme :" prefix here — with nothing to control, the
     // destination is not conditional on anything.
-    expect(statusWorkOrder({ etat: "LLD" })).toEqual(["À livrer au client"]);
-    expect(statusWorkOrder({})).toEqual(["À livrer au client"]);
+    expect(statusWorkOrder({ etat: "LLD" })).toEqual(["DISPONIBLE-A-LIVRER"]);
+    expect(statusWorkOrder({})).toEqual(["DISPONIBLE-A-LIVRER"]);
   });
 
   it("never returns an empty list — that is the whole point", () => {
@@ -160,13 +160,13 @@ describe("enforceActionStyle — degenerate lines and the conditional prefix", (
 
   it("drops 'Si conforme :' when the destination stands alone", () => {
     // Nothing precedes it, so it is conditional on nothing.
-    expect(enforceActionStyle(["Si conforme : À livrer au client"])).toEqual(["À livrer au client"]);
+    expect(enforceActionStyle(["Si conforme : DISPONIBLE-A-LIVRER"])).toEqual(["DISPONIBLE-A-LIVRER"]);
   });
 
   it("keeps the prefix when something is being checked first", () => {
     expect(
-      enforceActionStyle(["Contrôler les injecteurs", "Si conforme : À livrer au client"])
-    ).toEqual(["Contrôler les injecteurs", "Si conforme : À livrer au client"]);
+      enforceActionStyle(["Contrôler les injecteurs", "Si conforme : DISPONIBLE-A-LIVRER"])
+    ).toEqual(["Contrôler les injecteurs", "Si conforme : DISPONIBLE-A-LIVRER"]);
   });
 });
 
@@ -178,28 +178,45 @@ describe("withDestination — the controller always knows where the car goes", (
     expect(withDestination(["Contrôler la batterie", "Contrôler le turbo"], v)).toEqual([
       "Contrôler la batterie",
       "Contrôler le turbo",
-      "Si conforme : À livrer au client",
+      "Si conforme : DISPONIBLE-A-LIVRER",
     ]);
   });
 
   it("normalises an older phrasing instead of leaving two spellings", () => {
-    expect(withDestination(["Disponible — à livrer au client"], v)).toEqual(["À livrer au client"]);
+    // A stored answer written under the pre-2026-08-29 rules: the sentence form
+    // is recognised as a destination, dropped from the checks, and replaced by
+    // a real zone value rather than surviving as a second spelling.
+    expect(withDestination(["Disponible — à livrer au client"], v)).toEqual([
+      "DISPONIBLE-A-LIVRER",
+    ]);
   });
 
   it("never duplicates it, wherever the model put it", () => {
     expect(
-      withDestination(["Si conforme : À livrer au client", "Contrôler les freins"], v)
-    ).toEqual(["Contrôler les freins", "Si conforme : À livrer au client"]);
+      withDestination(["Si conforme : DISPONIBLE-A-LIVRER", "Contrôler les freins"], v)
+    ).toEqual(["Contrôler les freins", "Si conforme : DISPONIBLE-A-LIVRER"]);
   });
 
-  it("routes by status, and ETAT outranks ownership", () => {
+  it("KEEPS the zone the model chose, rather than substituting a status rule", () => {
+    // The point of the 2026-08-29 change. This vehicle is ETAT ATV and AVIS-
+    // owned, so the old status logic would have forced DEPOT-ATV; the model
+    // applied A0.5 criterion 5 (carrosserie) and that choice now survives.
+    expect(
+      withDestination(["Contrôler le pare-chocs", "Si conforme : CARROSSERIE-FSM"], {
+        etat: "ATV",
+        isAvis: true,
+      })
+    ).toEqual(["Contrôler le pare-chocs", "Si conforme : CARROSSERIE-FSM"]);
+  });
+
+  it("falls back to the status rule only when the model named no destination", () => {
+    // The last line is a CHECK, not a zone — it must not be promoted into the
+    // destination slot.
     expect(withDestination(["Contrôler X"], { etat: "ATV", isAvis: true })).toEqual([
       "Contrôler X",
-      "Si conforme : À envoyer vers depot-ATV",
+      "Si conforme : DEPOT-ATV",
     ]);
-    expect(withDestination([], { etat: "LCD", isAvis: true })).toEqual([
-      "À envoyer au garage Pierre Parent",
-    ]);
+    expect(withDestination([], { etat: "LCD", isAvis: true })).toEqual(["AVIS-PIERRE-PARENT"]);
   });
 });
 
@@ -221,5 +238,88 @@ describe("enforceActionStyle — the verb and the runaway subject", () => {
   it("leaves a normal-length control point alone", () => {
     const line = "Contrôler le remplacement du filtre à gasoil";
     expect(enforceActionStyle([line])).toEqual([line]);
+  });
+});
+
+// ─── Zone preconditions, and the ACTION/ZONING agreement they enforce ──────
+//
+// Measured live 2026-08-29, twice with identical results at temperature 0.2:
+// the model sent 908977WW (owner REVE COSMETIQUE) and 18148-T-6 (owner
+// LOGISMAR) to AVIS-PIERRE-PARENT with neither an AVIS owner nor ETAT « LCD »,
+// and with no part-change action either — so BOTH conjuncts of criterion
+// A0.5.4 were absent, not just the first.
+describe("zonePreconditionFailure — the factual gates, in one place", () => {
+  it("permits AVIS-PIERRE-PARENT for an AVIS vehicle, whatever its ETAT", () => {
+    expect(zonePreconditionFailure("AVIS-PIERRE-PARENT", { etat: "LLD", isAvis: true })).toBeNull();
+  });
+
+  it("permits it for an LCD vehicle that is not flagged AVIS", () => {
+    expect(zonePreconditionFailure("AVIS-PIERRE-PARENT", { etat: "LCD" })).toBeNull();
+    expect(zonePreconditionFailure("AVIS-PIERRE-PARENT", { etat: "  lcd " })).toBeNull();
+  });
+
+  it("refuses the exact shape observed failing in production", () => {
+    const r = zonePreconditionFailure("AVIS-PIERRE-PARENT", { etat: "LLD", isAvis: false });
+    expect(r).toContain("A0.5.4");
+  });
+
+  it("gates DEPOT-ATV on the ETAT or a closed contract", () => {
+    expect(zonePreconditionFailure("DEPOT-ATV", { etat: "ATV" })).toBeNull();
+    expect(zonePreconditionFailure("DEPOT-ATV", { etat: "LLD", cpStatus: "Arret facturation" })).toBeNull();
+    // "Restitué" carries its accent; "Arret" carries no circumflex (see CpItem).
+    expect(zonePreconditionFailure("DEPOT-ATV", { etat: "LLD", cpStatus: "Restitué" })).toBeNull();
+    expect(zonePreconditionFailure("DEPOT-ATV", { etat: "LLD", cpStatus: "Livré" })).toContain("A0.5.1");
+  });
+
+  it("gates DEPOT-REMPLACEMENT on the ETAT", () => {
+    expect(zonePreconditionFailure("DEPOT-REMPLACEMENT", { etat: "Remplacement" })).toBeNull();
+    expect(zonePreconditionFailure("DEPOT-REMPLACEMENT", { etat: "LLD" })).toContain("A0.5.2");
+  });
+
+  it("leaves the interpretive and residual criteria ungoverned", () => {
+    // 5, 6 are genuine readings of the history; 7, 8, 9 are residual.
+    for (const z of ["CARROSSERIE-FSM", "PRESTATAIRE-EXTERNE", "ATELIER", "DISPONIBLE-A-LIVRER", "DEPOT-DISPONIBLE", "visite technique"]) {
+      expect(zonePreconditionFailure(z, { etat: "LLD", isAvis: false })).toBeNull();
+    }
+  });
+});
+
+describe("ACTION and ZONING never disagree about a refused destination", () => {
+  // The gap this closed: the guard used to live only on the ZONING write, so a
+  // refused vehicle got a blank zone while ACTION still read
+  // "Si conforme : AVIS-PIERRE-PARENT" — the column the controller works from
+  // asserting a destination the sheet had just refused to record.
+  const nonAvis = { etat: "LLD", isAvis: false };
+
+  it("drops a precondition-failing zone out of the ACTION text too", () => {
+    const out = withDestination(["Contrôler le thermostat", "Si conforme : AVIS-PIERRE-PARENT"], nonAvis);
+    expect(out.join(" ")).not.toContain("AVIS-PIERRE-PARENT");
+    expect(out[out.length - 1]).toBe("Si conforme : DISPONIBLE-A-LIVRER");
+  });
+
+  it("keeps a permitted zone untouched", () => {
+    const v = { etat: "LCD", isAvis: false };
+    expect(withDestination(["Contrôler X", "Si conforme : AVIS-PIERRE-PARENT"], v)).toEqual([
+      "Contrôler X",
+      "Si conforme : AVIS-PIERRE-PARENT",
+    ]);
+  });
+
+  it("refuses DEPOT-ATV and DEPOT-REMPLACEMENT on the same rule", () => {
+    expect(withDestination(["DEPOT-ATV"], nonAvis)).toEqual(["DISPONIBLE-A-LIVRER"]);
+    expect(withDestination(["DEPOT-REMPLACEMENT"], nonAvis)).toEqual(["DISPONIBLE-A-LIVRER"]);
+    expect(withDestination(["DEPOT-ATV"], { etat: "ATV" })).toEqual(["DEPOT-ATV"]);
+  });
+
+  it("never falls back to a zone that itself fails a precondition", () => {
+    // statusWorkOrder() is the fallback, so its four outcomes must all be
+    // precondition-safe for the vehicle they were derived from.
+    for (const v of [
+      { etat: "ATV" }, { etat: "Remplacement" }, { etat: "LLD", isAvis: true },
+      { etat: "LLD" }, { etat: "LCD" }, { etat: "" },
+    ]) {
+      const zone = withDestination([], v)[0];
+      expect(zonePreconditionFailure(zone, v)).toBeNull();
+    }
   });
 });

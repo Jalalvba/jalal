@@ -99,6 +99,67 @@ export function currentKmOf(entries: readonly IntervalEntry[]): number | null {
 }
 
 /**
+ * The odometer to analyse against, and where it came from.
+ *
+ * PRECEDENCE, stated once here rather than re-derived at each call site: a
+ * human-entered reading wins over the DS-derived one, unconditionally.
+ *
+ * The DS history is a BILLING record, not an odometer log — it only knows the
+ * mileage of interventions that were actually invoiced. A vehicle that has run
+ * six months without a DS line has a real mileage that appears nowhere in
+ * `entries`, and currentKmOf() will confidently return the stale maximum. The
+ * Parking tab's KM column is the escape hatch: someone who has physically read
+ * the dashboard can say so.
+ *
+ * `manual` is validated the same way every other km in this module is (toKm:
+ * positive, finite, <= 1,000,000) — a blank cell, a typo, or a stray label
+ * falls through to the DS value rather than poisoning the arithmetic with it.
+ *
+ * Returns `source` so the caller can SAY which it used. That matters beyond
+ * bookkeeping: the marker line built from it goes into the prompt AND into the
+ * grounding guard's source text, the same dual role checkLines already plays
+ * (see prompts/dsAnalysis.ts:332-347).
+ */
+export type ResolvedKm =
+  | { km: number; source: "manual" | "ds" }
+  | { km: null; source: "none" };
+
+export function resolveVehicleKm(
+  manual: unknown,
+  entries: readonly IntervalEntry[]
+): ResolvedKm {
+  const m = toKm(manual);
+  if (m !== null) return { km: m, source: "manual" };
+  const ds = currentKmOf(entries);
+  return ds === null ? { km: null, source: "none" } : { km: ds, source: "ds" };
+}
+
+/**
+ * The prompt/guard line naming which odometer the checks below were computed
+ * against. Empty when there is no reading at all — there is nothing to declare,
+ * and the individual checks already say "aucun relevé exploitable".
+ *
+ * Deliberately NOT silent on the ordinary "ds" case, unlike the belt/pump and
+ * oil-grade formatters: the whole point is that the model can tell the two
+ * apart, and a line that only ever appears in the override case would let
+ * "absent" mean "DS-derived" — the same ambiguity prompt rule 16 exists to
+ * close for the checks themselves.
+ */
+export function formatKmSourceLine(r: ResolvedKm): string[] {
+  if (r.km === null) return [];
+  const km = r.km.toLocaleString("fr-FR");
+  return r.source === "manual"
+    ? [
+        `- Kilométrage retenu : ${km} km — KM DÉCLARÉ MANUELLEMENT (saisi par un opérateur sur l'onglet PARKING). ` +
+          `Cette valeur prime sur l'historique DS et c'est elle qui a servi à tous les contrôles ci-dessous.`,
+      ]
+    : [
+        `- Kilométrage retenu : ${km} km — KM ISSU DE L'HISTORIQUE DS (relevé le plus élevé des interventions facturées). ` +
+          `Aucun relevé manuel n'a été saisi pour ce véhicule.`,
+      ];
+}
+
+/**
  * Greedy forward scan keeping a non-decreasing run: keep the first reading,
  * then keep each later one only if it is not below the last kept. Everything
  * dropped is returned so it can be named in the finding.
@@ -174,7 +235,14 @@ export function hasIncoherentKmSequence(
  */
 export function checkInterval(
   service: ServiceType,
-  entries: readonly IntervalEntry[]
+  entries: readonly IntervalEntry[],
+  /**
+   * Manual odometer override (Parking's KM column). Omitted everywhere else —
+   * Atelier/Depot/DS History have no such column and keep the DS-derived value
+   * unchanged, which is why this is an optional trailing parameter rather than
+   * a required one threaded through every caller.
+   */
+  manualKm?: unknown
 ): IntervalCheck {
   const intervalKm = INTERVALS[service];
   const base = { service, label: SERVICE_LABELS[service], intervalKm: intervalKm ?? 0 };
@@ -186,7 +254,8 @@ export function checkInterval(
   // they caused about a third of all observed backward steps.
   const usable = usableKmEntries(entries);
 
-  const currentKm = currentKmOf(entries);
+  const resolved = resolveVehicleKm(manualKm, entries);
+  const currentKm = resolved.km;
   if (currentKm === null) {
     return { ...base, status: "unknown", note: "Aucun relevé kilométrique exploitable." };
   }
@@ -207,6 +276,27 @@ export function checkInterval(
   const last = performed[performed.length - 1];
   const since = String(last.date ?? "");
 
+  // A manual reading BELOW the last service of this type is a real conflict,
+  // not sparse noise: someone typed a number that contradicts an invoiced
+  // reading. There is no honest gap to report — a negative one is nonsense and
+  // clamping it to 0 would silently read as "À JOUR". Same rule as everywhere
+  // else in this module: name the problem instead of emitting a number that
+  // cannot be stood behind. Tolerance matches KM_REGRESSION_TOLERANCE so a
+  // keying-noise difference does not trip it.
+  if (resolved.source === "manual" && currentKm < last.km - KM_REGRESSION_TOLERANCE) {
+    return {
+      ...base,
+      status: "unknown",
+      lastKm: last.km,
+      lastDate: last.date,
+      currentKm,
+      note:
+        `Le kilométrage saisi manuellement (${currentKm.toLocaleString("fr-FR")} km) est inférieur ` +
+        `à celui de la dernière intervention de ce type (${last.km.toLocaleString("fr-FR")} km) — ` +
+        "relevé manuel et historique DS en contradiction, écart non calculable.",
+    };
+  }
+
   // The window that actually matters: readings from that service onward. A bad
   // reading from two years and forty entries ago must not block a calculation
   // that only needs the last three.
@@ -219,11 +309,17 @@ export function checkInterval(
   }
   window.sort((a, b) => String(a.date ?? "").localeCompare(String(b.date ?? "")));
 
+  // A manual reading REPLACES the window maximum rather than joining it. The
+  // window max is a DS-derived estimate of "where the odometer is now", and
+  // that is precisely the quantity the operator is overriding — averaging the
+  // two, or taking the larger, would keep a stale DS reading in play on exactly
+  // the vehicles the override exists to fix.
   const finish = (
     readings: readonly KmReading[],
     excluded: KmReading[]
   ): IntervalCheck => {
-    const effectiveCurrent = Math.max(...readings.map((r) => r.km));
+    const effectiveCurrent =
+      resolved.source === "manual" ? currentKm : Math.max(...readings.map((r) => r.km));
     const kmSince = effectiveCurrent - last.km;
     const overdue = kmSince > intervalKm;
     return {
@@ -269,8 +365,12 @@ export function checkInterval(
 /** Rules 1, 3 and 4 — the three unambiguous fixed-interval checks. */
 export const CHECKED_SERVICES: ServiceType[] = ["vidange", "filtre_gasoil", "filtre_air"];
 
-export function computeIntervalChecks(entries: readonly IntervalEntry[]): IntervalCheck[] {
-  return CHECKED_SERVICES.map((s) => checkInterval(s, entries));
+export function computeIntervalChecks(
+  entries: readonly IntervalEntry[],
+  /** Manual odometer override — see checkInterval's parameter of the same name. */
+  manualKm?: unknown
+): IntervalCheck[] {
+  return CHECKED_SERVICES.map((s) => checkInterval(s, entries, manualKm));
 }
 
 /** Renders the computed facts for the prompt. The model narrates these. */
@@ -333,11 +433,18 @@ export type BeltPumpCheck = {
  * helper as the other checks — including the Visite Technique exclusion, so an
  * inflated VT reading cannot push a vehicle over the threshold on its own.
  */
-export function checkBeltPump(entries: readonly IntervalEntry[]): BeltPumpCheck {
+export function checkBeltPump(
+  entries: readonly IntervalEntry[],
+  /** Manual odometer override — see checkInterval's parameter of the same name. */
+  manualKm?: unknown
+): BeltPumpCheck {
   const label = "Distribution / pompe à eau";
   const base = { label, thresholdKm: BELT_PUMP_KM_THRESHOLD };
 
-  const currentKm = currentKmOf(entries) ?? undefined;
+  // Threshold rule, so the override matters most here: a vehicle whose real
+  // mileage crossed 120,000 km since its last billed DS is exactly the case a
+  // DS-derived odometer cannot see.
+  const currentKm = resolveVehicleKm(manualKm, entries).km ?? undefined;
 
   // Latest recorded belt-or-pump service, if any. VT entries are irrelevant
   // here but excluded anyway for consistency with the km used above.

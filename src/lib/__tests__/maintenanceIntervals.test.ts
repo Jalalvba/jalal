@@ -9,6 +9,8 @@ import {
   computeIntervalChecks,
   formatIntervalChecks,
   formatRulesReference,
+  resolveVehicleKm,
+  formatKmSourceLine,
   INTERVALS,
   type IntervalEntry,
 } from "@/lib/ai/prompts/maintenanceIntervals";
@@ -174,8 +176,15 @@ describe("checkBeltPump — rule 2, mileage-only", () => {
   });
 
   it("fires regardless of contract status — it no longer reads the contract at all", () => {
-    // The signature takes no contract argument; this pins that.
-    expect(checkBeltPump.length).toBe(1);
+    // The signature takes no contract argument; this pins that. Arity is 2 —
+    // (entries, manualKm) — since the Parking KM override was added; the point
+    // of the assertion is that NEITHER parameter is a contract date, not the
+    // number itself.
+    expect(checkBeltPump.length).toBe(2);
+    // The behavioural half, which arity alone cannot express: a vehicle over
+    // the threshold with no belt service fires on mileage alone, with no
+    // contract information available anywhere in the input type.
+    expect(checkBeltPump(highKm()).status).toBe("never");
   });
 
   it("does NOT flag when a timing-belt service exists", () => {
@@ -423,5 +432,111 @@ describe("formatRulesReference — every rule stated, including the silent ones"
     ) as string;
     expect(l).toMatch(/DÉCLENCHÉE/);
     expect(l).toMatch(/150\s000/);
+  });
+});
+
+
+// ─── Manual km override (Parking's KM column) ──────────────────────────────
+
+describe("resolveVehicleKm — the manual reading wins, and says so", () => {
+  const hist = [e("2025-01-01", 100_000, "PNEU"), e("2025-06-01", 118_000, "PNEU")];
+
+  it("prefers the manual reading over the DS-derived one", () => {
+    expect(resolveVehicleKm(150_000, hist)).toEqual({ km: 150_000, source: "manual" });
+  });
+
+  it("wins even when it is LOWER than the DS maximum — a corrected odometer is still the correction", () => {
+    expect(resolveVehicleKm(90_000, hist)).toEqual({ km: 90_000, source: "manual" });
+  });
+
+  it("falls back to the DS value when there is no override", () => {
+    expect(resolveVehicleKm(undefined, hist)).toEqual({ km: 118_000, source: "ds" });
+    expect(resolveVehicleKm(null, hist)).toEqual({ km: 118_000, source: "ds" });
+    expect(resolveVehicleKm("", hist)).toEqual({ km: 118_000, source: "ds" });
+  });
+
+  it("falls back rather than poisoning the arithmetic with an unparseable value", () => {
+    for (const bad of ["abc", 0, -5, 2_000_000, NaN, {}]) {
+      expect(resolveVehicleKm(bad, hist).source).toBe("ds");
+    }
+  });
+
+  it("coerces the string forms a human actually types", () => {
+    expect(resolveVehicleKm("142 500", hist).km).toBe(142_500);
+    expect(resolveVehicleKm("142,500", hist).km).toBe(142_500);
+  });
+
+  it("reports 'none' when neither source has a reading", () => {
+    expect(resolveVehicleKm(undefined, [e("2025-01-01", undefined, "PNEU")])).toEqual({
+      km: null,
+      source: "none",
+    });
+  });
+});
+
+describe("formatKmSourceLine — a real source string for the grounding guard", () => {
+  const hist = [e("2025-01-01", 100_000, "PNEU")];
+
+  it("names the manual case in the upper-case form the guard has to match", () => {
+    const [line] = formatKmSourceLine(resolveVehicleKm(150_000, hist));
+    expect(line).toContain("KM DÉCLARÉ MANUELLEMENT");
+    // toLocaleString("fr-FR") uses a narrow no-break space as the group
+    // separator, so the literal is built the same way rather than typed out.
+    expect(line).toContain(`${(150_000).toLocaleString("fr-FR")} km`);
+  });
+
+  it("is NOT silent on the ordinary DS case — absent must not mean DS-derived", () => {
+    const [line] = formatKmSourceLine(resolveVehicleKm(undefined, hist));
+    expect(line).toContain("KM ISSU DE L'HISTORIQUE DS");
+  });
+
+  it("says nothing when there is no reading at all", () => {
+    expect(formatKmSourceLine({ km: null, source: "none" })).toEqual([]);
+  });
+});
+
+describe("checkInterval / checkBeltPump — honouring the override", () => {
+  it("computes the gap against the manual reading, not the DS maximum", () => {
+    const entries = [e("2025-01-01", 100_000, "VIDANGE 1:HUILE+FILTRE H+MO")];
+    // DS alone: 0 km since, à jour. With a manual 115,000: 15,000 km since,
+    // past the 10,000 km interval.
+    expect(checkInterval("vidange", entries).status).toBe("ok");
+    const r = checkInterval("vidange", entries, 115_000);
+    expect(r.status).toBe("overdue");
+    expect(r.currentKm).toBe(115_000);
+    expect(r.kmSince).toBe(15_000);
+    expect(r.overdueByKm).toBe(5_000);
+  });
+
+  it("refuses to invent a gap when the manual reading contradicts the last service", () => {
+    const entries = [e("2025-01-01", 100_000, "VIDANGE 1:HUILE+FILTRE H+MO")];
+    const r = checkInterval("vidange", entries, 50_000);
+    expect(r.status).toBe("unknown");
+    expect(r.note).toContain("contradiction");
+    // The numbers behind the refusal are still reported, so it can be checked.
+    expect(r.lastKm).toBe(100_000);
+    expect(r.currentKm).toBe(50_000);
+  });
+
+  it("tolerates a keying-noise difference rather than refusing on it", () => {
+    const entries = [e("2025-01-01", 100_000, "VIDANGE 1:HUILE+FILTRE H+MO")];
+    expect(checkInterval("vidange", entries, 99_950).status).toBe("ok");
+  });
+
+  it("crosses the belt/pump threshold on a manual reading the DS history cannot see", () => {
+    // 118,157 km in the history — the 44329-B-7 case, correctly silent. An
+    // operator reading 130,000 off the dashboard changes that.
+    const entries = [e("2026-05-04", 118_157, "PNEU")];
+    expect(checkBeltPump(entries).status).toBe("not_applicable");
+    const r = checkBeltPump(entries, 130_000);
+    expect(r.status).toBe("never");
+    expect(r.currentKm).toBe(130_000);
+    expect(formatBeltPumpCheck(r)).toHaveLength(1);
+  });
+
+  it("changes nothing for a zone that passes no override", () => {
+    const entries = [e("2025-01-01", 100_000, "VIDANGE 1:HUILE+FILTRE H+MO"), e("2025-06-01", 118_000, "PNEU")];
+    expect(computeIntervalChecks(entries, undefined)).toEqual(computeIntervalChecks(entries));
+    expect(checkBeltPump(entries, undefined)).toEqual(checkBeltPump(entries));
   });
 });

@@ -92,6 +92,30 @@ export function useUpdateParkingZoning() {
   });
 }
 
+/**
+ * Sets a row's hand-entered KM. Separate from the ACTION mutation for the same
+ * reason as ZONING — that one stamps TIMESTAMP, and a meter reading is not
+ * workshop activity.
+ */
+export function useUpdateParkingKm() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ rowIndex, km, imm }: { rowIndex: number; km: string; imm: string }) =>
+      fetchJson<{ ok: true }>("/api/parking/km", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex, km, imm }),
+      }),
+    meta: { successMessage: "Kilométrage mis à jour" },
+    onSuccess: () => {
+      // markFresh first: invalidating alone reads back the pre-write value,
+      // because the sheet cache is stale-while-revalidate (see freshFetch.ts).
+      markFresh("parking");
+      void queryClient.invalidateQueries({ queryKey: ROWS_KEY });
+    },
+  });
+}
+
 export function useDeleteParkingRow() {
   const queryClient = useQueryClient();
   return useMutation({

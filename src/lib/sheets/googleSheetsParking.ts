@@ -33,7 +33,9 @@ const PARKING_TAB = "PARKING";
 // HEADER_RANGE_WIDTH. The live header row is 17 columns (…DEPOT=P, gemini=Q,
 // read 2026-08-21); the ranges below previously stopped at O, which made the
 // `gemini` column invisible to this module entirely.
-const RANGE_WIDTH = "T"; // 17 real columns through `gemini` (Q), margin to T
+// 18 real columns through `KM` (R) — KM added to the live sheet 2026-08-29 as
+// the first free column, resolved by header name like every other. Margin to T.
+const RANGE_WIDTH = "T";
 const DATA_START_ROW = 2;
 
 /** Live header row → column-name lookup, never hardcoded indices. Cached 5min — headers essentially never change. */
@@ -133,6 +135,7 @@ async function fetchParkingRows(fresh = false): Promise<ParkingRow[]> {
   const founisseurCol = colMap["FOUNISSEUR"];
   const geminiCol = colMap["GEMINI"];
   const zoningCol = colMap["ZONING"];
+  const kmCol = colMap["KM"];
 
   // Ownership comes from the `parc` TAB, not from this one: the CLIENT column
   // here is an XLOOKUP into that tab's Client column, which is empty for every
@@ -192,6 +195,15 @@ async function fetchParkingRows(fresh = false): Promise<ParkingRow[]> {
       founisseur: strOrEmpty(founisseurCol),
       gemini: strOrEmpty(geminiCol),
       zoning: strOrEmpty(zoningCol),
+      ...(() => {
+        // Blank is the normal state, so an unparseable or empty cell yields NO
+        // key at all rather than 0 — `manualKm: 0` would read downstream as a
+        // real reading of zero. Same String()-then-Number coercion the rest of
+        // this module uses: UNFORMATTED_VALUE gives a number for a numeric
+        // cell, but a hand-typed "142 500" arrives as a string.
+        const km = kmNumberOrUndefined(kmCol ? row[kmCol - 1] : undefined);
+        return km === undefined ? {} : { manualKm: km };
+      })(),
       societe: owners.get(imm)?.societe ?? "",
       isAvis: owners.get(imm)?.isAvis ?? false,
     });
@@ -536,6 +548,74 @@ export async function updateZoning(rowIndex: number, zoning: string, expectedImm
     // USER_ENTERED reinterprets what it is given.
     valueInputOption: "RAW",
     requestBody: { values: [[zoning.trim()]] },
+  });
+  invalidateCache(ROWS_CACHE_KEY);
+}
+
+/**
+ * Parses one KM cell. Accepts what a human actually types — "142500",
+ * "142 500", "142,500" — and rejects everything else to `undefined`.
+ *
+ * The bounds mirror toKm() in prompts/maintenanceIntervals.ts on purpose: a
+ * value this function lets through but the resolver then rejects would show in
+ * the UI as an accepted override while silently doing nothing to the checks,
+ * which is the worst of both.
+ */
+function kmNumberOrUndefined(v: unknown): number | undefined {
+  if (v == null || v === "") return undefined;
+  const n = Number(String(v).replace(/[\s,]/g, ""));
+  return Number.isFinite(n) && n > 0 && n <= 1_000_000 ? n : undefined;
+}
+
+/**
+ * Writes one row's KM cell — the hand-entered odometer that overrides the
+ * DS-derived one (see resolveVehicleKm() in prompts/maintenanceIntervals.ts).
+ *
+ * Same shape as updateZoning(), deliberately: verifyRowIdentity() first, so a
+ * client-supplied rowIndex that shifted under the user's feet is refused rather
+ * than writing a mileage onto the wrong vehicle (AGENTS.md rule 3 — and the
+ * consequence here is worse than a mislabelled zone, since this number decides
+ * whether a timing belt gets flagged).
+ *
+ * No TIMESTAMP stamp, for the same reason as updateZoning: reading a dashboard
+ * is not workshop activity, and stamping it would make every km entry look like
+ * one in every view that sorts by that column.
+ *
+ * An empty string CLEARS the override and falls the vehicle back to its DS
+ * history — a real operation, not a no-op, so it is allowed through.
+ */
+export async function updateManualKm(
+  rowIndex: number,
+  km: string,
+  expectedImm: string
+): Promise<void> {
+  const sheets = getSheetsClient();
+  const colMap = buildColMap(await getHeaderRow(sheets));
+  const immCol = colMap["IMM"] ?? 1;
+  const kmCol = colMap["KM"];
+  if (!kmCol) throw new Error("Colonne KM introuvable sur l'onglet PARKING");
+
+  await verifyRowIdentity(
+    sheets,
+    spreadsheetId!,
+    `'${PARKING_TAB}'!${columnIndexToLetter(immCol)}${rowIndex}`,
+    expectedImm
+  );
+
+  const raw = km.trim();
+  const parsed = kmNumberOrUndefined(raw);
+  if (raw && parsed === undefined) {
+    throw new Error("Kilométrage invalide : saisir un nombre entre 1 et 1 000 000");
+  }
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: spreadsheetId!,
+    range: `'${PARKING_TAB}'!${columnIndexToLetter(kmCol)}${rowIndex}`,
+    // RAW, per AGENTS/CLAUDE.md: USER_ENTERED reinterprets what it is given,
+    // and this cell is read back with Number() — a locale-reformatted value is
+    // a value this module then has to un-format.
+    valueInputOption: "RAW",
+    requestBody: { values: [[parsed ?? ""]] },
   });
   invalidateCache(ROWS_CACHE_KEY);
 }

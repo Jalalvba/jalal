@@ -121,6 +121,13 @@ export type DsAnalysisInput = {
   };
   replacements: DsAnalysisReplacement[];
   entries: DsAnalysisEntry[];
+  /**
+   * Odometer entered by hand on the Parking tab's KM column, when one exists.
+   * Absent for every other zone — Atelier/Depot/DS History have no such column
+   * and keep the DS-derived reading. Resolution and precedence live in
+   * resolveVehicleKm() (prompts/maintenanceIntervals.ts), never here.
+   */
+  manualKm?: number;
 };
 
 // ── Output contract ───────────────────────────────────────────────────────

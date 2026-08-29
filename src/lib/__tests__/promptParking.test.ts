@@ -44,9 +44,9 @@ describe("the two prompts are separate documents on one set of rules", () => {
     // included ("depot-rempalcmemnt"): the action has to name the zone as it
     // exists, not as it should be spelled, or it points at a bucket the column
     // does not have.
-    expect(p).toContain("À envoyer vers depot-ATV");
-    expect(p).toContain("À envoyer vers depot-rempalcmemnt");
-    expect(p).toContain("À envoyer au garage Pierre Parent");
+    expect(p).toContain("DEPOT-ATV");
+    expect(p).toContain("DEPOT-REMPLACEMENT");
+    expect(p).toContain("AVIS-PIERRE-PARENT");
     // A0 has to be read before the rules that would otherwise fill the list.
     expect(p.indexOf("LE STATUT DÉCIDE")).toBeLessThan(p.indexOf("A1. Chaque action"));
   });
@@ -63,10 +63,15 @@ describe("the two prompts are separate documents on one set of rules", () => {
 
   it("sends an AVIS vehicle to Pierre Parent after a part change", () => {
     const p = DS_PARKING_WORKORDER_PROMPT;
-    expect(p).toContain("VÉHICULE DU PARC AVIS");
-    expect(p).toContain("À envoyer au garage Pierre Parent");
-    // Once, never twice — the LCD rule writes the same line.
-    expect(p).toContain("jamais en double");
+    // This rule used to be its own "A6. VÉHICULE DU PARC AVIS" section. The
+    // A0.5 restructure folded it into criterion 4 of the destination ladder;
+    // the assertions follow it there rather than being dropped, because the
+    // behaviour they pin is unchanged.
+    expect(p).toContain("Propriétaire = « AVIS » ou « Scal Avis »");
+    expect(p).toContain("remplacement ou le changement d'une");
+    expect(p).toContain("AVIS-PIERRE-PARENT");
+    // Once, never twice — criterion 3 (LCD) writes the same zone.
+    expect(p).toContain("si le cas 3 a déjà ajouté cette ligne");
   });
 
   it("keeps the imposed order of a work order", () => {
@@ -82,13 +87,21 @@ describe("the zone actions name real ZONING values", () => {
   it("uses only values from the configured option list", async () => {
     const { ZONING_OPTIONS_FALLBACK } = await import("@/types");
     const { DS_PARKING_WORKORDER_PROMPT: p } = await import("@/lib/ai/dsAnalysis/prompt-parking");
-    // Every zone the prompt tells the model to write must be a value the
-    // ZONING column (and its filter chips) actually recognises — otherwise the
-    // work order sends a vehicle to a zone that does not exist.
-    for (const zone of ["depot-ATV", "depot-rempalcmemnt"]) {
+    const { PARKING_ZONE_VALUES } = await import("@/lib/ai/dsAnalysis/prompt-parking");
+    // Asserted against the shared constant rather than hardcoded literals. The
+    // previous version pinned "depot-ATV"/"depot-rempalcmemnt" by hand and went
+    // stale the moment the real dropdown was replaced (2026-08-29) — which is
+    // the same hand-copied-literal drift this file exists to catch.
+    expect([...PARKING_ZONE_VALUES]).toEqual(ZONING_OPTIONS_FALLBACK);
+    // Every zone the model may be told to write must be a value the ZONING
+    // column actually recognises, and must appear in the prompt text. The one
+    // exception is "visite technique": on the dropdown for humans, deliberately
+    // given no A0.5 criterion, so it is absent from the prompt by design.
+    for (const zone of PARKING_ZONE_VALUES) {
       expect(ZONING_OPTIONS_FALLBACK).toContain(zone);
-      expect(p).toContain(zone);
+      if (zone !== "visite technique") expect(p).toContain(zone);
     }
+    expect(p).not.toContain("visite technique");
   });
 });
 
@@ -124,7 +137,10 @@ describe("the ACTION column is written for the quality controller", () => {
   it("always ends on the destination he will order", async () => {
     const { DS_PARKING_WORKORDER_PROMPT: p } = await import("@/lib/ai/dsAnalysis/prompt-parking");
     expect(p).toContain("LA DESTINATION — TOUJOURS, et toujours en dernier");
-    expect(p).toContain("À livrer au client");
+    // The bare zone value, not the old French sentence "À livrer au client":
+    // the destination line is parsed back out and exact-matched against the
+    // dropdown, so it has to BE a zone value.
+    expect(p).toContain("DISPONIBLE-A-LIVRER");
     // Conditional when there is something to check first, bare when there is not.
     expect(p).toContain("Si conforme :");
   });
