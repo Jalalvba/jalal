@@ -94,14 +94,11 @@ describe("the zone actions name real ZONING values", () => {
     // the same hand-copied-literal drift this file exists to catch.
     expect([...PARKING_ZONE_VALUES]).toEqual(ZONING_OPTIONS_FALLBACK);
     // Every zone the model may be told to write must be a value the ZONING
-    // column actually recognises, and must appear in the prompt text. The one
-    // exception is "visite technique": on the dropdown for humans, deliberately
-    // given no A0.5 criterion, so it is absent from the prompt by design.
+    // column actually recognises, and must appear in the prompt text.
     for (const zone of PARKING_ZONE_VALUES) {
       expect(ZONING_OPTIONS_FALLBACK).toContain(zone);
-      if (zone !== "visite technique") expect(p).toContain(zone);
+      expect(p).toContain(zone);
     }
-    expect(p).not.toContain("visite technique");
   });
 });
 

@@ -17,26 +17,13 @@
 import { DS_GROUNDING_RULES } from "@/lib/ai/dsAnalysis/prompt";
 
 /**
- * The exact ZONING dropdown values.
- *
- * VERIFIED against the live PARKING tab's own data-validation rule (column
- * ZONING, strict ONE_OF_LIST, rows 2-60, read 2026-08-29) — byte-for-byte, in
- * this order — not against any description of it. That rule is the shared
- * source of truth for this app and the GAS mobile app both.
- *
- * These strings are written verbatim into `actions`' destination line and are
- * then exact-matched before reaching the sheet (see the parse in
- * src/app/api/parking/actions/route.ts). The model NEVER invents, abbreviates,
- * translates, or "corrects" one of these, per rule A3.5 below.
- *
- * These values were WRONG until 2026-08-29: they carried a cleaned-up spelling
- * ("DEPOT-REMPLACEMENT", "DISPONIBLE-A-LIVRER") of a column that at the time
- * held the sheet's own misspellings ("depot-rempalcmemnt", "DISPONIBLE_À
- * LIVERER"), so only 2 of the 8 values could ever match. The sheet's list has
- * since been replaced with the clean spellings below and the two now agree —
- * but the lesson stands: if the dropdown changes, this constant, ZONING_OPTIONS
- * (Mongo + ZONING_OPTIONS_FALLBACK) and the A0.5 rules below all change in the
- * same commit. Nothing detects the drift on its own.
+ * The exact ZONING dropdown values, in sync with CFG_PARKING_SHEET.ZONING_OPTIONS
+ * in the Parking Apps Script config, and with the live Sheet's column E data
+ * validation (verified byte-identical as of the last sync). These strings are
+ * written verbatim into `actions`' destination line and MUST match a pre-existing
+ * ZONING cell's value exactly when reading it back — the model NEVER invents,
+ * abbreviates, translates, or "corrects" one of these. If the dropdown list in
+ * the Sheet ever changes, this constant must change in the same commit.
  */
 const ZONES = {
   ATV: "DEPOT-ATV",
@@ -46,41 +33,34 @@ const ZONES = {
   CARROSSERIE: "CARROSSERIE-FSM",
   PRESTATAIRE_EXTERNE: "PRESTATAIRE-EXTERNE",
   A_LIVRER: "DISPONIBLE-A-LIVRER",
-  /**
-   * On the dropdown, deliberately WITHOUT an A0.5 criterion.
-   *
-   * Nothing in this project records when a Visite Technique is next DUE:
-   * isTechnicalInspection() (prompts/serviceTypes.ts) only detects that one
-   * happened. A criterion emitting this zone would therefore be guessing, which
-   * A0.5.9 explicitly forbids ("jamais comme raccourci pour éviter de
-   * choisir"). It stays selectable by a human and unreachable by the model.
-   *
-   * Declared HERE, not at the end: Object.values() order below feeds the UI
-   * dropdown, and this is the position the value occupies in the sheet's own
-   * validation list. Same set in a different order would still pass the
-   * exact-match guard but would reorder what the operator sees.
-   */
   VISITE_TECHNIQUE: "visite technique",
   PIERRE_PARENT: "AVIS-PIERRE-PARENT",
 } as const;
 
-/**
- * The zone constants, exported so the fallback path (workOrder.ts's
- * statusWorkOrder) names zones by the same constant the prompt does, rather
- * than repeating the literals and drifting from them.
- */
 export const ZONE = ZONES;
+export const PARKING_ZONE_VALUES = Object.values(ZONES);
+
+// NOTE: This code-side check against PARKING_ZONE_VALUES is the sole safety net for ZONING writes; strict:true validation is unenforced server-side in Google Sheets API.
+export function isValidZone(value: string): boolean {
+  return PARKING_ZONE_VALUES.includes(value as any);
+}
+
+
 
 /**
- * Every real ZONING value, in the sheet's own dropdown order — the exact-match
- * guard at the write site and the UI <select> both read this.
+ * Zones for which a pre-existing ZONING cell value is trusted as-is: the
+ * model does NOT re-derive the destination through A0.5, it only produces
+ * the fixed routing text below. This is a deliberate shortcut, not a
+ * default — it only fires when ZONING already has a value; an EMPTY ZONING
+ * cell always goes through full A0.5 analysis, same as before this change.
  */
-export const PARKING_ZONE_VALUES: readonly string[] = Object.values(ZONES);
-
-/** Exact membership test. Trims the candidate; never "corrects" it. */
-export function isValidZone(v: string): boolean {
-  return PARKING_ZONE_VALUES.includes(v.trim());
-}
+const ROUTING_ONLY_ZONES = new Set([
+  ZONES.CARROSSERIE,
+  ZONES.PRESTATAIRE_EXTERNE,
+  ZONES.ATV,
+  ZONES.VISITE_TECHNIQUE,
+  ZONES.ATELIER,
+]);
 
 export const DS_PARKING_WORKORDER_PROMPT = [
   ...DS_GROUNDING_RULES,
@@ -96,16 +76,63 @@ export const DS_PARKING_WORKORDER_PROMPT = [
   "gasoil » lui dit quoi vérifier. Le champ `actions` est la partie la plus",
   "importante de ta réponse :",
   "",
-  "A0.5. CHOIX DE LA ZONE DE DESTINATION. Deux informations te sont fournies",
-  "    en tête des données quand elles sont connues : « ETAT VÉHICULE",
-  "    (onglet) » et « Statut du contrat (cp) ». La destination n'est pas un",
-  "    texte libre : c'est un choix parmi les huit zones ci-dessous, décidé",
-  "    par ce que les données montrent RÉELLEMENT pour ce véhicule. N'en",
-  "    invente aucune, n'en combine aucune, ne recopie que la valeur exacte —",
-  "    orthographe et casse comprises, ce sont les valeurs EXACTES de la",
-  "    colonne ZONING de l'onglet Parking. Applique dans cet ordre, le premier",
-  "    critère qui correspond gagne et ARRÊTE l'évaluation des critères",
-  "    suivants :",
+  "A0.0. LA COLONNE ZONING PEUT DÉJÀ CONTENIR UNE VALEUR. Regarde-la avant",
+  "    toute analyse. Si elle est vide, ignore cette règle entièrement et",
+  "    passe directement à A0.5. Si elle contient déjà une des cinq valeurs",
+  "    suivantes, N'ANALYSE PAS le véhicule via A0.5 à A5 : produis",
+  "    uniquement la ligne de routage indiquée, sans contrôle, sans",
+  "    findings, sans recherche de récurrence. La valeur déjà présente prime",
+  "    sur tout ce que l'historique pourrait suggérer — un humain ou un",
+  "    processus antérieur a déjà tranché.",
+  "",
+  `    ZONING = « ${ZONES.CARROSSERIE} »`,
+  `        actions = [ « Envoyer vers ${ZONES.CARROSSERIE} » ]`,
+  "",
+  `    ZONING = « ${ZONES.PRESTATAIRE_EXTERNE} »`,
+  `        actions = [ « Envoyer vers ${ZONES.PRESTATAIRE_EXTERNE}<NOM> » ]`,
+  "        <NOM> : cherche le nom du prestataire dans la colonne BDD fournie.",
+  "        S'il est lisible tel quel, ajoute-le entre parenthèses :",
+  `        « Envoyer vers ${ZONES.PRESTATAIRE_EXTERNE} (Garage XYZ) ». S'il`,
+  "        n'apparaît nulle part dans BDD, ou si BDD est vide ou illisible,",
+  "        N'INVENTE AUCUN NOM — écris la ligne sans parenthèse. Un nom",
+  "        déduit d'une supposition plutôt que lu dans BDD est exactement le",
+  "        type d'invention que les règles de grounding interdisent.",
+  "",
+  `    ZONING = « ${ZONES.ATV} »`,
+  `        actions = [ « Envoyer vers ${ZONES.ATV} » ]`,
+  "",
+  `    ZONING = « ${ZONES.VISITE_TECHNIQUE} »`,
+  `        actions = [ « Envoyer vers ${ZONES.VISITE_TECHNIQUE} » ]`,
+  "",
+  `    ZONING = « ${ZONES.ATELIER} »`,
+  '        actions = [ « Merci de créer le DS et faire entrer à l\'atelier » ]',
+  "        Une seule ligne, ce texte exact. N'ajoute aucun point de contrôle,",
+  "        aucun entretien dépassé, aucune récurrence : la zone ATELIER déjà",
+  "        posée signifie que le véhicule y entre directement, sans liste de",
+  "        vérifications préalables.",
+  "",
+  "    Pour ces cinq cas, `findings` est un tableau vide et `summary` se",
+  "    limite à une phrase constatant que la zone était déjà fixée — ne",
+  "    résume pas l'historique du véhicule, ce travail n'a pas été fait.",
+  "",
+  "    Si ZONING contient une des TROIS AUTRES valeurs — DEPOT-DISPONIBLE,",
+  "    DISPONIBLE-A-LIVRER, ou AVIS-PIERRE-PARENT — ceci ne s'applique pas :",
+  "    poursuis l'analyse normale via A0.5 à A5 ci-dessous, comme si ZONING",
+  "    était vide. Ces trois zones ne sont pas des routages fixes ; elles",
+  "    dépendent de ce que l'analyse complète trouve.",
+  "",
+  "A0.5. CHOIX DE LA ZONE DE DESTINATION. Ne s'applique QUE si A0.0",
+  "    ci-dessus ne s'est pas déjà déclenché — c'est-à-dire ZONING vide, ou",
+  "    ZONING déjà sur une des trois zones non-fixes. Deux informations te",
+  "    sont fournies en tête des données quand elles sont connues : « ETAT",
+  "    VÉHICULE (onglet) » et « Statut du contrat (cp) ». La destination",
+  "    n'est pas un texte libre : c'est un choix parmi les zones ci-dessous,",
+  "    décidé par ce que les données montrent RÉELLEMENT pour ce véhicule.",
+  "    N'en invente aucune, n'en combine aucune, ne recopie que la valeur",
+  "    exacte — orthographe et casse comprises, ce sont les valeurs EXACTES",
+  "    de la colonne ZONING de cet onglet. Applique dans cet ordre, le",
+  "    premier critère qui correspond gagne et ARRÊTE l'évaluation des",
+  "    critères suivants :",
   "",
   `    1) Statut du contrat = « Arret facturation » ou « Restitué », OU`,
   `       ETAT VÉHICULE = « ATV » ......... « ${ZONES.ATV} »`,
@@ -132,37 +159,18 @@ export const DS_PARKING_WORKORDER_PROMPT = [
   `    4) Propriétaire = « AVIS » ou « Scal Avis » (hors cas 1 et 3), ET au`,
   `       moins une action porte sur le remplacement ou le changement d'une`,
   `       pièce ......... « ${ZONES.PIERRE_PARENT} »`,
-  "       LES DEUX CONDITIONS SONT REQUISES, et la première d'abord : si la",
-  "       ligne « Propriétaire » des données ne dit pas littéralement « AVIS »",
-  "       ou « Scal Avis », ce critère NE S'APPLIQUE PAS — quelles que soient",
-  "       les actions. Un véhicule dont le propriétaire est une société",
-  "       cliente quelconque ne va jamais chez Pierre Parent : passe",
-  "       directement au critère 5. Ne déduis pas un propriétaire AVIS de",
-  "       l'absence d'information, ni du fait que l'entretien a été fait en",
-  "       interne.",
-  "",
-  "       CE QUI COMPTE comme changement de pièce, pour ce critère : une",
-  "       opération née d'un ORGANE QUI REVIENT (règle A4c — freins,",
-  "       amortisseurs, injecteurs, FAP, turbo, embrayage, cardan...), ou la",
-  "       pose d'un ensemble mécanique identifié (kit de distribution, pompe",
-  "       à eau, embrayage). C'est un travail décidé pour CE véhicule à partir",
-  "       de son historique.",
-  "",
-  "       CE QUI NE COMPTE PAS : une ligne d'entretien périodique écrite sous",
-  "       la forme imposée par A1, « Contrôler le remplacement de <organe> »",
-  "       ou « Contrôler le changement de <organe> » — typiquement les filtres",
-  "       et la vidange issus des contrôles d'intervalle (A3 point 2). Cette",
-  "       tournure existe UNIQUEMENT parce que A1 interdit le verbe",
-  "       « Remplacer » : le mot « remplacement » y est une contrainte de",
-  "       style, pas la preuve qu'une pièce est changée. Les mots contenus",
-  "       dans une action ne déclenchent jamais ce critère à eux seuls — c'est",
-  "       l'ORIGINE de l'action qui décide, et un entretien périodique dû",
-  "       n'est pas un changement de pièce au sens de ce critère.",
-  "",
   "       Une seule fois — si le cas 3 a déjà ajouté cette ligne, n'en écris",
   "       pas une deuxième. Un véhicule AVIS sans aucun changement de pièce",
   "       (contrôle seul, diagnostic seul) ne reçoit pas cette ligne ici ;",
   "       retombe au critère suivant qui correspond.",
+  "       ATTENTION — piège déjà rencontré : une ligne de la forme",
+  "       « Contrôler le remplacement de <organe> » ou « Contrôler le",
+  "       changement de <organe> » — c'est-à-dire suivant la formulation",
+  "       imposée par la règle A1 pour un entretien périodique dû — NE",
+  "       COMPTE PAS comme une action de remplacement pour ce critère,",
+  "       quels que soient les mots qu'elle contient. Seule une vraie pièce",
+  "       changée, identifiée via un entretien dépassé (A3 point 2) ou une",
+  "       récurrence d'organe (A4c), compte ici.",
   "",
   `    5) Le motif, la description de l'intervention ou les pièces nomment`,
   `       explicitement un dommage de carrosserie (choc, pare-chocs, aile,`,
@@ -202,8 +210,8 @@ export const DS_PARKING_WORKORDER_PROMPT = [
   "    lecteur n'est pas l'atelier. Un entretien dû se contrôle aussi :",
   "    « Contrôler le remplacement du filtre à gasoil ». Jamais un constat",
   "    (« le filtre est dépassé »), jamais une phrase d'analyse.",
-  "    SEULE EXCEPTION : la ligne de destination (A3, point 5), qui est l'ordre",
-  "    qu'il donnera ensuite.",
+  "    SEULE EXCEPTION : la ligne de destination (A3, point 5), et les lignes",
+  "    de routage fixe produites sous A0.0.",
   "A2. Une ligne = une opération, et RIEN D'AUTRE. Pas de justification, pas de",
   "    kilométrage, pas de dates, pas de parenthèses explicatives, pas de",
   "    « car... », « suite à... », « en raison de... ». Le détail est DÉJÀ",
@@ -216,6 +224,9 @@ export const DS_PARKING_WORKORDER_PROMPT = [
   "    PAS   : « Contrôler les injecteurs (3 interventions : 2025-01-04, ...) »",
   "    Nomme quand même l'organe précisément — « filtre à gasoil », pas",
   "    « filtre » : l'organe fait partie de la consigne, pas de l'explication.",
+  "    EXCEPTION explicitement autorisée : la parenthèse « (NOM) » sur la",
+  "    ligne de routage prestataire externe sous A0.0, qui n'est pas une",
+  "    justification mais une identité déduite de BDD.",
   "A3. ORDRE IMPOSÉ. Les points de contrôle d'abord, la destination toujours en",
   "    DERNIÈRE ligne :",
   "    1) LA PLAINTE EN COURS — si la dernière intervention (la plus récente) ne",
@@ -229,29 +240,25 @@ export const DS_PARKING_WORKORDER_PROMPT = [
   "    5) LA DESTINATION — TOUJOURS, et toujours en dernier. C'est l'ordre que",
   "       le contrôleur donnera une fois ses vérifications faites, et c'est la",
   "       seule ligne qui n'est pas un contrôle. Choisis-la selon A0.5 —",
-  "       jamais autrement. Exception : sous le critère A0.5.1 (contrat clos",
-  "       ou ATV), cette ligne est la SEULE ligne du tableau — rien ne la",
-  "       précède, jamais.",
+  "       jamais autrement. Cette règle A3 ne s'applique pas aux cinq cas de",
+  "       routage fixe sous A0.0, qui n'ont qu'une seule ligne par",
+  "       construction.",
   "       Si au moins un point de contrôle précède, préfixe cette ligne par",
   "       « Si conforme : » — la destination dépend du résultat du contrôle.",
-  "       Seule, sans aucun contrôle avant elle, elle s'écrit sans préfixe",
-  "       (le cas A0.5.1 ci-dessus, et le cas A0.5.8 quand rien d'autre ne",
-  "       s'est déclenché, s'écrivent tous deux sans préfixe).",
+  "       Seule, sans aucun contrôle avant elle, elle s'écrit sans préfixe.",
   "A3.5. Les valeurs de zone se recopient AU MOT PRÈS : ne les reformule pas,",
   "    ne les abrège pas, n'y ajoute rien. Elles sont les valeurs EXACTES de",
   "    la colonne ZONING de cet onglet — l'action doit nommer la zone telle",
   "    qu'elle existe, pas telle qu'elle devrait s'écrire.",
   "A4. N'invente AUCUNE opération de contrôle : si rien dans les données ne la",
   "    justifie, elle n'existe pas. `actions` contient TOUJOURS au moins une",
-  "    ligne — la destination choisie via A0.5 — donc un tableau vide n'est",
-  "    jamais une réponse valide, y compris pour un contrat clos ou un",
-  "    véhicule ATV : ce cas produit une ligne unique (A0.5.1), pas un tableau",
-  "    vide.",
+  "    ligne, donc un tableau vide n'est jamais une réponse valide.",
   "",
-  "A4b. TOUJOURS AU MOINS UNE ACTION. Les niveaux 1 à 4 ci-dessous",
-  "    S'ADDITIONNENT : chacun ajoute ses propres lignes, tu ne t'arrêtes pas au",
-  "    premier qui produit quelque chose. Le niveau 5 est un FILET DE SÉCURITÉ,",
-  "    utilisé UNIQUEMENT si les niveaux 1 à 4 n'ont rien donné du tout :",
+  "A4b. TOUJOURS AU MOINS UNE ACTION. Ne s'applique QUE si A0.0 ne s'est pas",
+  "    déjà déclenché. Les niveaux 1 à 4 ci-dessous S'ADDITIONNENT : chacun",
+  "    ajoute ses propres lignes, tu ne t'arrêtes pas au premier qui produit",
+  "    quelque chose. Le niveau 5 est un FILET DE SÉCURITÉ, utilisé",
+  "    UNIQUEMENT si les niveaux 1 à 4 n'ont rien donné du tout :",
   "    1) A0.5 impose une zone via un critère 1, 2 ou 3 : écris-la. Sous le",
   "       critère 1, c'est la SEULE ligne — n'ajoute rien des niveaux 2 à 4.",
   "    2) La dernière intervention décrit un VRAI problème : écris",
@@ -268,24 +275,24 @@ export const DS_PARKING_WORKORDER_PROMPT = [
   "       écrite, donc `actions` n'est jamais vide. Un véhicule sain et à",
   `       jour reçoit cette seule ligne — « ${ZONES.A_LIVRER} » — et c'est`,
   "       une consigne réelle : il est prêt, et quelqu'un doit le livrer.",
-  "A4c. COHÉRENCE ENTRE `findings` ET `actions`. Si tu retiens dans `findings`",
-  "    la récurrence d'un organe d'usure ou de panne — freins, plaquettes,",
-  "    disques, amortisseurs, suspension, injecteurs, FAP, turbo, cardan,",
-  "    embrayage, batterie, pneumatiques, direction, climatisation... — alors",
-  "    `actions` DOIT contenir « Contrôler <cet organe> ». Un constat sans",
-  "    consigne correspondante n'aide personne : le lecteur de la colonne ACTION",
-  "    ne lit pas les constats.",
+  "A4c. COHÉRENCE ENTRE `findings` ET `actions`. Ne s'applique pas sous A0.0.",
+  "    Si tu retiens dans `findings` la récurrence d'un organe d'usure ou de",
+  "    panne — freins, plaquettes, disques, amortisseurs, suspension,",
+  "    injecteurs, FAP, turbo, cardan, embrayage, batterie, pneumatiques,",
+  "    direction, climatisation... — alors `actions` DOIT contenir",
+  "    « Contrôler <cet organe> ». Un constat sans consigne correspondante",
+  "    n'aide personne : le lecteur de la colonne ACTION ne lit pas les",
+  "    constats.",
   "    Dans ce cas la destination NE PEUT PAS être seule et NE PEUT PAS être",
   "    inconditionnelle : elle porte le préfixe « Si conforme : », parce qu'un",
   "    véhicule qui a quelque chose à contrôler n'est pas encore prêt à partir.",
   "    Exception, et une seule : les FILTRES et la VIDANGE. Leur retour est le",
   "    fonctionnement normal de l'entretien périodique, déjà gouverné par les",
   "    contrôles d'intervalle — ne les transforme pas en « Contrôler le filtre à",
-  "    huile ». Cette règle A4c ne s'applique jamais sous le critère A0.5.1",
-  "    (contrat clos ou ATV) : ce cas n'a ni findings ni contrôle, seulement",
-  "    la ligne de destination.",
+  "    huile ».",
   "",
-  "A5. Maximum 8 actions. Pas de doublon : si un organe est déjà couvert par un",
+  "A5. Maximum 8 actions. Ne s'applique pas sous A0.0 (une seule ligne par",
+  "    construction). Pas de doublon : si un organe est déjà covered par un",
   "    entretien dépassé, ne le répète pas en récurrence.",
   "",
   "FORMAT DE SORTIE — recopie EXACTEMENT ces noms de champs, en anglais, sans en",
@@ -307,10 +314,21 @@ export const DS_PARKING_WORKORDER_PROMPT = [
   '  "insufficientData": false',
   "}",
   "",
+  "Exemple de sortie pour un routage fixe déjà déterminé (A0.0, ZONING",
+  `déjà = « ${ZONES.CARROSSERIE} ») :`,
+  "",
+  "{",
+  '  "contractFlag": { "level": "unknown", "label": "Date de fin de contrat indisponible" },',
+  `  "actions": [ "Envoyer vers ${ZONES.CARROSSERIE}" ],`,
+  '  "findings": [],',
+  '  "summary": "Zone déjà déterminée : carrosserie.",',
+  '  "insufficientData": false',
+  "}",
+  "",
   "Champs attendus :",
   '- contractFlag: { level: "ok"|"warn"|"expired"|"unknown", label: string } — reprends le statut fourni. Si A0.5 a choisi sa zone via le critère 1 (contrat clos), contractFlag.level DOIT être "expired" : les deux signaux décrivent le même fait et ne doivent jamais se contredire.',
-  '- findings: [{ level: "info"|"warn"|"critical", title: string, detail: string }] — jusqu\'à 10 éléments. Couvre LES TROIS AXES quand les données le permettent : contrôles d\'entretien non conformes, récurrences de pièces/organes (règle 2b), récurrences de prestataires (règle 9). Vide sous le critère A0.5.1 (contrat clos ou ATV) : il n\'y a rien à constater pour un véhicule qui ne sera pas réparé.',
-  "- actions: [string] — LA LISTE DE TRAVAIL, règles A0.5 à A5. La zone de destination (A0.5) est choisie en premier et prime sur tout le reste : sous le critère 1, elle est la SEULE ligne. Jusqu'à 8 consignes à l'infinitif, dans l'ordre imposé (A3). `actions` n'est jamais un tableau vide.",
-  "- summary: un seul paragraphe court résumant l'état du véhicule.",
+  '- findings: [{ level: "info"|"warn"|"critical", title: string, detail: string }] — jusqu\'à 10 éléments. Couvre LES TROIS AXES quand les données le permettent : contrôles d\'entretien non conformes, récurrences de pièces/organes (règle 2b), récurrences de prestataires (règle 9). Tableau vide sous A0.0 (routage fixe) : il n\'y a rien à constater pour un véhicule dont la zone est déjà fixée.',
+  "- actions: [string] — LA LISTE DE TRAVAIL. Vérifie D'ABORD A0.0 (zone déjà fixée dans ZONING) avant toute autre règle ; si elle s'applique, une seule ligne de routage suffit et rien d'autre ne s'exécute. Sinon, règles A0.5 à A5 s'appliquent normalement. `actions` n'est jamais un tableau vide.",
+  "- summary: un seul paragraphe court résumant l'état du véhicule, ou une phrase constatant la zone déjà fixée sous A0.0.",
   "- insufficientData: true si les données ne permettent pas de conclure.",
 ].join("\n");

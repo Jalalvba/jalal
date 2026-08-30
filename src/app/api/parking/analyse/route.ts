@@ -96,6 +96,8 @@ export async function POST(request: Request) {
           // guess from a company name.
           owner: String(row.client ?? "").trim() || undefined,
           isAvis: row.isAvis === true,
+          zoning: String(row.zoning ?? "").trim() || undefined,
+          bdd: String(row.bdd ?? "").trim() || undefined,
         },
         // The tab's own KM column, when an operator filled it in. Takes
         // priority over the DS-derived odometer in every interval and

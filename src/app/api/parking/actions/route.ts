@@ -237,6 +237,7 @@ export async function POST(request: Request) {
         const zone0 = await applyZone(row, { insufficientData: true }, {
           etat: String(row.etatVehicule ?? ""),
           isAvis: row.isAvis === true,
+          zoning: String(row.zoning ?? "").trim(),
         });
         results.push({ imm, outcome: "written", actions: 1, zone: zone0 });
         continue;
@@ -261,6 +262,8 @@ export async function POST(request: Request) {
           // guess from a company name.
           owner: String(row.client ?? "").trim() || undefined,
           isAvis: row.isAvis === true,
+          zoning: String(row.zoning ?? "").trim() || undefined,
+          bdd: String(row.bdd ?? "").trim() || undefined,
         },
         // The tab's own KM column, when an operator filled it in. Takes
         // priority over the DS-derived odometer in every interval and
@@ -325,6 +328,7 @@ export async function POST(request: Request) {
         etat: String(row.etatVehicule ?? ""),
         isAvis: row.isAvis === true,
         cpStatus,
+        zoning: String(row.zoning ?? "").trim(),
       };
       // withDestination() now KEEPS the model's own A0.5 choice and only falls
       // back to statusWorkOrder() when it produced no destination at all. The

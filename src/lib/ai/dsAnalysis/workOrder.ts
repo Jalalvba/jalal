@@ -230,7 +230,17 @@ const SI_CONFORME_RE = /^\s*si\s+conforme\s*:\s*/i;
  */
 export function parseDestinationZone(actions: readonly string[]): string | null {
   if (actions.length === 0) return null;
-  const last = String(actions[actions.length - 1] ?? "").replace(SI_CONFORME_RE, "").trim();
+  let last = String(actions[actions.length - 1] ?? "").replace(SI_CONFORME_RE, "").trim();
+  
+  // Handle A0.0 special routing strings
+  if (last.toLowerCase() === "merci de créer le ds et faire entrer à l'atelier") {
+    return ZONE.ATELIER;
+  }
+  
+  // Remove "Envoyer vers " prefix and trailing " (Supplier)" for external providers
+  last = last.replace(/^Envoyer vers\s+/i, "");
+  last = last.replace(/\s*\([^)]*\)$/, "").trim();
+
   return last || null;
 }
 
@@ -260,6 +270,8 @@ export type ZoneVehicle = {
   isAvis?: boolean;
   /** cp's contract `statut` — "Livré" / "Arret facturation" / "Restitué". */
   cpStatus?: string;
+  /** ZONING, as currently stored in the sheet. */
+  zoning?: string;
 };
 
 /** Contract states that mean the vehicle has left the billed fleet (A0.5.1). */
@@ -298,6 +310,12 @@ export function zonePreconditionFailure(zone: string, vehicle: ZoneVehicle): str
   const etat = String(vehicle.etat ?? "").trim().toUpperCase();
   const cp = String(vehicle.cpStatus ?? "").trim().toUpperCase();
   const isAvis = vehicle.isAvis === true;
+  const currentZoning = String(vehicle.zoning ?? "").trim();
+
+  // A0.0 Bypasses preconditions if the zone was already fixed in the sheet
+  if (currentZoning === zone && [ZONE.ATV, ZONE.ATELIER, ZONE.CARROSSERIE, ZONE.PRESTATAIRE_EXTERNE, ZONE.VISITE_TECHNIQUE].includes(zone as any)) {
+    return null;
+  }
 
   if (zone === ZONE.PIERRE_PARENT && !(isAvis || etat === "LCD")) {
     return "A0.5.4 exige un propriétaire AVIS / Scal Avis, ou A0.5.3 un ETAT « LCD »";
@@ -317,31 +335,19 @@ export function withDestination(
 ): string[] {
   const checks = actions.filter((a) => !DESTINATION_RE.test(a));
 
-  // The model's own destination, kept — but ONLY if the last line actually IS
-  // one. parseDestinationZone() returns the last line whatever it says, which
-  // is right for reporting an invalid zone back to the operator and wrong here:
-  // a model that forgot its destination (45802-B-7 shipped six checks and no
-  // destination) would otherwise have its last CHECK promoted into the
-  // destination slot and duplicated as "Si conforme : Contrôler le turbo".
-  // isValidZone, not DESTINATION_RE: the regex answers "is this line a
-  // destination", which is what filters `checks` above and deliberately also
-  // matches the pre-2026-08-29 sentence forms. Keeping a line requires the
-  // stricter question — "is this a real ZONING value" — so a legacy
-  // "Disponible — à livrer au client" from a stored answer is recognised as a
-  // destination, dropped, and re-emitted as DISPONIBLE-A-LIVRER rather than
-  // surviving as a second spelling of the same instruction.
-  //
-  // And kept only if this vehicle may actually RECEIVE it: a zone whose
-  // precondition fails is refused here too, not only on the ZONING write, so
-  // ACTION can never instruct the controller to send a car somewhere the zone
-  // column just refused to record. statusWorkOrder() is the fallback, and its
-  // four outcomes are precondition-safe by construction — ATV only when the
-  // ETAT is ATV, REMPLACEMENT only when it is Remplacement, PIERRE_PARENT only
-  // when isAvis, and DISPONIBLE-A-LIVRER otherwise, which is gated on nothing.
-  const last = parseDestinationZone(actions);
+  const lastParsed = parseDestinationZone(actions);
   const usable =
-    last !== null && isValidZone(last) && zonePreconditionFailure(last, vehicle) === null;
-  const chosen = usable ? last : statusWorkOrder(vehicle)[0];
+    lastParsed !== null && isValidZone(lastParsed) && zonePreconditionFailure(lastParsed, vehicle) === null;
+  
+  const originalLast = actions.length > 0 ? String(actions[actions.length - 1] ?? "").replace(SI_CONFORME_RE, "").trim() : null;
+  
+  // Keep original if it's an A0.0 special string, otherwise use the bare parsed zone to drop legacy French sentences.
+  const isA00 = originalLast && (
+    originalLast.toLowerCase().startsWith("envoyer vers ") || 
+    originalLast.toLowerCase() === "merci de créer le ds et faire entrer à l'atelier"
+  );
 
-  return checks.length > 0 ? [...checks, `Si conforme : ${chosen}`] : [chosen];
+  const chosen = usable ? (isA00 ? originalLast : lastParsed) : statusWorkOrder(vehicle)[0];
+
+  return checks.length > 0 ? [...checks, `Si conforme : ${chosen}`] : [chosen!];
 }
