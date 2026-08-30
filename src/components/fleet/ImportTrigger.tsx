@@ -182,6 +182,7 @@ export function LastImportCard() {
   const [lastRun, setLastRun] = React.useState<LastRunSummary | null | "loading">("loading");
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- readLastRun() reads browser storage, which does not exist on the server; the "loading" sentinel is rendered on both sides and replaced only after mount. Reading it during render would hydrate-mismatch.
     setLastRun(readLastRun());
   }, []);
 
@@ -249,6 +250,7 @@ export function ImportTrigger() {
   React.useEffect(() => {
     if (phase !== "replaying") return;
     if (visibleCount >= flatLines.length) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- terminal transition of a timed reveal sequence. This one IS derivable (`phase === "replaying" && visibleCount >= flatLines.length`) and setPhase("done") has no other call site, but deriving it also requires reworking isBusy below — which would otherwise stay true forever once a run finishes — plus five other `phase === "done"` reads. That is a state-machine refactor for a component with no test coverage, so it is tracked rather than folded into a lint pass. See issue #2.
       setPhase("done");
       return;
     }

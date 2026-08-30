@@ -920,6 +920,7 @@ export default function Home() {
   const [rlReunionRows, setRlReunionRows] = useState<RlReunionRow[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- the mounted flag is an SSR hydration guard: an effect is the ONLY place it can be set, because the whole point is that it must not run on the server. Deriving it during render would defeat it.
   useEffect(() => setMounted(true), []);
 
   const [exportingDocx, setExportingDocx] = useState(false);
@@ -930,6 +931,7 @@ export default function Home() {
 
   // Load cookie preferences after mount (avoids SSR/client hydration mismatch)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reading cookies during render would produce different markup on server and client, which is the mismatch this effect exists to avoid. useState's initializer cannot read them for the same reason.
     setVisibleCardFields(loadCardFields());
     setVisibleLineFields(loadLineFields());
   }, []);

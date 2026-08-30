@@ -2,7 +2,3 @@ allowBuilds:
   unrs-resolver: true
 overrides:
   uuid: ">=11.1.1"
-  # Pinned: 7.1.1 added react-hooks/refs and set-state-in-effect as errors,
-  # which fail CI on 11 pre-existing violations. See the tracking issue before
-  # lifting this — some are deliberate SSR hydration guards.
-  eslint-plugin-react-hooks: "7.0.1"
