@@ -533,6 +533,17 @@ export type ParkingRow = {
    */
   zoning: string;
   /**
+   * The provider who did (or will do) the work, from the tab's own PRESTATAIRE
+   * column — added to the live sheet 2026-08-31 as column S, after FOUNISSEUR.
+   * Set by hand by an operator.
+   *
+   * Distinct from `founisseur`: this one is the authoritative provider name for
+   * A0.0's routing, and it is the reason that branch no longer deduces a name
+   * out of the free-text BDD column. A value containing "Scal" is AVIS's OWN
+   * in-house entity, not an external provider — see prompt-parking.ts.
+   */
+  prestataire: string;
+  /**
    * Odometer reading entered by hand into the tab's own KM column, when one is
    * present. `undefined` — not 0 — for a blank cell, because blank is the
    * normal state and a 0 would be indistinguishable from a real reading.

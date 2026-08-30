@@ -119,6 +119,7 @@ export type DsAnalysisInput = {
     /** True for AVIS's own fleet (short-term rental). See googleSheetsParc.ts. */
     isAvis?: boolean;
     zoning?: string;
+    prestataire?: string;
     bdd?: string;
   };
   replacements: DsAnalysisReplacement[];
@@ -421,6 +422,10 @@ export function buildDsAnalysisPrompt(
   if (input.vehicle.isAvis) lines.push("Propriétaire : AVIS (parc propre / location courte durée)");
   if (input.vehicle.zoning) lines.push(`ZONING (onglet) : ${input.vehicle.zoning}`);
   if (input.vehicle.bdd) lines.push(`BDD (onglet) : ${input.vehicle.bdd}`);
+  // The provider name, authoritative from its own column — A0.0's
+  // PRESTATAIRE-EXTERNE branch reads this rather than deducing a name out of
+  // BDD's free text, and a "Scal" value there means the work is INTERNAL.
+  if (input.vehicle.prestataire) lines.push(`PRESTATAIRE (onglet) : ${input.vehicle.prestataire}`);
   lines.push(`Statut du contrat (déjà calculé, à reprendre): ${contractStatus.level} — ${contractStatus.label}`);
 
   if (input.replacements.length > 0) {

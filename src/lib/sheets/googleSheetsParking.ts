@@ -32,10 +32,12 @@ const PARKING_TAB = "PARKING";
 // Must cover the LAST real column — see the note on ATELIER's
 // HEADER_RANGE_WIDTH. An earlier version of the ranges below stopped at O,
 // which made the `gemini` column invisible to this module entirely.
-// The live header row is 18 columns, A..R, ending on FOUNISSEUR (read
-// 2026-08-30): IMM, TIMESTAMP, KM, ACTION, ZONING, MARQUE, MODEL, gemini,
+// The live header row is 19 columns, A..S, ending on PRESTATAIRE (read
+// 2026-08-31): IMM, TIMESTAMP, KM, ACTION, ZONING, MARQUE, MODEL, gemini,
 // CLIENT, RL_REUNION, MOTIF, ETAT VÉHICULE, BDD, DATE_DS, DS, PARTS,
-// TECHNICEIN, FOUNISSEUR. `KM` was added to the live sheet 2026-08-29 and has
+// TECHNICEIN, FOUNISSEUR, PRESTATAIRE. PRESTATAIRE was added 2026-08-31 as a
+// NEW column S — it does not replace FOUNISSEUR (R), which still exists and is
+// empty on every row. `KM` was added to the live sheet 2026-08-29 and has
 // since been moved to column C — which cost nothing here, because every column
 // is resolved by header name. Margin to T.
 const RANGE_WIDTH = "T";
@@ -136,6 +138,7 @@ async function fetchParkingRows(fresh = false): Promise<ParkingRow[]> {
   const partsCol = colMap["PARTS"];
   const techniceinCol = colMap["TECHNICEIN"];
   const founisseurCol = colMap["FOUNISSEUR"];
+  const prestataireCol = colMap["PRESTATAIRE"];
   const geminiCol = colMap["GEMINI"];
   const zoningCol = colMap["ZONING"];
   const kmCol = colMap["KM"];
@@ -196,6 +199,7 @@ async function fetchParkingRows(fresh = false): Promise<ParkingRow[]> {
       parts: strOrEmpty(partsCol),
       technicein: strOrEmpty(techniceinCol),
       founisseur: strOrEmpty(founisseurCol),
+      prestataire: strOrEmpty(prestataireCol),
       gemini: strOrEmpty(geminiCol),
       zoning: strOrEmpty(zoningCol),
       ...(() => {
