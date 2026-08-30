@@ -38,11 +38,61 @@ const ZONES = {
 } as const;
 
 export const ZONE = ZONES;
+
+/**
+ * The zones A0.0 short-circuits on: a value already in the ZONING cell is
+ * trusted and the model produces only the fixed routing line.
+ *
+ * THE list — A0.0's prompt text says "une des cinq valeurs suivantes" and this
+ * must stay those exact five. Consumers that need to know whether a zone is
+ * fixed-routing (zonePreconditionFailure's A0.0 bypass, the ZONING route's
+ * re-analysis trigger) import this instead of rebuilding the array, which is
+ * how the prompt and the code drift apart.
+ *
+ * NOTE the other four zones are deliberately absent: DEPOT-DISPONIBLE,
+ * DISPONIBLE-A-LIVRER and AVIS-PIERRE-PARENT are named in A0.0 as explicitly
+ * NOT fixed (the full analysis decides them), and DEPOT-REMPLACEMENT is named
+ * in neither clause — an acknowledged hole in the rule text, not an omission
+ * here. A0.5.2 happens to route those rows correctly off ETAT anyway.
+ */
+export const A00_FIXED_ROUTING_ZONES: readonly string[] = [
+  ZONES.ATV,
+  ZONES.ATELIER,
+  ZONES.CARROSSERIE,
+  ZONES.PRESTATAIRE_EXTERNE,
+  ZONES.VISITE_TECHNIQUE,
+];
+
+/** True when ZONING already fixes the destination — see A00_FIXED_ROUTING_ZONES. */
+export function isFixedRoutingZone(zoning: string): boolean {
+  return A00_FIXED_ROUTING_ZONES.includes(zoning.trim());
+}
 export const PARKING_ZONE_VALUES: readonly string[] = Object.values(ZONES);
 
 // NOTE: This code-side check against PARKING_ZONE_VALUES is the sole safety net for ZONING writes; strict:true validation is unenforced server-side in Google Sheets API.
 export function isValidZone(value: string): boolean {
   return PARKING_ZONE_VALUES.includes(value);
+}
+
+/**
+ * ATELIER's suppression sentence, reused verbatim for the other fixed-routing
+ * branches of A0.0.
+ *
+ * Measured 2026-08-30: with only the destination stated, the model read ZONING
+ * correctly but would not stop analysing — 39360-B-7 and 25044-T-6 both ran a
+ * full checklist 8/8 on a ZONING already set to «visite technique», while
+ * 46540-B-7 complied 8/8. Per-vehicle deterministic, and the failures were the
+ * vehicles with the most history: abundant checklist material outcompetes a
+ * short-circuit that never says "add nothing". ATELIER was the one branch that
+ * said it, so its wording is what the others now get.
+ */
+function noAnalysisNote(zone: string): string[] {
+  return [
+    "        Une seule ligne, ce texte exact. N'ajoute aucun point de contrôle,",
+    `        aucun entretien dépassé, aucune récurrence : la zone « ${zone} »`,
+    "        déjà posée signifie que le véhicule y va directement, sans liste",
+    "        de vérifications préalables.",
+  ];
 }
 
 export const DS_PARKING_WORKORDER_PROMPT = [
@@ -77,6 +127,7 @@ export const DS_PARKING_WORKORDER_PROMPT = [
   "",
   `    ZONING = « ${ZONES.CARROSSERIE} »`,
   `        actions = [ « Envoyer vers ${ZONES.CARROSSERIE} » ]`,
+  ...noAnalysisNote(ZONES.CARROSSERIE),
   "",
   `    ZONING = « ${ZONES.PRESTATAIRE_EXTERNE} »`,
   `        actions = [ « Envoyer vers ${ZONES.PRESTATAIRE_EXTERNE}<NOM> » ]`,
@@ -87,12 +138,15 @@ export const DS_PARKING_WORKORDER_PROMPT = [
   "        N'INVENTE AUCUN NOM — écris la ligne sans parenthèse. Un nom",
   "        déduit d'une supposition plutôt que lu dans BDD est exactement le",
   "        type d'invention que les règles de grounding interdisent.",
+  ...noAnalysisNote(ZONES.PRESTATAIRE_EXTERNE),
   "",
   `    ZONING = « ${ZONES.ATV} »`,
   `        actions = [ « Envoyer vers ${ZONES.ATV} » ]`,
+  ...noAnalysisNote(ZONES.ATV),
   "",
   `    ZONING = « ${ZONES.VISITE_TECHNIQUE} »`,
   `        actions = [ « Envoyer vers ${ZONES.VISITE_TECHNIQUE} » ]`,
+  ...noAnalysisNote(ZONES.VISITE_TECHNIQUE),
   "",
   `    ZONING = « ${ZONES.ATELIER} »`,
   '        actions = [ « Merci de créer le DS et faire entrer à l\'atelier » ]',

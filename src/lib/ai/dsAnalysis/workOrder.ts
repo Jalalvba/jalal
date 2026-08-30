@@ -6,7 +6,7 @@
 // instruction is something they have to delete before pasting.
 
 import type { DsAnalysis } from "@/lib/ai/prompts/dsAnalysis";
-import { PARKING_ZONE_VALUES, ZONE, isValidZone } from "@/lib/ai/dsAnalysis/prompt-parking";
+import { A00_FIXED_ROUTING_ZONES, PARKING_ZONE_VALUES, ZONE, isValidZone } from "@/lib/ai/dsAnalysis/prompt-parking";
 
 /** A cell holding more than this is unusable in a spreadsheet UI anyway. */
 const MAX_CELL = 1500;
@@ -315,7 +315,7 @@ export function zonePreconditionFailure(zone: string, vehicle: ZoneVehicle): str
   // A0.0 Bypasses preconditions if the zone was already fixed in the sheet
   if (
     currentZoning === zone &&
-    ([ZONE.ATV, ZONE.ATELIER, ZONE.CARROSSERIE, ZONE.PRESTATAIRE_EXTERNE, ZONE.VISITE_TECHNIQUE] as readonly string[]).includes(zone)
+    A00_FIXED_ROUTING_ZONES.includes(zone)
   ) {
     return null;
   }
