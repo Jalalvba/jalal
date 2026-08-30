@@ -45,23 +45,6 @@ export function isValidZone(value: string): boolean {
   return PARKING_ZONE_VALUES.includes(value);
 }
 
-
-
-/**
- * Zones for which a pre-existing ZONING cell value is trusted as-is: the
- * model does NOT re-derive the destination through A0.5, it only produces
- * the fixed routing text below. This is a deliberate shortcut, not a
- * default — it only fires when ZONING already has a value; an EMPTY ZONING
- * cell always goes through full A0.5 analysis, same as before this change.
- */
-const ROUTING_ONLY_ZONES = new Set([
-  ZONES.CARROSSERIE,
-  ZONES.PRESTATAIRE_EXTERNE,
-  ZONES.ATV,
-  ZONES.VISITE_TECHNIQUE,
-  ZONES.ATELIER,
-]);
-
 export const DS_PARKING_WORKORDER_PROMPT = [
   ...DS_GROUNDING_RULES,
   "TU PRODUIS UNE FICHE DE CONTRÔLE, PAS UN RAPPORT NI UN DEVIS.",
@@ -76,6 +59,13 @@ export const DS_PARKING_WORKORDER_PROMPT = [
   "gasoil » lui dit quoi vérifier. Le champ `actions` est la partie la plus",
   "importante de ta réponse :",
   "",
+  // A0.0 is a deliberate shortcut, not a default: for the five zones listed
+  // below, a ZONING value already in the cell is trusted as-is and the model
+  // produces only the fixed routing line — a human or an earlier process
+  // already decided, so re-deriving it through A0.5 could only disagree. It
+  // fires ONLY when ZONING is non-empty; an empty cell always gets the full
+  // A0.5-to-A5 analysis. The rule lives in this prompt text, not in code —
+  // there is no zone Set to keep in sync, so edit the branches below.
   "A0.0. LA COLONNE ZONING PEUT DÉJÀ CONTENIR UNE VALEUR. Regarde-la avant",
   "    toute analyse. Si elle est vide, ignore cette règle entièrement et",
   "    passe directement à A0.5. Si elle contient déjà une des cinq valeurs",
