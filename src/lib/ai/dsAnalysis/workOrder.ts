@@ -90,6 +90,9 @@ const EMPTY_SUBJECTS = new Set([
 
 const CONTROL_VERBS = /^(contrôler|controler|vérifier|verifier|diagnostiquer|remplacer|effectuer|réaliser|realiser|faire)\s+(l[ea]s?\s+|l'|du\s+|de\s+la\s+|des\s+|au\s+)?/i;
 
+/** « Envoyer vers PRESTATAIRE-EXTERNE (Nom) » — see the exception in enforceActionStyle. */
+const PROVIDER_ROUTING_LINE = /^\s*envoyer vers\s+PRESTATAIRE-EXTERNE\s*\(/i;
+
 export function enforceActionStyle(actions: readonly string[] | undefined): string[] {
   if (!actions) return [];
   const DATE = /\b(\d{1,2}\/\d{1,2}\/\d{4}|\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})\b/g;
@@ -97,6 +100,22 @@ export function enforceActionStyle(actions: readonly string[] | undefined): stri
   const out: string[] = [];
 
   for (const raw of actions) {
+    // A2's ONE stated exception, which this function never implemented: the
+    // provider name on the PRESTATAIRE-EXTERNE routing line is an identity
+    // copied from the PRESTATAIRE column, not the parenthetical justification
+    // A2 forbids. Without this the strip below deletes it and the line silently
+    // loses the only thing that says WHICH provider — which is why the name
+    // never reached the ACTION cell even once it was produced correctly.
+    if (PROVIDER_ROUTING_LINE.test(String(raw ?? ""))) {
+      const kept = String(raw).trim();
+      const dedupeKey = kept.toLowerCase();
+      if (kept && !seen.has(dedupeKey)) {
+        seen.add(dedupeKey);
+        out.push(kept);
+      }
+      continue;
+    }
+
     let cleaned = String(raw ?? "")
       // Parenthesised commentary, including the nested-free case
       // "(3 interventions : 2025-01-04, ...)".
@@ -272,6 +291,8 @@ export type ZoneVehicle = {
   cpStatus?: string;
   /** ZONING, as currently stored in the sheet. */
   zoning?: string;
+  /** PRESTATAIRE, as currently stored in the sheet (column S). */
+  prestataire?: string;
 };
 
 /** Contract states that mean the vehicle has left the billed fleet (A0.5.1). */
@@ -306,6 +327,62 @@ const CLOSED_CONTRACT = ["ARRET FACTURATION", "RESTITUÉ"];
  * necessary, purely factual gate) but no measured failure. Documented as
  * inference, not evidence.
  */
+/** ATELIER's mandated line — the one A0.0 text that is not "Envoyer vers <zone>". */
+export const ATELIER_ACTION = "Merci de créer le DS et faire entrer à l'atelier";
+
+/**
+ * A0.0, decided in code instead of asked of the model.
+ *
+ * Returns the mandated single-line work order when ZONING already fixes the
+ * destination, or null when the full A0.5-to-A5 analysis should run.
+ *
+ * WHY THIS IS NOT A PROMPT RULE ANY MORE. A0.0 is stated in prompt-parking.ts
+ * and the model reads ZONING correctly — it simply will not stop analysing a
+ * vehicle that has material to analyse. Measured on the live tab, 8 runs per
+ * vehicle, current prompt:
+ *
+ *   39360-B-7  ZONING «visite technique»  0/8   6-line checklist every run
+ *   25044-T-6  ZONING «visite technique»  0/8   5-7 line checklist every run
+ *   18148-T-6  ZONING «ATELIER»           0/8   3-line checklist every run
+ *   47138-B-7  ZONING «PRESTATAIRE-EXTERNE» 0/8 3-line checklist every run
+ *
+ * Three separate wording attempts failed to move those numbers: ATELIER-style
+ * suppression language added to all five branches (0/8, unchanged), a
+ * three-case PRESTATAIRE branch (0/8, and it pushed a previously compliant
+ * plate from 8/8 to 0/8), and the earlier A0.5.4 rewrite this file's
+ * zonePreconditionFailure header already records. The failures track how much
+ * history the vehicle has: abundant checklist material outcompetes an
+ * instruction to produce no checklist. That is not a phrasing problem.
+ *
+ * Every branch here is a pure function of two cells, with no judgement in it —
+ * which is exactly the kind of rule that belongs in code, and is the same move
+ * zonePreconditionFailure makes for A0.5. The prompt keeps its A0.0 text as
+ * defence in depth; this is what actually decides.
+ */
+export function fixedRoutingActions(vehicle: ZoneVehicle): string[] | null {
+  const zoning = String(vehicle.zoning ?? "").trim();
+  if (!A00_FIXED_ROUTING_ZONES.includes(zoning)) return null;
+
+  if (zoning === ZONE.ATELIER) return [ATELIER_ACTION];
+
+  if (zoning === ZONE.PRESTATAIRE_EXTERNE) {
+    const prestataire = String(vehicle.prestataire ?? "").trim();
+    // "Scal" — in any case, anywhere in the value ("Scal Casa", "SCAL AVIS") —
+    // is AVIS's OWN in-house entity. An operator naming Scal has said the work
+    // is internal, which cannot be true at the same time as "external
+    // provider", so PRESTATAIRE overrides ZONING and the vehicle goes to the
+    // workshop.
+    if (/scal/i.test(prestataire)) return [ATELIER_ACTION];
+    // Verbatim: an operator-entered field, not free text to interpret. Nothing
+    // to invent when it is empty, so the line simply carries no name.
+    return prestataire
+      ? [`Envoyer vers ${ZONE.PRESTATAIRE_EXTERNE} (${prestataire})`]
+      : [`Envoyer vers ${ZONE.PRESTATAIRE_EXTERNE}`];
+  }
+
+  return [`Envoyer vers ${zoning}`];
+}
+
 export function zonePreconditionFailure(zone: string, vehicle: ZoneVehicle): string | null {
   const etat = String(vehicle.etat ?? "").trim().toUpperCase();
   const cp = String(vehicle.cpStatus ?? "").trim().toUpperCase();

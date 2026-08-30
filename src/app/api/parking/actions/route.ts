@@ -28,13 +28,14 @@ import { AiCallError } from "@/lib/ai";
 import { log, serializeError } from "@/lib/http/logger";
 import { GET as dsHistoryGET } from "@/app/api/ds/history/route";
 import { buildDsAnalysisPayload } from "@/lib/ai/dsAnalysis/payload";
-import { canonicalizeSuppliers } from "@/lib/ai/prompts/dsAnalysis";
+import { canonicalizeSuppliers, computeContractStatus } from "@/lib/ai/prompts/dsAnalysis";
 import { runDsAnalysis, resolveTier } from "@/lib/ai/dsAnalysis/run";
 import { resolveCpStatus } from "@/lib/vehicle/contractEnd";
 import { DS_PARKING_WORKORDER_PROMPT } from "@/lib/ai/dsAnalysis/prompt-parking";
 import { getAnalysis, recordActionText, saveAnalysis } from "@/lib/mongo/dsAnalyses";
 import { isStale, promptFingerprint } from "@/lib/ai/dsAnalysis/stored";
 import {
+  fixedRoutingActions,
   formatWorkOrder,
   mayOverwrite,
   parseDestinationZone,
@@ -293,6 +294,23 @@ export async function POST(request: Request) {
       // 52722-B-7, both of which have real operations outstanding. An `actions`
       // array that is present but EMPTY is a genuine "nothing to do" and is
       // reused; an absent one means nobody ever asked.
+      // The facts every zone decision is made from — built once and shared by
+      // the A0.0 short-circuit below, withDestination() (ACTION) and applyZone()
+      // (ZONING), so all three judge the same destination against the same data.
+      const vehicle: ZoneVehicle = {
+        etat: String(row.etatVehicule ?? ""),
+        isAvis: row.isAvis === true,
+        cpStatus,
+        zoning: String(row.zoning ?? "").trim(),
+        prestataire: String(row.prestataire ?? "").trim(),
+      };
+
+      // A0.0, decided here rather than asked of the model — see
+      // fixedRoutingActions()'s header for the measurements that moved it into
+      // code. A zone already in the cell means a human or an earlier process
+      // decided, so there is nothing to analyse and no model call to pay for.
+      const fixedActions = fixedRoutingActions(vehicle);
+
       const stored = await getAnalysis(imm);
       const currentPrompt = promptFingerprint(DS_PARKING_WORKORDER_PROMPT);
       const fresh =
@@ -322,10 +340,39 @@ export async function POST(request: Request) {
 
       // Parking's OWN prompt — not DS History's. Same data, same grounding
       // rules, different output: a work order rather than a report.
-      const analysis = fresh
-        ? stored!.analysis
-        : (await runDsAnalysis(input, tier, DS_PARKING_WORKORDER_PROMPT)).analysis;
-      const costUsd = fresh ? 0 : undefined;
+      const analysis = fixedActions
+        ? {
+            contractFlag: computeContractStatus(input.contractEnd),
+            actions: fixedActions,
+            // Empty by construction: there is nothing to report about a vehicle
+            // whose destination was already decided elsewhere.
+            findings: [],
+            summary: `Zone déjà déterminée : ${vehicle.zoning}.`,
+            insufficientData: false,
+          }
+        : fresh
+          ? stored!.analysis
+          : (await runDsAnalysis(input, tier, DS_PARKING_WORKORDER_PROMPT)).analysis;
+      const costUsd = fresh || fixedActions ? 0 : undefined;
+
+      // runDsAnalysis() stores its own answer; this path never called it, so it
+      // stores its own. promptHash is a sentinel rather than a fingerprint: no
+      // prompt produced this, and "never matches, always recomputed" is right
+      // when recomputing is free — the same choice the status-only path makes.
+      if (fixedActions) {
+        await saveAnalysis({
+          imm,
+          analysis,
+          tier,
+          model: "aucun (routage fixe A0.0)",
+          costUsd: 0,
+          entriesCount: input.entries.length,
+          lastEntryDate: input.entries[0]?.date ?? null,
+          manualKm: input.manualKm,
+          routing: { zoning: vehicle.zoning, etat: vehicle.etat, cpStatus: vehicle.cpStatus },
+          promptHash: "fixed-routing",
+        });
+      }
 
       // The model's answer, with the status-only work order as a FLOOR: rule
       // A4b makes an empty list impossible in every case but a closed
@@ -337,12 +384,6 @@ export async function POST(request: Request) {
       // The facts every zone precondition is decided from — built once and
       // passed to both withDestination() (ACTION) and applyZone() (ZONING), so
       // the two columns judge the same destination against the same data.
-      const vehicle: ZoneVehicle = {
-        etat: String(row.etatVehicule ?? ""),
-        isAvis: row.isAvis === true,
-        cpStatus,
-        zoning: String(row.zoning ?? "").trim(),
-      };
       // withDestination() now KEEPS the model's own A0.5 choice and only falls
       // back to statusWorkOrder() when it produced no destination at all. The
       // resulting list is what both the ACTION cell and the zone parse read, so
