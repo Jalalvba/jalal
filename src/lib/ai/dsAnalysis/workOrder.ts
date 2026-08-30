@@ -313,7 +313,10 @@ export function zonePreconditionFailure(zone: string, vehicle: ZoneVehicle): str
   const currentZoning = String(vehicle.zoning ?? "").trim();
 
   // A0.0 Bypasses preconditions if the zone was already fixed in the sheet
-  if (currentZoning === zone && [ZONE.ATV, ZONE.ATELIER, ZONE.CARROSSERIE, ZONE.PRESTATAIRE_EXTERNE, ZONE.VISITE_TECHNIQUE].includes(zone as any)) {
+  if (
+    currentZoning === zone &&
+    ([ZONE.ATV, ZONE.ATELIER, ZONE.CARROSSERIE, ZONE.PRESTATAIRE_EXTERNE, ZONE.VISITE_TECHNIQUE] as readonly string[]).includes(zone)
+  ) {
     return null;
   }
 

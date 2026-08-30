@@ -38,11 +38,11 @@ const ZONES = {
 } as const;
 
 export const ZONE = ZONES;
-export const PARKING_ZONE_VALUES = Object.values(ZONES);
+export const PARKING_ZONE_VALUES: readonly string[] = Object.values(ZONES);
 
 // NOTE: This code-side check against PARKING_ZONE_VALUES is the sole safety net for ZONING writes; strict:true validation is unenforced server-side in Google Sheets API.
 export function isValidZone(value: string): boolean {
-  return PARKING_ZONE_VALUES.includes(value as any);
+  return PARKING_ZONE_VALUES.includes(value);
 }
 
 
