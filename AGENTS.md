@@ -53,22 +53,34 @@ for it.
 Do not restate or fork these rules elsewhere. If a rule needs to change,
 edit it here once — every other doc links in rather than duplicating it.
 
-## Multi-Tool Workflow: Gemini/Antigravity is Read-Only
+## Multi-Tool Workflow: two writers, one system of record
 
-This project uses two AI tools with strictly separated roles:
+This project uses two AI tools. Both may write **code**; only Claude Code
+may write **data**.
 
-- **Claude Code**: the ONLY tool permitted to write, edit, or execute
-  changes in this repository. All code changes, file edits, commits, and
-  test runs happen exclusively through Claude Code.
-- **Antigravity CLI / Gemini**: READ-ONLY audit and research tool. No
-  exceptions.
+- **Claude Code**: full read/write on the repository, and the only tool
+  permitted to run write operations against Google Sheets, MongoDB,
+  Drive, or Gmail.
+- **Antigravity CLI / Gemini**: full read/write on repository **files** —
+  create, edit, delete, run commands, run `tsc`/lint/tests, commit — but
+  **strictly read-only on every connected service**.
+
+The split is about what a mistake costs, not about trust. A bad file edit
+is caught by a diff and undone with `git revert`. A bad Sheets or Mongo
+write lands in the live fleet system of record, where the PARKING/BDD/RDV
+tabs drive real physical work — a wrongly-placed vehicle is a move
+someone has to undo, and no code review will catch it. That surface keeps
+exactly one writer.
 
 ### Hard rules for Gemini/Antigravity sessions in this repo
 
-1. **Never write, edit, delete, or modify any file.** No code changes, no
-   config changes, no committing, no running write operations against
-   MongoDB, Google Sheets, Google Drive, Gmail, or any other connected
-   Google API/service — read-only access to all of these, always.
+1. **Never run a write operation against MongoDB, Google Sheets, Google
+   Drive, Gmail, or any other connected Google API/service** — read-only
+   access to all of these, always, with no exceptions. This holds even
+   when a task would be easier with a write, and even when the write
+   looks trivially small or obviously correct. Editing repo files is
+   permitted; touching live data is not. If a task genuinely requires a
+   data write, say so explicitly and hand it to Claude Code.
 2. **Never claim something is true without citing where it was verified**
    (a specific file/line, a specific live read of a Sheet tab, a specific
    query result). Given this project relies heavily on Google Sheets/
@@ -76,37 +88,41 @@ This project uses two AI tools with strictly separated roles:
    names, or data contents must be based on an actual read performed
    during that session — not assumed, not remembered from a prior
    session, not inferred from a filename.
-3. **Every Gemini/Antigravity session must end by producing a single,
-   ready-to-use prompt** — written for Claude Code to execute —
-   summarizing the audit findings and the exact recommended action. This
-   prompt is the ONLY output the human should need to copy; Gemini/
-   Antigravity itself makes zero changes to the project directly.
-4. **If a task requires making an actual change, Gemini/Antigravity must
-   decline and say so explicitly** — e.g. "This requires a code change,
-   which I cannot make. Here is the prompt to give Claude Code instead:"
-   — rather than attempting the change itself under any circumstance.
-5. **Claude Code must independently verify any finding from a Gemini/
-   Antigravity-sourced prompt against the real, live codebase/data before
-   acting on it** — same as any other unverified claim, per the Mandatory
-   Verification Protocol below. A read-only audit tool can still be wrong
-   or working from stale context; verification stays required regardless
-   of source.
+3. **Anything written to the repo must be verified before the session
+   ends**: `pnpm exec tsc --noEmit`, `pnpm lint`, and `pnpm test` all
+   green, and `git status` reported so nothing is left uncommitted by
+   surprise. Code that was never type-checked is not a finished change.
+4. **Commit small and often, and never force-push.** Each commit should
+   be revertible on its own — that revertibility is the entire reason
+   file writes are permitted at all. Leave the working tree clean.
+5. **Neither tool may edit this file, `CLAUDE.md`, or `GEMINI.md` to
+   widen its own permissions.** These three state one policy and are
+   changed together, deliberately, by the human — never as a side effect
+   of another task. An agent that finds them in conflict must stop and
+   report the conflict rather than pick whichever reading grants it more
+   access.
+6. **Each tool must independently verify the other's findings against the
+   real, live codebase/data before acting on them** — same as any other
+   unverified claim, per the Mandatory Verification Protocol below. Any
+   agent can be wrong or working from stale context; verification stays
+   required regardless of source.
 
 ### Mandatory Verification Protocol (applies to all findings, any source)
 
 - Factual claims about project structure, Sheet/tab contents, database
   state, or bug causes must be checked against real, live data (`git
   diff`, `grep`, a direct Sheets/MongoDB read, or a real running test)
-  before Claude Code acts on them.
+  before either tool acts on them.
 - Neither tool's assertions override direct, observable output.
 
-### Handoff Checklist (Claude Code only, since it's the sole writer)
+### Checklist after any change (both tools)
 
-- Before starting work from a Gemini-sourced prompt: verify its claims
-  against the real repo/data first, per the protocol above.
-- After any change: `git status`, `pnpm exec tsc --noEmit`, `pnpm lint`.
+- Verify claims against the real repo/data first, per the protocol above.
+- After any change: `git status`, `pnpm exec tsc --noEmit`, `pnpm lint`,
+  `pnpm test`.
 - Commit small and often so any mistaken change is trivially revertible
   (`git revert`).
+- A data change — anything in Sheets or Mongo — is Claude Code's alone.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

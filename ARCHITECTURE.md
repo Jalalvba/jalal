@@ -87,7 +87,7 @@ and only ever read here — plus two small app-owned collections
 |---|---|
 | [`AGENTS.md`](./AGENTS.md) | **The 5 inviolable rules**, for any AI assistant. Never fork or restate. |
 | [`CLAUDE.md`](./CLAUDE.md) | Claude Code entry point — stack, env vars, theming, feature table |
-| [`GEMINI.md`](./GEMINI.md) | Gemini CLI / Antigravity entry point (read-only sessions) |
+| [`GEMINI.md`](./GEMINI.md) | Gemini CLI / Antigravity entry point (may write code, read-only on live data) |
 | [`PROJECT_HISTORY.md`](./PROJECT_HISTORY.md) | Commit-by-commit chronology and reasoning |
 | [`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md) | File/line-cited security verification |
 | [`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md) | Colour, typography, radius, error-banner conventions |
