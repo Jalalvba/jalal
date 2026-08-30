@@ -225,6 +225,10 @@ export async function POST(request: Request) {
           costUsd: 0,
           entriesCount: 0,
           lastEntryDate: null,
+          routing: {
+            zoning: String(row.zoning ?? "").trim() || undefined,
+            etat: String(row.etatVehicule ?? "").trim() || undefined,
+          },
           // Not a prompt: this answer comes from the status rules in code.
           // Never matches a prompt fingerprint, so it is always recomputed —
           // which costs nothing, since no model is involved.
@@ -305,6 +309,14 @@ export async function POST(request: Request) {
           // A corrected odometer changes every verdict without touching the
           // history, so it has to participate in the reuse decision.
           manualKm: input.manualKm,
+          // And so do the routing facts: A0.0 fires off ZONING, which applyZone()
+          // below WRITES from this very answer. Without this the first run's full
+          // work order is pinned forever and A0.0 never gets a second chance.
+          routing: {
+            zoning: input.vehicle.zoning,
+            etat: input.vehicle.state,
+            cpStatus: input.vehicle.cpStatus,
+          },
         });
 
       // Parking's OWN prompt — not DS History's. Same data, same grounding

@@ -11,6 +11,30 @@ import type { DsAnalysis } from "@/lib/ai/prompts/dsAnalysis";
 
 export type AnalysisTier = "standard" | "pro";
 
+/**
+ * The vehicle facts that decide a destination WITHOUT touching the DS history —
+ * so they have to take part in the reuse decision. See StoredDsAnalysis.routing.
+ */
+export type RoutingFacts = {
+  zoning?: string;
+  etat?: string;
+  cpStatus?: string;
+};
+
+/** Case- and whitespace-insensitive, and absent compares equal to empty. */
+function sameFact(a: string | undefined, b: string | undefined): boolean {
+  return String(a ?? "").trim().toUpperCase() === String(b ?? "").trim().toUpperCase();
+}
+
+/** True when any routing fact moved since the stored answer was produced. */
+export function routingChanged(a: RoutingFacts | undefined, b: RoutingFacts | undefined): boolean {
+  return (
+    !sameFact(a?.zoning, b?.zoning) ||
+    !sameFact(a?.etat, b?.etat) ||
+    !sameFact(a?.cpStatus, b?.cpStatus)
+  );
+}
+
 export type StoredDsAnalysis = {
   imm: string;
   analysis: DsAnalysis;
@@ -61,6 +85,23 @@ export type StoredDsAnalysis = {
    * old mileage — which is precisely the number the operator just corrected.
    */
   manualKm?: number;
+  /**
+   * The routing facts this answer was computed against: ZONING, ETAT VÉHICULE
+   * and the cp contract status, as they stood when the model ran.
+   *
+   * Stored for the same reason manualKm is, and it is the same bug. Prompt rule
+   * A0.0 short-circuits to a single routing line when ZONING already holds one
+   * of the five fixed zones, and A0.5.1 does the same off ETAT/cp — but the
+   * ANALYSIS ITSELF sets ZONING, via applyZone() in /api/parking/actions. So a
+   * vehicle analysed with an empty ZONING gets a full work order, that work
+   * order's destination is written back into ZONING, and every later run then
+   * sees entriesCount/lastEntryDate unmoved and reuses the pre-ZONING answer
+   * forever. A0.0 never gets a second chance to fire and the row cannot
+   * self-correct. Measured on 31195-B-7 (2026-08-30): ZONING «DEPOT-ATV» and
+   * ETAT «ATV», yet the stored answer was a 3-check work order; re-running the
+   * live row against the same prompt gave the correct single line 20/20.
+   */
+  routing?: RoutingFacts;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -80,14 +121,20 @@ export type DsAnalysisSummary = Pick<
  * picture changed.
  */
 export function isStale(
-  stored: Pick<StoredDsAnalysis, "entriesCount" | "lastEntryDate" | "manualKm">,
-  current: { entriesCount: number; lastEntryDate: string | null; manualKm?: number }
+  stored: Pick<StoredDsAnalysis, "entriesCount" | "lastEntryDate" | "manualKm" | "routing">,
+  current: { entriesCount: number; lastEntryDate: string | null; manualKm?: number; routing?: RoutingFacts }
 ): boolean {
   if (current.entriesCount !== stored.entriesCount) return true;
   // An analysis stored before this field existed has `undefined`, and a vehicle
   // with no override also passes `undefined` — so the two compare equal and no
   // existing stored answer is invalidated just by this field appearing.
   if ((current.manualKm ?? null) !== (stored.manualKm ?? null)) return true;
+  // ZONING / ETAT / cp decide the destination on their own (A0.0, A0.5.1) and
+  // move without the history moving — including when this app's own zone write
+  // is what moved them. Absent compares equal to empty, so a stored answer for
+  // a vehicle that still has none of these is not invalidated just by the field
+  // appearing.
+  if (routingChanged(current.routing, stored.routing)) return true;
   return (current.lastEntryDate ?? "") !== (stored.lastEntryDate ?? "");
 }
 

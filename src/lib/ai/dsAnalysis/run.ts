@@ -264,6 +264,15 @@ export async function runDsAnalysis(
       // so a corrected km forces a re-run, the same way promptHash does for a
       // rules change.
       manualKm: input.manualKm,
+      // ZONING / ETAT / cp as they stood for THIS run. isStale() compares them
+      // so a zone that appeared afterwards — including one this app's own
+      // applyZone() wrote — forces a re-run instead of pinning the answer that
+      // was produced before it existed. See StoredDsAnalysis.routing.
+      routing: {
+        zoning: input.vehicle.zoning,
+        etat: input.vehicle.state,
+        cpStatus: input.vehicle.cpStatus,
+      },
       // Which rules produced this. A later run under different rules must not
       // reuse it — see StoredDsAnalysis.promptHash.
       promptHash: promptFingerprint(systemPrompt),

@@ -122,6 +122,13 @@ export async function POST(request: Request) {
           // A corrected odometer changes every verdict without touching the
           // history, so it has to participate in the reuse decision.
           manualKm: input.manualKm,
+          // Same reuse key as the sibling /actions route — one store, so a stored
+          // answer has to be judged stale on the same facts from either side.
+          routing: {
+            zoning: input.vehicle.zoning,
+            etat: input.vehicle.state,
+            cpStatus: input.vehicle.cpStatus,
+          },
         });
 
       // No prompt argument: this is the DS History analysis, the default.
