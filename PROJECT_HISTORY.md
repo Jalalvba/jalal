@@ -984,6 +984,147 @@ on the live deployment afterwards: 21 cards before, 21 after, no page errors.
 
 Detail: [`docs/cross-cutting.md`](./docs/cross-cutting.md) §8.1.
 
+### Parking: a hand-entered odometer, and the model's zone reaching the sheet
+
+`9877bff` through `549a408`. Two Parking changes that turned out to depend on
+each other, plus the toolchain fallout of shipping them.
+
+**The odometer had no way to be corrected.** Every maintenance interval check
+runs against `currentKmOf()`, which takes the highest reading across the DS
+history — and the DS history only knows the mileage of interventions that were
+BILLED. A vehicle that had run for months without a DS line therefore had its
+real mileage recorded nowhere, and the checks were confidently wrong against a
+stale maximum. A `KM` column was added to the PARKING tab with an editable field
+on the card behind `POST /api/parking/km`. `resolveVehicleKm()` was put next to
+`currentKmOf()` so the precedence is stated exactly once — a valid manual
+reading wins, anything else falls back to DS — and `checkInterval()`/
+`checkBeltPump()` take it as an optional trailing argument, leaving Atelier,
+Depot and DS History byte-identically unaffected, which a test pins. A manual
+reading below the last service of its type returns `"unknown"` naming both
+figures rather than a clamped or negative gap. `isStale()` gained `manualKm`,
+because a corrected odometer changes every verdict without adding a DS entry and
+a re-run would otherwise reuse the analysis computed against the number the
+operator had just fixed.
+
+**The prompt's nine zone criteria could never reach the sheet.**
+`withDestination()` discarded the model's A0.5 choice and substituted
+`statusWorkOrder()`'s four etat/isAvis outcomes, so everything A0.5 reasoned
+about was thrown away before it was written. It now keeps the model's zone and
+`statusWorkOrder()` survives as the fallback only — which deliberately changed
+the ACTION text of every vehicle. `/api/parking/actions` also began writing
+`ZONING` itself, via `updateZoning()` behind `verifyRowIdentity()`.
+
+Two guards stand in front of that write, and neither is decorative. The exact
+match against the dropdown is the only real enforcement there is: the Sheets
+API was verified live NOT to enforce `strict:true` validation on writes.
+`zonePreconditionFailure()` is the single source of truth for the factual gates
+behind criteria A0.5.1/2/3/4. Measured over 8 live vehicles, twice: the model
+sent 908977WW and 18148-T-6 to `AVIS-PIERRE-PARENT` with a non-AVIS owner AND no
+part-change action, neither conjunct met. Rewording criterion 4 alone corrected
+3 of 6 and pushed a previously correct vehicle into the failure set — which is
+the whole argument for the boolean living in code rather than in prose. Both
+guards refuse rather than substitute, matching `ungroundedDates()` and
+`ungroundedSuppliers()`, which drop an unsupported item instead of rewriting it;
+`ZONING` is skipped, not defaulted, on `insufficientData`. Criteria 5/6
+(interpretive) and 7/8/9 (residual) are deliberately unguarded.
+
+The three zone lists — `prompt-parking.ts`, `ZONING_OPTIONS_FALLBACK`, and the
+Mongo option set — were made byte-identical to the sheet's own validation rule,
+verified as ordered array equality. `ZONING_OPTIONS` had been in `OPTION_KEYS`
+but missing from the seed script's `SEED_VALUES`, so it had never been seeded at
+all.
+
+**A0.0: a zone already in the cell is a decision, not a hypothesis.** `e0dcf9d`.
+For five fixed-routing zones — `CARROSSERIE-FSM`, `PRESTATAIRE-EXTERNE`,
+`DEPOT-ATV`, `visite technique`, `ATELIER` — a non-empty `ZONING` cell records
+a choice a human or an earlier process already made, and re-deriving it through
+A0.5 could only disagree. A wrongly-placed vehicle is a physical move somebody
+has to undo. So the model emits the routing line alone, with no findings, no
+recurrence search and no control points. The other three zones depend on what
+the analysis finds and keep the full path, as does an empty cell.
+`zonePreconditionFailure()` needed a matching bypass or the shortcut was
+unreachable in practice — a `DEPOT-ATV` row on an LLD vehicle parses a valid
+zone and is then rejected by A0.5.1. Traced live, one plate per zone: 47138-B-7,
+57109-B-7 and 52090-B-7 each held their preset zone and produced the fixed line;
+`DEPOT-ATV` and `visite technique` had no live row, so both were exercised on a
+temporary value on 46540-B-7 and restored afterwards.
+
+`0429a96` then deleted `ROUTING_ONLY_ZONES`. The `Set` was never read — A0.0 is
+enforced entirely as prompt text — so it was a second, silent copy of the same
+five zones, free to drift from the branches below it without anything failing.
+`2fb6777` removed two `as any` casts introduced by the same work: casting the
+value silences `Object.values()`-over-`as const` by discarding the very check
+`isValidZone()` exists to perform. The list was widened instead of the value
+narrowed.
+
+**Temperature became per-prompt.** The work order runs at 0 — it is a
+classification, and variance there is a correctness bug — while DS History stays
+at 0.2. Keyed on the prompt rather than the route, because `/api/parking/analyse`
+is a Parking route that runs the DS History prompt. Measured honestly: 0 fixed
+two of six drifting vehicles but not all, so greedy decoding is not determinism
+on this provider. The guards, not the temperature, are what keep a wrong zone off
+the sheet.
+
+**The dependency bump, and what it cost.** `ec72afa` bumped Radix, TanStack
+Query, docx, lucide-react and mongodb, and pinned devDependencies from bare
+majors to real floors. `uuid` was overridden to `>=11.1.1` because exceljs@4.4.0
+pins uuid@8.3.2, which carries GHSA-w5hq-g745-h8pq — `v3()`/`v5()`/`v6()` write
+into a caller-supplied buffer with no bounds check. This app was never exposed:
+exceljs imports only `v4()`, which already raised `RangeError` correctly, so the
+override keeps `pnpm audit` clean rather than fixing a reachable bug. Verified in
+a detached worktree carrying only those three files, so the A0.0 work could not
+mask a break. `61e715e` then deleted the duplicate `pnpm.overrides` block from
+`package.json`: pnpm 11 no longer reads that field and warned on every run, and
+only the `pnpm-workspace.yaml` copy was doing anything — which is why the
+lockfile was deliberately left out of that commit.
+
+That bump broke CI. `e04ee14`: the Lint step went red on main with 11 errors
+across four files **none of which had changed** — `git diff` reported all four
+byte-identical to the last green run. The bump had pulled
+`eslint-plugin-react-hooks` from 7.0.1 to 7.1.1 transitively, and 7.1.1 ships
+`react-hooks/refs` and `react-hooks/set-state-in-effect` as errors. Production
+was never affected; only the gate was broken, and `verify-field-names` and the
+Vitest suite were being skipped as a result. Pinned back as the smallest change
+that restored the gate.
+
+`549a408` lifted that pin and triaged the 11 properly, in three outcomes.
+Four were correct as written — SSR hydration guards, where an effect is the only
+place they can run because the entire point is that they must NOT run on the
+server — and got narrow suppressions each stating why. One was genuinely
+derivable but deferred: deriving `ImportTrigger`'s `setPhase("done")` also
+requires reworking `isBusy` and five other reads, a state-machine refactor in a
+component with no test coverage, and folding that into a lint pass is how a green
+build hides a stuck spinner. The remaining six are an inherent conflict:
+`useStableRowOrder` reads and writes refs during render, which the rule flags
+correctly, but the order has to be known DURING the render that uses it —
+routing it through state renders the server order first and corrects it a frame
+later, which is exactly the row-jumping the hook exists to prevent. That hook had
+zero tests despite being load-bearing on three pages, so the ordering decision
+was extracted as `computeStableOrder()` — pure, no refs, no React — and pinned by
+9 tests, leaving the suppression scoped to the ref plumbing alone.
+
+**The write-access policy changed here too.** `62aa4b9`. `GEMINI.md` had been
+rewritten locally to grant "Full Developer & Repository Owner" status while
+`AGENTS.md` and `CLAUDE.md` §5 still said read-only, no exceptions. Antigravity
+read the elevated file, recorded the conflict in its own reasoning — "AGENTS.md
+is more authoritative" — and wrote to three source files anyway. Three documents
+stating two policies means an agent picks one, and it will not reliably pick the
+narrower. Settled deliberately rather than by whichever file was read last:
+Gemini/Antigravity now has full read/write on repository FILES, while every
+connected service — Sheets, MongoDB, Drive, Gmail — stays strictly read-only,
+with Claude Code the only writer there. The split is drawn on what a mistake
+costs. A bad file edit appears in a diff and dies to `git revert`; a bad Sheets
+write lands in the live system of record where PARKING/BDD/RDV drive real
+physical work, invisible to code review and not revertible in git. Two rules were
+added rather than relaxed: repo writes must be tsc/lint/test-green with `git
+status` reported before the session ends, and neither tool may edit the three
+governance files to widen its own permissions. The earlier "Documentation split
+across two AI tools" entry above is left as written — it records what the policy
+was at that time, which is still true of that time.
+
+Detail: [`docs/ai.md`](./docs/ai.md) and
+[`docs/fleet-pages.md`](./docs/fleet-pages.md) §2.1–2.3.
+
 ## 3. Architectural tradeoffs & known limitations
 
 - **Single-user hardcoded authorization.** `src/lib/auth/googleOAuth.ts`'s

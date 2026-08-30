@@ -30,11 +30,14 @@ if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID in .env.local");
 const PARKING_TAB = "PARKING";
 
 // Must cover the LAST real column — see the note on ATELIER's
-// HEADER_RANGE_WIDTH. The live header row is 17 columns (…DEPOT=P, gemini=Q,
-// read 2026-08-21); the ranges below previously stopped at O, which made the
-// `gemini` column invisible to this module entirely.
-// 18 real columns through `KM` (R) — KM added to the live sheet 2026-08-29 as
-// the first free column, resolved by header name like every other. Margin to T.
+// HEADER_RANGE_WIDTH. An earlier version of the ranges below stopped at O,
+// which made the `gemini` column invisible to this module entirely.
+// The live header row is 18 columns, A..R, ending on FOUNISSEUR (read
+// 2026-08-30): IMM, TIMESTAMP, KM, ACTION, ZONING, MARQUE, MODEL, gemini,
+// CLIENT, RL_REUNION, MOTIF, ETAT VÉHICULE, BDD, DATE_DS, DS, PARTS,
+// TECHNICEIN, FOUNISSEUR. `KM` was added to the live sheet 2026-08-29 and has
+// since been moved to column C — which cost nothing here, because every column
+// is resolved by header name. Margin to T.
 const RANGE_WIDTH = "T";
 const DATA_START_ROW = 2;
 

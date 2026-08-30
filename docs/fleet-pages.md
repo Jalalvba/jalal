@@ -46,12 +46,22 @@ are sheet-side XLOOKUP formulas, read-only here.
   in `cdbfcd7` where it queried the wrong Mongo field and **always returned
   `[]`**.
 
-### 2.1 ZONING, the filter, and the PDF export
+### 2.1 ZONING, the filter, and the AI-written zone
 
-The tab gained a `ZONING` column (live values: `DISPONIBLE_À LIVERER` 66,
-`depot-ATV` 8, `depot-rempalcmemnt` 6, `AVIS-PIERRE-PARENT` 3). It is read
-into `ParkingRow.zoning`, shown on each card, and drives a single-select chip
-row in the header.
+The tab gained a `ZONING` column. It is read into `ParkingRow.zoning`, shown on
+each card, and drives a single-select chip row in the header.
+
+The dropdown holds **nine** values, byte-verified against the live tab's
+`ONE_OF_LIST` validation rule (read 2026-08-29) and identical to
+`prompt-parking.ts`'s `ZONES` and `ZONING_OPTIONS_FALLBACK`:
+
+`DEPOT-ATV` · `DEPOT-REMPLACEMENT` · `DEPOT-DISPONIBLE` · `ATELIER` ·
+`CARROSSERIE-FSM` · `PRESTATAIRE-EXTERNE` · `DISPONIBLE-A-LIVRER` ·
+`visite technique` · `AVIS-PIERRE-PARENT`
+
+`visite technique` is lower-case and un-hyphenated on purpose — that is exactly
+how the sheet stores it. Per-value row counts are deliberately not recorded
+here: they change every working day, and a stale count reads as current.
 
 **"Non assigné" is always offered**, even when every row currently has a zone.
 A vehicle losing its zone is exactly what someone would come here to check, and
@@ -67,10 +77,31 @@ admin-editable at `/admin/config` like every other list, and the route refuses
 anything outside it: a free-text zone would create a bucket the chip filter and
 the work-order rules do not recognise.
 
-`depot-rempalcmemnt` is spelled as the live sheet spells it, in the option list
-AND in the work-order prompt. The action has to name the zone as it exists, not
-as it should be written — correcting the spelling here would send vehicles to a
-zone no row matches. Fix the sheet first, then the list.
+**Superseded 2026-08-29.** This paragraph used to record that
+`depot-rempalcmemnt` was spelled as the live sheet spelled it, in the option
+list and in the work-order prompt, because correcting the typo in code would
+have sent vehicles to a zone no row matched. The sheet's validation rule was
+replaced with the clean nine-value list above, and the code re-synced to it in
+the same change, so there is no misspelling left to mirror. The rule that
+produced it still stands: fix the sheet FIRST, then the list — never the
+reverse.
+
+**The AI fills this column too.** `POST /api/parking/actions` writes `ZONING`
+as well as `ACTION`, through `applyZone()`, which reports one of five outcomes
+per vehicle: `written`, `invalid` (the model named something that is not a real
+zone), `rejected` (a real zone this vehicle's data does not permit),
+`skipped-no-data`, or `failed`. Two guards stand in front of the write — an
+exact match against the dropdown via `isValidZone()`, and
+`zonePreconditionFailure()` for the factual gates behind criteria A0.5.1/2/3/4.
+The first is not redundant: the Sheets API was verified NOT to enforce
+`strict:true` validation on writes, so that check is the only real enforcement
+there is.
+
+Both guards **refuse rather than substitute**. `ACTION` always ends on some
+destination — the controller cannot work without one — but `ZONING` does not
+inherit that fallback, because a zone nobody reasoned about is worse than an
+empty cell a human will fill. On `insufficientData` the zone is skipped, not
+defaulted. Full reasoning: [`ai.md`](./ai.md).
 
 **Ownership and the AVIS badge.** `client` falls back to the parc tab's
 `Société` when the tab's own CLIENT lookup is empty, and a vehicle whose Client
@@ -101,8 +132,54 @@ a 60 req/min quota four zone tabs already share. `locataire` is still NOT a
 substitute for `societe`: it reads "Locafinance" for the very plates whose
 Société is "AVIS".
 
+### 2.2 KM — the hand-entered odometer
+
+The tab also carries a `KM` column, edited from the card through an
+`InlineEditText` field ("KM relevé") and written by `POST /api/parking/km`.
+
+**Why it exists.** The DS-derived odometer (`currentKmOf()`) is only ever as
+fresh as the last BILLED intervention, so a vehicle that has run for months
+without a DS line has its real mileage recorded nowhere — and every maintenance
+interval check is computed against that number. This column is the escape hatch.
+
+**Manual beats DS, stated once.** `resolveVehicleKm()` sits next to
+`currentKmOf()` in `maintenanceIntervals.ts` and is the single place the
+precedence lives: a valid manual reading wins (`source: "manual"`), anything
+else falls back to the DS value (`"ds"`), and with neither it returns
+`{ km: null, source: "none" }`. `checkInterval()`/`checkBeltPump()` take it as
+an optional trailing argument, so Atelier, Depot and DS History are
+byte-identically unaffected — pinned by a test. A manual reading BELOW the last
+service of its type returns `"unknown"` with both figures named, rather than a
+clamped or negative gap.
+
+`formatKmSourceLine()` states which odometer was used, first in `checkLines`,
+so it is prompt content AND grounding-guard source text — `KM DÉCLARÉ
+MANUELLEMENT` is an upper-case run that `ungroundedSuppliers()` would otherwise
+read as a fabricated supplier name. It is deliberately not silent on the
+ordinary `"ds"` case: a line appearing only in the override case would let
+"absent" mean "DS-derived".
+
+`isStale()` gains `manualKm` — a corrected odometer changes every verdict
+without adding a DS entry, so without it a re-run would reuse an analysis
+computed against the number the operator just fixed.
+
+**The route** is its own, not a field on `/api/parking/action`, for the same
+reason `/api/parking/zoning` is: `ACTION`'s write also stamps `TIMESTAMP`, and
+reading a dashboard is not workshop activity. `verifyRowIdentity()` first, like
+every Sheets write; `RAW`, never `USER_ENTERED`, because the cell is read back
+with `Number()` and a locale-reformatted value is one this module then has to
+un-format. An empty string is a meaningful value — it CLEARS the override
+rather than being a missing parameter — and the range is validated both at the
+route boundary (a 400 naming the rule) and independently in `updateManualKm()`.
+
+### 2.3 The PDF export
+
 **Export PDF** renders the filtered view — `POST /api/parking/export`, seven
-columns: IMM, TIMESTAMP, ACTION, ZONING, MARQUE, MODEL, gemini.
+columns: IMM, TIMESTAMP, ACTION, ZONING, MARQUE, MODEL, gemini. `KM` is
+deliberately NOT among them: the report is a work list for the quality
+controller, who reads it to know what to check and where the car goes, and the
+odometer is an input to that reasoning rather than part of the instruction —
+its omission is a decision, not an oversight.
 
 - **Landscape A4**, unlike the BDD report's portrait: two of these columns are
   long free text, and portrait squeezes the work order into a column too narrow

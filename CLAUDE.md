@@ -46,7 +46,7 @@ Copy `.env.example` to `.env.local` and fill in real values:
 | `IRON_SESSION_SECRET` | Encrypts the session cookie, ≥32 chars |
 | `GOOGLE_SERVICE_ACCOUNT_KEY_B64` | Base64-encoded service account JSON, grants Sheets/Drive access |
 | `GOOGLE_SHEETS_ID` | The spreadsheet ID every `src/lib/sheets/googleSheets*.ts` module reads/writes |
-| `GOOGLE_RDV_SHEETS_ID` | **Separate** spreadsheet holding the monthly appointment-calendar tabs — see §6's RDV entry. **Production scope only** on Vercel; a Preview deployment touching RDV code needs its own value added via `vercel env add` |
+| `GOOGLE_RDV_SHEETS_ID` | **Separate** spreadsheet holding the monthly appointment-calendar tabs — see §6's RDV entry. Set in both **Production and Preview** scope on Vercel (Preview added 2026-08-29, marked sensitive), so a Preview deployment touching RDV code resolves it without a further `vercel env add` |
 | `GOOGLE_DRIVE_FOLDER_ID` | Only needed for the optional `scripts/test-service-account.ts` diagnostic |
 | `VERCEL_OIDC_TOKEN` | Auto-populated by `vercel env pull`/`vercel dev` — not set by hand |
 

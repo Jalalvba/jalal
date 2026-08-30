@@ -602,10 +602,16 @@ paying for a lookup table:
 
 | | |
 |---|---|
-| `ETAT VÉHICULE` = ATV | `À envoyer vers depot-ATV` |
-| `ETAT VÉHICULE` = Remplacement | `À envoyer vers depot-rempalcmemnt` |
-| AVIS / Scal Avis | `À envoyer au garage Pierre Parent` |
-| anything else | `Disponible — à livrer au client` |
+| `ETAT VÉHICULE` = ATV | `DEPOT-ATV` |
+| `ETAT VÉHICULE` = Remplacement | `DEPOT-REMPLACEMENT` |
+| AVIS / Scal Avis | `AVIS-PIERRE-PARENT` |
+| anything else | `DISPONIBLE-A-LIVRER` |
+
+What it returns is a **bare ZONING value, not a French sentence**. That is a
+hard requirement rather than a style choice: `parseDestinationZone()` reads
+this string back out as the destination and exact-matches it against the
+sheet's dropdown, so a sentence like `À envoyer vers depot-ATV` would fail its
+own guard and leave the fallback path unable to set a zone at all.
 
 ETAT outranks ownership, and a closed contract does not suppress it: billing
 stopping is a reason not to REPAIR a vehicle, not a reason to leave it parked
@@ -637,21 +643,61 @@ line is a control point — `Contrôler …`, `Vérifier …`, never `Remplacer 
 which would ask him to do somebody else's job — and the LAST line is always the
 destination he will order:
 
+**A0.0 comes first: a zone already in the cell is a decision, not a hypothesis.**
+Before any of the analysis below runs, the model looks at what `ZONING` already
+holds. If it holds one of the five FIXED-ROUTING zones — `CARROSSERIE-FSM`,
+`PRESTATAIRE-EXTERNE`, `DEPOT-ATV`, `visite technique`, `ATELIER` — a human or
+an earlier process has already decided where the car goes, and re-deriving that
+through A0.5 could only disagree with it. So the model short-circuits: it emits
+the routing line alone, with **no findings, no recurrence search and no control
+points**. `PRESTATAIRE-EXTERNE` is the one that carries a name, read out of the
+`BDD` column and rendered `Envoyer vers PRESTATAIRE-EXTERNE (Garage XYZ)`; with
+no name there it invents none.
+
+The other three zones are NOT fixed routings — `DEPOT-DISPONIBLE`,
+`DISPONIBLE-A-LIVRER` and `AVIS-PIERRE-PARENT` all depend on what the analysis
+actually finds — so they take the full A0.5-to-A5 path, as does an empty cell.
+The shortcut only ever fires on a non-empty one. The rule lives in the prompt
+text, not in a constant: `ROUTING_ONLY_ZONES` used to state the same five zones
+as a `Set` nothing ever read, and it was deleted (`0429a96`) precisely because a
+second silent copy of the list was free to drift from the branches that do the
+work.
+
+`zonePreconditionFailure()` carries the matching bypass. Without it the
+shortcut is unreachable in practice: a `DEPOT-ATV` row on an LLD vehicle parses
+a valid zone and is then rejected by A0.5.1, leaving `ZONING` untouched. When
+the candidate equals the zone already in the cell, the A0.5 preconditions do not
+re-litigate it.
+
+**Only if A0.0 does not fire** does A0.5 choose a destination from the nine
+criteria. The floor under it is still `statusWorkOrder()`:
+
 | | |
 |---|---|
-| ETAT ATV | `À envoyer vers depot-ATV` |
-| ETAT Remplacement | `À envoyer vers depot-rempalcmemnt` |
-| AVIS / Scal Avis | `À envoyer au garage Pierre Parent` |
-| otherwise | `À livrer au client` |
+| ETAT ATV | `DEPOT-ATV` |
+| ETAT Remplacement | `DEPOT-REMPLACEMENT` |
+| AVIS / Scal Avis | `AVIS-PIERRE-PARENT` |
+| otherwise | `DISPONIBLE-A-LIVRER` |
 
 Prefixed `Si conforme : ` when something is checked first, bare when it stands
 alone — a destination with nothing before it is conditional on nothing.
 
 **The destination is guaranteed in code**, not merely requested:
-`withDestination()` appends it, deduplicates it, puts it last and normalises
-older phrasings. The prompt asked for it and mostly complied, which left
-45802-B-7 with six checks and nowhere to send the car — the one line the
-controller cannot work without.
+`withDestination()` puts exactly one destination last, and the prompt alone
+could not — it asked for one and mostly complied, which left 45802-B-7 with six
+checks and nowhere to send the car, the one line the controller cannot work
+without.
+
+What it does with the model's choice changed in `9877bff`. It used to DISCARD
+that choice and substitute `statusWorkOrder()`'s four etat/isAvis outcomes,
+which meant the prompt's nine criteria could never reach the sheet at all. It
+now KEEPS the model's zone whenever that zone is real (`isValidZone()`) and
+this vehicle may receive it (`zonePreconditionFailure()` returns null), and
+falls back to `statusWorkOrder()` only when it is neither. An A0.0 routing
+string is kept verbatim — `Envoyer vers …`, which carries the prestataire name
+a bare zone value would lose; everything else is reduced to the bare zone,
+which is what drops the pre-2026-08-29 French sentences from a REUSED analysis
+rather than appending a second destination after the stale one.
 
 **Actions carry no justification.** The instruction and nothing else —
 `Remplacer le filtre à gasoil`, not `Remplacer le filtre à gasoil (jamais
@@ -668,22 +714,37 @@ there. 766 parc rows have an empty Client and record the owner only in
 Société, so `client` falls back to it (`src/lib/sheets/googleSheetsParc.ts`).
 A vehicle whose Client or Société matches AVIS / Scal gets a loud badge on its
 card, is named as AVIS-owned in the analysis, and — when its work order
-contains at least one part replacement — a final `À envoyer au garage Pierre
-Parent`. Live: 4 of the 83 Parking vehicles, one of them detected only through
+contains at least one part replacement — a final `AVIS-PIERRE-PARENT`. That
+conjunction is the one `zonePreconditionFailure()` guards hardest, and for
+measured reason: the model sent 908977WW and 18148-T-6 there with a non-AVIS
+owner AND no part-change action, i.e. with neither conjunct met. Live: 4 of the
+83 Parking vehicles, one of them detected only through
 `Client = "Scal Avis"`.
 
 | Status | Work order |
 |---|---|
 | `cp.statut` = `Arret facturation` or `Restitué` | **empty** — the vehicle has left the billed fleet |
-| `ETAT VÉHICULE` = `ATV` | one line only: `À envoyer vers depot-ATV` — no workshop visit |
-| `ETAT VÉHICULE` = `Remplacement` | the repairs **plus** a final `À envoyer vers depot-rempalcmemnt` — it is a customer's courtesy car and must be fixed |
-| `ETAT VÉHICULE` = `LCD` | the repairs **plus** a final `À envoyer au garage Pierre Parent` |
+| `ETAT VÉHICULE` = `ATV` | one line only: `DEPOT-ATV` — no workshop visit |
+| `ETAT VÉHICULE` = `Remplacement` | the repairs **plus** a final `DEPOT-REMPLACEMENT` — it is a customer's courtesy car and must be fixed |
+| `ETAT VÉHICULE` = `LCD` | the repairs **plus** a final `AVIS-PIERRE-PARENT` |
 | `LLD`, `En stock`, `Livré`, unknown | normal work order |
 
-The zone names are the ZONING column's own values, misspelling included — the
-action must name the zone as it exists, or it points at a bucket the column
-does not have. Those three status lines are copied WORD FOR WORD from the
-prompt — they are
+The zone names are the ZONING column's own values — the action must name the
+zone as it exists, or it points at a bucket the column does not have.
+
+**The paragraph that stood here said "misspelling included", and described the
+pre-2026-08-29 state.** The dropdown then carried the sheet's own typos
+(`depot-rempalcmemnt`, `DISPONIBLE_À LIVERER`) and was missing four zones
+entirely, so preserving the misspellings really was the correct instruction:
+correcting them in code would have created a second, near-identical value that
+no existing row matched. The sheet's validation rule was replaced with the clean
+nine-value list on 2026-08-29, and `prompt-parking.ts`'s `ZONES`,
+`ZONING_OPTIONS_FALLBACK` and the Mongo option set were re-synced to it in the
+same change — verified as ordered array equality. There is no misspelling left
+to preserve. The underlying rule is unchanged and still binding: the sheet is
+fixed FIRST, then the code follows it, never the other way round.
+
+Those three status lines are copied WORD FOR WORD from the prompt — they are
 the only actions written without a figure in brackets, because they follow from
 the status rather than from the history. `promptParking.test.ts` asserts each
 string, so changing one here is a deliberate change to what lands in the sheet.
@@ -708,11 +769,13 @@ value is multi-line — without it Sheets keeps the newlines but renders the cel
 clipped to a single line, and the advisor sees the first operation with the
 rest invisible until they click in.
 
-**Columns are resolved by header NAME, never by position.** The PARKING tab was
-restructured mid-session — `ACTION` moved from column B to column D and a
-`ZONING` column appeared — and nothing broke, because every read and write goes
-through `colMap["ACTION"]`. Positional fallbacks exist only for a tab whose
-header row is unreadable.
+**Columns are resolved by header NAME, never by position.** `KM` was added to
+the PARKING tab on 2026-08-29 as the first free column, R — and by the live read
+of 2026-08-30 it sat at column **C**, moved by nobody in either AI session.
+Nothing broke and no code changed, because every read and write goes through
+`colMap["KM"]`. That is the property being bought here: the tab is edited by
+people, in a spreadsheet, without telling the app. Positional fallbacks exist
+only for a tab whose header row is unreadable.
 
 **Two prompts, one rulebook.** `prompt.ts` exports `DS_GROUNDING_RULES` — the
 three axes and rules 1 to 17, which govern how the model may read this data —
