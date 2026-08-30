@@ -54,6 +54,7 @@ import {
   TECHNICIEN_OPTIONS_FALLBACK,
   PRESTATAIRE_OPTIONS_FALLBACK,
   RDV_CONVOYEURS_FALLBACK,
+  ZONING_OPTIONS_FALLBACK,
   type OptionKey,
 } from "../src/types";
 
@@ -84,6 +85,11 @@ const SEED_VALUES: Record<OptionKey, unknown> = {
   TECHNICIEN_OPTIONS: TECHNICIEN_OPTIONS_FALLBACK,
   PRESTATAIRE_OPTIONS: PRESTATAIRE_OPTIONS_FALLBACK,
   RDV_CONVOYEURS: [...RDV_CONVOYEURS_FALLBACK],
+  // Was missing from this map even though ZONING_OPTIONS is in OPTION_KEYS —
+  // so the seeder silently never wrote it, and the key only existed in Mongo
+  // because something else put it there. Added 2026-08-29 alongside the
+  // 9-value dropdown replacement.
+  ZONING_OPTIONS: [...ZONING_OPTIONS_FALLBACK],
 };
 
 async function main() {

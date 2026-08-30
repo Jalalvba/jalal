@@ -34,8 +34,17 @@ import { resolveCpStatus } from "@/lib/vehicle/contractEnd";
 import { DS_PARKING_WORKORDER_PROMPT } from "@/lib/ai/dsAnalysis/prompt-parking";
 import { getAnalysis, recordActionText, saveAnalysis } from "@/lib/mongo/dsAnalyses";
 import { isStale, promptFingerprint } from "@/lib/ai/dsAnalysis/stored";
-import { formatWorkOrder, mayOverwrite, statusWorkOrder, withDestination } from "@/lib/ai/dsAnalysis/workOrder";
-import { getParkingRows, updateAction } from "@/lib/sheets/googleSheetsParking";
+import {
+  formatWorkOrder,
+  mayOverwrite,
+  parseDestinationZone,
+  statusWorkOrder,
+  withDestination,
+  zonePreconditionFailure,
+  type ZoneVehicle,
+} from "@/lib/ai/dsAnalysis/workOrder";
+import { isValidZone } from "@/lib/ai/dsAnalysis/prompt-parking";
+import { getParkingRows, updateAction, updateZoning } from "@/lib/sheets/googleSheetsParking";
 import type { DsHistoryItem } from "@/types";
 
 // Generous: a batch is at most BATCH_MAX plates and the client walks the tab
@@ -55,7 +64,85 @@ type Outcome =
   | "no-row"        // plate is not on the PARKING tab
   | "failed";
 
-type Result = { imm: string; outcome: Outcome; actions?: number; error?: string; costUsd?: number };
+/** What happened to the ZONING cell, reported separately from the ACTION one. */
+type ZoneOutcome =
+  | "written"          // a valid zone reached the cell
+  | "invalid"          // the model named something that is not a real zone
+  | "rejected"         // a real zone, but this vehicle's data does not permit it
+  | "skipped-no-data"  // insufficientData — no basis to place the vehicle
+  | "failed";          // the write itself threw
+
+type Result = {
+  imm: string;
+  outcome: Outcome;
+  actions?: number;
+  error?: string;
+  costUsd?: number;
+  /** Absent when the ACTION path never got far enough to attempt a zone. */
+  zone?: { outcome: ZoneOutcome; value?: string; error?: string; reason?: string };
+};
+
+/**
+ * Places the model's chosen destination in the ZONING cell.
+ *
+ * THE EXACT-MATCH CHECK BELOW IS THE ONLY REAL ENFORCEMENT THERE IS. The sheet's
+ * ZONING column carries a strict:true ONE_OF_LIST validation rule, and it is
+ * tempting to treat this check as a redundant second guard in front of it. It is
+ * not. Verified against the live sheet on 2026-08-29: the Sheets API does NOT
+ * apply data validation to API writes — writing "DEPOT-ATV" (valid),
+ * "visite technique" (valid) and a deliberately out-of-list value all three
+ * succeeded and were stored. strict:true constrains the Sheets UI, not us.
+ *
+ * So a near-miss string — a translated zone, a lowercased one, a hallucinated
+ * one — would be written and stored silently, leaving a cell that no dropdown
+ * offers and that every consumer of this column then has to cope with. Do not
+ * remove or weaken this check on the belief that the spreadsheet is catching it.
+ *
+ * On a mismatch the previous value is left ALONE and the miss is reported, so
+ * the operator learns the AI's answer could not be placed instead of quietly
+ * seeing a stale zone.
+ */
+async function applyZone(
+  row: { rowIndex: number; imm: string },
+  analysis: { actions?: string[]; insufficientData?: boolean },
+  vehicle: ZoneVehicle
+): Promise<Result["zone"]> {
+  // Rule A0.5 has no basis to fire when the data could not support a
+  // conclusion, and a wrongly-placed vehicle is a physical move someone has to
+  // undo. ACTION is still written (the car is in the parking and needs
+  // instructions either way) — only the zone is left for a human.
+  if (analysis.insufficientData === true) return { outcome: "skipped-no-data" };
+
+  // Judged on what the MODEL said, not on what reached ACTION. withDestination()
+  // substitutes statusWorkOrder()'s zone when the model's line is unusable, so
+  // actionsWritten always ends on a valid zone — reading it here would report
+  // every vehicle as fine and never surface a bad answer. ACTION keeps that
+  // fallback (the controller must always have a destination); ZONING does not
+  // inherit it, because a zone nobody chose is worse than an empty cell a human
+  // will fill.
+  const candidate = parseDestinationZone(analysis.actions ?? []);
+  if (!candidate || !isValidZone(candidate)) {
+    return { outcome: "invalid", value: candidate ?? undefined };
+  }
+
+  // Second guard: the string is a real zone, but is it one THIS vehicle may
+  // receive? Refuses rather than substituting — the same choice ungroundedDates()
+  // and ungroundedSuppliers() make when they drop an unsupported finding instead
+  // of rewriting it. Falling through to statusWorkOrder()'s zone would put a
+  // plausible-looking value in the cell that nothing actually reasoned about,
+  // which is the very failure this guard exists to stop.
+  const reason = zonePreconditionFailure(candidate.trim(), vehicle);
+  if (reason) return { outcome: "rejected", value: candidate.trim(), reason };
+
+  try {
+    // verifyRowIdentity() inside updateZoning re-reads the row's IMM cell and
+    // refuses on a mismatch (AGENTS.md rule 3) — same guard as updateAction.
+    await updateZoning(row.rowIndex, candidate.trim(), row.imm);
+    return { outcome: "written", value: candidate.trim() };
+  } catch (e) {
+    return { outcome: "failed", error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 export async function POST(request: Request) {
   const limited = await rateLimitOrNull(request, "parking-actions", RATE_LIMIT, RATE_WINDOW_MS);
@@ -144,25 +231,46 @@ export async function POST(request: Request) {
           promptHash: "status-only",
         });
         await recordActionText(imm, text);
-        results.push({ imm, outcome: "written", actions: 1 });
+        // insufficientData is true on this path by construction, so applyZone
+        // reports "skipped-no-data" and writes nothing — the vehicle still gets
+        // its ACTION, and a human sets the zone.
+        const zone0 = await applyZone(row, { insufficientData: true }, {
+          etat: String(row.etatVehicule ?? ""),
+          isAvis: row.isAvis === true,
+          zoning: String(row.zoning ?? "").trim(),
+        });
+        results.push({ imm, outcome: "written", actions: 1, zone: zone0 });
         continue;
       }
 
       // Both statuses travel with the payload: they decide whether the
       // workshop should be booking anything on this vehicle at all, which
       // outranks whatever the maintenance history says.
+      // One lookup, reused by the payload AND by the zone preconditions below
+      // (criterion A0.5.1 reads the contract status). A second call would be a
+      // second chance to disagree with itself.
+      const cpStatus = (await resolveCpStatus(imm)) ?? undefined;
+
       const raw = buildDsAnalysisPayload({
         imm,
         items,
         vehicle: {
           state: String(row.etatVehicule ?? "").trim() || undefined,
-          cpStatus: (await resolveCpStatus(imm)) ?? undefined,
+          cpStatus,
           // Resolved on the row itself (parc tab: Client, else Société), so
           // the model is told who owns the vehicle rather than being left to
           // guess from a company name.
           owner: String(row.client ?? "").trim() || undefined,
           isAvis: row.isAvis === true,
+          zoning: String(row.zoning ?? "").trim() || undefined,
+          bdd: String(row.bdd ?? "").trim() || undefined,
         },
+        // The tab's own KM column, when an operator filled it in. Takes
+        // priority over the DS-derived odometer in every interval and
+        // belt/pump check — see resolveVehicleKm() in
+        // lib/ai/prompts/maintenanceIntervals.ts, which is where that
+        // precedence is decided, not here.
+        manualKm: row.manualKm,
       });
       const input = { ...raw, entries: canonicalizeSuppliers(raw.entries) };
 
@@ -191,7 +299,13 @@ export async function POST(request: Request) {
         // so every stored answer looks fresh and the whole tab keeps its old
         // work orders.
         stored.promptHash === currentPrompt &&
-        !isStale(stored, { entriesCount: input.entries.length, lastEntryDate: input.entries[0]?.date ?? null });
+        !isStale(stored, {
+          entriesCount: input.entries.length,
+          lastEntryDate: input.entries[0]?.date ?? null,
+          // A corrected odometer changes every verdict without touching the
+          // history, so it has to participate in the reuse decision.
+          manualKm: input.manualKm,
+        });
 
       // Parking's OWN prompt — not DS History's. Same data, same grounding
       // rules, different output: a work order rather than a report.
@@ -207,11 +321,21 @@ export async function POST(request: Request) {
       // The destination is guaranteed in code, not merely requested: it is the
       // line the controller cannot work without, and withDestination() also
       // normalises whatever wording a reused answer carries.
-      const vehicle = { etat: String(row.etatVehicule ?? ""), isAvis: row.isAvis };
-      const text = formatWorkOrder({
-        ...analysis,
-        actions: withDestination(analysis.actions ?? [], vehicle),
-      });
+      // The facts every zone precondition is decided from — built once and
+      // passed to both withDestination() (ACTION) and applyZone() (ZONING), so
+      // the two columns judge the same destination against the same data.
+      const vehicle: ZoneVehicle = {
+        etat: String(row.etatVehicule ?? ""),
+        isAvis: row.isAvis === true,
+        cpStatus,
+        zoning: String(row.zoning ?? "").trim(),
+      };
+      // withDestination() now KEEPS the model's own A0.5 choice and only falls
+      // back to statusWorkOrder() when it produced no destination at all. The
+      // resulting list is what both the ACTION cell and the zone parse read, so
+      // the two can never describe different destinations.
+      const finalActions = withDestination(analysis.actions ?? [], vehicle);
+      const text = formatWorkOrder({ ...analysis, actions: finalActions });
       if (!text) {
         results.push({ imm, outcome: "no-action" });
         continue;
@@ -229,11 +353,38 @@ export async function POST(request: Request) {
       await updateAction(row.rowIndex, text, row.imm);
       await recordActionText(imm, text);
 
+      // AFTER the ACTION write, deliberately: the work order is the thing the
+      // controller cannot do without, so a zone failure must never cost him the
+      // instructions. Reported as its own outcome rather than folded into the
+      // ACTION one, because "work order written, zone rejected" is a real and
+      // actionable state.
+      const zone = await applyZone(row, analysis, vehicle);
+      if (zone?.outcome === "invalid") {
+        log("warn", "parking-actions", "Model named a zone that is not in the dropdown", {
+          imm,
+          candidate: zone.value ?? "(none)",
+        });
+      }
+      if (zone?.outcome === "rejected") {
+        // Logged at warn, not swallowed: a rejection means the model applied a
+        // criterion whose precondition this vehicle does not meet, and the
+        // operator needs to place it by hand.
+        log("warn", "parking-actions", "Zone rejected — precondition not met for this vehicle", {
+          imm,
+          candidate: zone.value ?? "(none)",
+          reason: zone.reason ?? "",
+          etat: String(row.etatVehicule ?? ""),
+          isAvis: row.isAvis === true,
+          cpStatus: cpStatus ?? "",
+        });
+      }
+
       results.push({
         imm,
         outcome: fresh ? "reused" : "written",
         actions: analysis.actions?.length ?? 0,
         costUsd,
+        zone,
       });
     } catch (e) {
       const msg = e instanceof AiCallError ? e.kind : e instanceof Error ? e.message : String(e);

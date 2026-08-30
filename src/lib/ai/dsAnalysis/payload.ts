@@ -53,6 +53,12 @@ export function buildDsAnalysisPayload(params: {
   contractEnd?: string | null;
   vehicle?: DsAnalysisInput["vehicle"];
   replacements?: DsAnalysisInput["replacements"];
+  /**
+   * Parking's hand-entered odometer. Only the Parking routes pass it; every
+   * other caller omits it and the checks fall back to the DS-derived value,
+   * so this is additive and changes nothing for the other zones.
+   */
+  manualKm?: number;
 }): DsAnalysisInput {
   return {
     imm: params.imm,
@@ -60,5 +66,6 @@ export function buildDsAnalysisPayload(params: {
     vehicle: params.vehicle ?? {},
     replacements: params.replacements ?? [],
     entries: toDsAnalysisEntries(params.items),
+    ...(params.manualKm != null ? { manualKm: params.manualKm } : {}),
   };
 }

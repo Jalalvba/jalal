@@ -115,38 +115,51 @@ auth email, implicit CSRF, no OAuth fallback, spoofable rate-limit IP
 headers outside Vercel, and non-prefix-indexable Articles search regex.
 Full file/line-cited detail: [`SECURITY_VERIFICATION.md`](./SECURITY_VERIFICATION.md).
 
-## 5. Multi-tool workflow: Gemini/Antigravity is read-only
+## 5. Multi-tool workflow: two writers, one system of record
 
-This project uses two AI tools with strictly separated roles. Kept in
-sync with [`AGENTS.md`](./AGENTS.md)'s copy of this section — if they
-ever diverge, that's a doc bug, fix both.
+Two AI tools. Both may write **code**; only Claude Code may write
+**data**. Kept in sync with [`AGENTS.md`](./AGENTS.md)'s copy of this
+section — if they ever diverge, that's a doc bug, fix both.
 
-- **Claude Code**: the ONLY tool permitted to write, edit, or execute
-  changes in this repository. All code changes, file edits, commits, and
-  test runs happen exclusively through Claude Code.
-- **Antigravity CLI / Gemini**: READ-ONLY audit and research tool. No
-  exceptions.
+- **Claude Code**: full read/write on the repository, and the only tool
+  permitted to run write operations against Google Sheets, MongoDB,
+  Drive, or Gmail.
+- **Antigravity CLI / Gemini**: full read/write on repository **files** —
+  create, edit, delete, run commands, run `tsc`/lint/tests, commit — but
+  **strictly read-only on every connected service**.
+
+The split is about what a mistake costs, not trust: a bad file edit shows
+up in a diff and dies to `git revert`, while a bad Sheets/Mongo write
+lands in the live system of record that PARKING/BDD/RDV drive real
+physical work from, where no code review will catch it.
 
 **Hard rules for Gemini/Antigravity sessions:**
-1. Never write, edit, delete, or modify any file, or run any write
-   operation against MongoDB, Google Sheets, Google Drive, Gmail, or any
-   other connected Google API/service — read-only access, always.
+1. Never run a write operation against MongoDB, Google Sheets, Google
+   Drive, Gmail, or any other connected Google API/service — read-only,
+   always, no exceptions, however small or obviously-correct the write
+   looks. Repo files are fair game; live data is not. A task that needs
+   a data write gets handed to Claude Code explicitly.
 2. Never claim something is true without citing where it was verified
    (a file/line, a live Sheet-tab read, a query result) — not assumed,
    not remembered from a prior session, not inferred from a filename.
-3. Every session must end with a single, ready-to-use prompt for Claude
-   Code to execute, summarizing findings and the recommended action —
-   the only output the human should need to copy.
-4. If a task requires an actual change, decline explicitly and hand back
-   the prompt for Claude Code instead of attempting it.
-5. **Claude Code must independently verify any Gemini/Antigravity-sourced
-   finding against the real, live codebase/data before acting on it** —
-   same as any other unverified claim. A read-only audit tool can still
-   be wrong or stale; verification stays required regardless of source.
+3. Anything written to the repo is verified before the session ends:
+   `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm test` green, and
+   `git status` reported. Unchecked code is not a finished change.
+4. Commit small and often, never force-push, leave the tree clean — that
+   per-commit revertibility is why file writes are allowed at all.
+5. **Neither tool may edit `AGENTS.md`, this file, or `GEMINI.md` to
+   widen its own permissions.** The three state one policy and change
+   together, deliberately, by the human. An agent finding them in
+   conflict stops and reports it rather than taking the reading that
+   grants it more access — this has happened once already.
+6. **Each tool independently verifies the other's findings against the
+   real, live codebase/data before acting** — any agent can be wrong or
+   stale; verification stays required regardless of source.
 
-**After any change** (either tool's handoff): `git status`,
-`pnpm exec tsc --noEmit`, `pnpm lint`, then commit small and often so a
-mistake is trivially revertible (`git revert`).
+**After any change** (either tool): `git status`, `pnpm exec tsc
+--noEmit`, `pnpm lint`, `pnpm test`, then commit small and often so a
+mistake is trivially revertible (`git revert`). A change to Sheets or
+Mongo data is Claude Code's alone.
 
 ## 6. Feature / data model reference
 

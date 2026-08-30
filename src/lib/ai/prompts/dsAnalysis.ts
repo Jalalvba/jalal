@@ -118,9 +118,18 @@ export type DsAnalysisInput = {
     owner?: string;
     /** True for AVIS's own fleet (short-term rental). See googleSheetsParc.ts. */
     isAvis?: boolean;
+    zoning?: string;
+    bdd?: string;
   };
   replacements: DsAnalysisReplacement[];
   entries: DsAnalysisEntry[];
+  /**
+   * Odometer entered by hand on the Parking tab's KM column, when one exists.
+   * Absent for every other zone — Atelier/Depot/DS History have no such column
+   * and keep the DS-derived reading. Resolution and precedence live in
+   * resolveVehicleKm() (prompts/maintenanceIntervals.ts), never here.
+   */
+  manualKm?: number;
 };
 
 // ── Output contract ───────────────────────────────────────────────────────
@@ -410,6 +419,8 @@ export function buildDsAnalysisPrompt(
   // model to infer ownership from a company name it has never seen.
   if (input.vehicle.owner) lines.push(`Propriétaire: ${input.vehicle.owner}`);
   if (input.vehicle.isAvis) lines.push("Propriétaire : AVIS (parc propre / location courte durée)");
+  if (input.vehicle.zoning) lines.push(`ZONING (onglet) : ${input.vehicle.zoning}`);
+  if (input.vehicle.bdd) lines.push(`BDD (onglet) : ${input.vehicle.bdd}`);
   lines.push(`Statut du contrat (déjà calculé, à reprendre): ${contractStatus.level} — ${contractStatus.label}`);
 
   if (input.replacements.length > 0) {

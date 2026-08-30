@@ -342,11 +342,25 @@ export const EMPLACEMENT_OPTIONS_FALLBACK = ["ATELIER", "PARKING", "INTROUVABLE"
  * Fallback only: the live list is admin-editable at /admin/config like every
  * other option set.
  */
+// Byte-verified against the live PARKING tab's ZONING data-validation rule
+// (strict ONE_OF_LIST, rows 2-60, read 2026-08-29) and against
+// prompt-parking.ts's ZONES — all three must stay identical.
+//
+// Replaced 2026-08-29. The previous five values mirrored an older dropdown that
+// carried the sheet's own misspellings ("depot-rempalcmemnt", "DISPONIBLE_À
+// LIVERER") and was missing four zones entirely; the sheet's rule was replaced
+// with the clean list below in the same change. "visite technique" is
+// lower-case and un-hyphenated on purpose — that is exactly how the sheet
+// stores it.
 export const ZONING_OPTIONS_FALLBACK = [
-  "depot-rempalcmemnt",
-  "depot-ATV",
+  "DEPOT-ATV",
+  "DEPOT-REMPLACEMENT",
+  "DEPOT-DISPONIBLE",
   "ATELIER",
-  "DISPONIBLE_À LIVERER",
+  "CARROSSERIE-FSM",
+  "PRESTATAIRE-EXTERNE",
+  "DISPONIBLE-A-LIVRER",
+  "visite technique",
   "AVIS-PIERRE-PARENT",
 ];
 
@@ -518,6 +532,19 @@ export type ParkingRow = {
    * assigned" — and is filterable as such on the page, not hidden.
    */
   zoning: string;
+  /**
+   * Odometer reading entered by hand into the tab's own KM column, when one is
+   * present. `undefined` — not 0 — for a blank cell, because blank is the
+   * normal state and a 0 would be indistinguishable from a real reading.
+   *
+   * Exists because the DS-derived odometer (currentKmOf() in
+   * prompts/maintenanceIntervals.ts) is only as fresh as the last BILLED
+   * intervention: a vehicle can run for months without a DS line, and its real
+   * mileage is then nowhere in the history. When set, this takes priority over
+   * the DS-derived value — see resolveVehicleKm() in that same file, which is
+   * the single place that precedence is expressed.
+   */
+  manualKm?: number;
   /**
    * Owner, resolved from the spreadsheet's `parc` tab: the Client column when
    * set, otherwise Société. 766 parc rows have an empty Client and record the
