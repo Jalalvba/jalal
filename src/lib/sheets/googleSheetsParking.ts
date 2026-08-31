@@ -316,7 +316,10 @@ const FORMULAS: Record<string, string> = {
   RL_REUNION: '=XLOOKUP(A{ROW};RL_reunion!A:A;RL_reunion!B:B;"";0;1)',
   MOTIF: '=XLOOKUP(A{ROW};RL!D:D;RL!S:S;"sans RL";0;1)',
   "ETAT VÉHICULE": '=XLOOKUP(A{ROW};parc!F:F;parc!I:I;"";0;1)',
-  BDD: '=XLOOKUP(A{ROW};BDD!A:A;BDD!H:H;"";0;1)',
+  // BDD!I:I is the commentaire column; the live PARKING rows all point there
+  // (confirmed by a FORMULA read of the tab, 2026-08-31). ATELIER/DEPOT still
+  // legitimately point at H — only PARKING was migrated.
+  BDD: '=XLOOKUP(A{ROW};BDD!A:A;BDD!I:I;"";0;1)',
   DATE_DS: '=XLOOKUP(A{ROW};ds!D:D;ds!A:A;"";0;-1)',
   DS: '=XLOOKUP(A{ROW};ds!D:D;ds!C:C;"";0;-1)',
   PARTS: '=XLOOKUP(A{ROW};ds!D:D;ds!G:G;"";0;-1)',
