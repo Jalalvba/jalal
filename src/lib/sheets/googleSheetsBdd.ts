@@ -184,7 +184,9 @@ async function fetchSheetRows(): Promise<BddRow[]> {
 // isn't restructured; if it ever is, every existing row's formula breaks too,
 // not just newly-added ones.
 const BDD_FORMULAS: Record<string, string> = {
-  date: '=XLOOKUP(A{ROW};RL!D:D;RL!B:B;46422;0;1)',
+  // "SANS RL", not the serial 46422: `date` is in DATE_LIKE_HEADERS, so a
+  // numeric fallback renders as a fabricated date instead of the marker.
+  date: '=XLOOKUP(A{ROW};RL!D:D;RL!B:B;"SANS RL";0;1)',
   // parc-based with the Société fallback, matching the live rows byte-for-byte
   // (spaces included) — parc!C:C is empty for AVIS-owned vehicles. The old
   // template looked the client up in RL instead, an entirely different tab.
