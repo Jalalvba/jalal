@@ -312,7 +312,12 @@ export function resolveIMM(token: string, immList: string[]): string {
 const FORMULAS: Record<string, string> = {
   MARQUE: '=XLOOKUP(A{ROW};parc!F:F;parc!D:D;"";0;1)',
   MODEL: '=XLOOKUP(A{ROW};parc!F:F;parc!E:E;"";0;1)',
-  CLIENT: '=XLOOKUP(A{ROW};parc!F:F;parc!C:C;"";0;1)',
+  // Société fallback, matching the live rows byte-for-byte (spaces included):
+  // parc!C:C is empty for every AVIS-owned vehicle, whose owner sits in
+  // parc!B:B instead. fetchParkingRows() patches this over at read time via
+  // getParcOwners(), but the cell itself is read directly in the sheet too.
+  CLIENT:
+    '=IF(XLOOKUP(A{ROW}; parc!F:F; parc!C:C; ""; 0; 1)=""; XLOOKUP(A{ROW}; parc!F:F; parc!B:B; ""; 0; 1); XLOOKUP(A{ROW}; parc!F:F; parc!C:C; ""; 0; 1))',
   RL_REUNION: '=XLOOKUP(A{ROW};RL_reunion!A:A;RL_reunion!B:B;"";0;1)',
   MOTIF: '=XLOOKUP(A{ROW};RL!D:D;RL!S:S;"sans RL";0;1)',
   "ETAT VÉHICULE": '=XLOOKUP(A{ROW};parc!F:F;parc!I:I;"";0;1)',
