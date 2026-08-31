@@ -192,7 +192,7 @@ const BDD_FORMULAS: Record<string, string> = {
   // template looked the client up in RL instead, an entirely different tab.
   client:
     '=IF(XLOOKUP(A{ROW}; parc!F:F; parc!C:C; ""; 0; 1)=""; XLOOKUP(A{ROW}; parc!F:F; parc!B:B; ""; 0; 1); XLOOKUP(A{ROW}; parc!F:F; parc!C:C; ""; 0; 1))',
-  modele: '=XLOOKUP(A{ROW};parc!F:F;parc!E:E;"INCONNU";0;1)',
+  modele: '=XLOOKUP(A{ROW};parc!F:F;parc!E:E;"";0;1)',
   "Reunion N-1": '=XLOOKUP(A{ROW};RL_reunion!A:A;RL_reunion!B:B;"";0;1)',
   mois_restant: '=IFERROR(DATEDIF(TODAY();O{ROW};"m");0)',
   date_fin_contrat: '=XLOOKUP(A{ROW};CP!G:G;CP!Q:Q;"";0;1)',
