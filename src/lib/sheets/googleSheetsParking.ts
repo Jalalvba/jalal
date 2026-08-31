@@ -11,6 +11,7 @@ import {
   getSheetsClient,
   invalidateCache,
   nowToSerial,
+  requireCol,
   serialToUTCDate,
   verifyRowIdentity,
   withCache,
@@ -123,12 +124,12 @@ async function fetchParkingRows(fresh = false): Promise<ParkingRow[]> {
 
   const headers = values[0].map((h) => String(h ?? "").trim().toUpperCase());
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
-  const actionCol = colMap["ACTION"] ?? 2;
-  const marqueCol = colMap["MARQUE"] ?? 3;
-  const modelCol = colMap["MODEL"] ?? 4;
-  const clientCol = colMap["CLIENT"] ?? 5;
-  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const immCol = requireCol(colMap, "IMM", PARKING_TAB);
+  const actionCol = requireCol(colMap, "ACTION", PARKING_TAB);
+  const marqueCol = requireCol(colMap, "MARQUE", PARKING_TAB);
+  const modelCol = requireCol(colMap, "MODEL", PARKING_TAB);
+  const clientCol = requireCol(colMap, "CLIENT", PARKING_TAB);
+  const tsCol = requireCol(colMap, "TIMESTAMP", PARKING_TAB);
   const rlReunionCol = colMap["RL_REUNION"];
   const motifCol = colMap["MOTIF"];
   const etatVehiculeCol = colMap["ETAT VÉHICULE"];
@@ -363,8 +364,8 @@ export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
-  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const immCol = requireCol(colMap, "IMM", PARKING_TAB);
+  const tsCol = requireCol(colMap, "TIMESTAMP", PARKING_TAB);
 
   const dataRes = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
@@ -479,9 +480,9 @@ export async function updateAction(rowIndex: number, action: string, expectedImm
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
-  const actionCol = colMap["ACTION"] ?? 2;
-  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const immCol = requireCol(colMap, "IMM", PARKING_TAB);
+  const actionCol = requireCol(colMap, "ACTION", PARKING_TAB);
+  const tsCol = requireCol(colMap, "TIMESTAMP", PARKING_TAB);
 
   await verifyRowIdentity(
     sheets,
@@ -549,7 +550,7 @@ export async function updateAction(rowIndex: number, action: string, expectedImm
 export async function updateZoning(rowIndex: number, zoning: string, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
   const colMap = buildColMap(await getHeaderRow(sheets));
-  const immCol = colMap["IMM"] ?? 1;
+  const immCol = requireCol(colMap, "IMM", PARKING_TAB);
   const zoningCol = colMap["ZONING"];
   if (!zoningCol) throw new Error("Colonne ZONING introuvable sur l'onglet PARKING");
 
@@ -610,7 +611,7 @@ export async function updateManualKm(
 ): Promise<void> {
   const sheets = getSheetsClient();
   const colMap = buildColMap(await getHeaderRow(sheets));
-  const immCol = colMap["IMM"] ?? 1;
+  const immCol = requireCol(colMap, "IMM", PARKING_TAB);
   const kmCol = colMap["KM"];
   if (!kmCol) throw new Error("Colonne KM introuvable sur l'onglet PARKING");
 
@@ -649,7 +650,7 @@ export async function deletePlate(rowIndex: number, expectedImm: string): Promis
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
+  const immCol = requireCol(colMap, "IMM", PARKING_TAB);
 
   await verifyRowIdentity(
     sheets,
@@ -681,9 +682,9 @@ export async function clearAll(): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
-  const actionCol = colMap["ACTION"] ?? 2;
-  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const immCol = requireCol(colMap, "IMM", PARKING_TAB);
+  const actionCol = requireCol(colMap, "ACTION", PARKING_TAB);
+  const tsCol = requireCol(colMap, "TIMESTAMP", PARKING_TAB);
 
   const props = await getParkingSheetProps(sheets);
   const lastRow = props.rowCount;
@@ -735,7 +736,7 @@ export async function writeParkingGeminiSummary(
   const match = rows.find((r) => r.imm.trim() === plate);
   if (!match) return { ok: false, reason: "no-row" };
 
-  const immCol = colMap["IMM"] ?? 1;
+  const immCol = requireCol(colMap, "IMM", PARKING_TAB);
   try {
     await verifyRowIdentity(
       sheets,

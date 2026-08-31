@@ -285,6 +285,37 @@ export function columnIndexToLetter(oneBasedIndex: number): string {
   return letters;
 }
 
+/**
+ * Resolves one header name to its 1-based column index, or throws.
+ *
+ * Every tab module resolves columns by header name precisely so a column
+ * MOVING costs nothing — PARKING's `KM` went from R to C with no code change.
+ * The `colMap[...] ?? <number>` fallbacks this replaces quietly broke that
+ * property: they only fired when a header was MISSING, which is exactly when
+ * a guessed index is most dangerous, since the guess was a snapshot of a
+ * layout that had already shifted (PARKING's ACTION fallback still said 2
+ * long after ACTION became column 4, so a missing header would have written
+ * work-order text into KM). A missing header means the sheet is not what this
+ * code was written against; refuse rather than write somewhere plausible.
+ *
+ * ApiError so toErrorResponse() surfaces the message instead of a generic
+ * 500 — the whole value here is naming the header that vanished.
+ */
+export function requireCol(
+  colMap: Record<string, number>,
+  header: string,
+  tab: string
+): number {
+  const col = colMap[header];
+  if (col === undefined) {
+    throw new ApiError(
+      `${tab} sheet: '${header}' column header not found — refusing to guess a column position`,
+      500
+    );
+  }
+  return col;
+}
+
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
