@@ -36,6 +36,7 @@ import { getAnalysis, recordActionText, saveAnalysis } from "@/lib/mongo/dsAnaly
 import { isStale, promptFingerprint } from "@/lib/ai/dsAnalysis/stored";
 import {
   fixedRoutingActions,
+  fixedRoutingZone,
   formatWorkOrder,
   mayOverwrite,
   parseDestinationZone,
@@ -106,7 +107,14 @@ type Result = {
 async function applyZone(
   row: { rowIndex: number; imm: string },
   analysis: { actions?: string[]; insufficientData?: boolean },
-  vehicle: ZoneVehicle
+  vehicle: ZoneVehicle,
+  /**
+   * The zone to write, when the caller already knows it. The fixed-routing path
+   * passes it because its ACTION line no longer necessarily names its zone —
+   * « Envoyer vers HAMID CLIM » parses back to "HAMID CLIM", which is not a
+   * valid zone. Model answers still go through the parse below.
+   */
+  explicitZone?: string | null
 ): Promise<Result["zone"]> {
   // Rule A0.5 has no basis to fire when the data could not support a
   // conclusion, and a wrongly-placed vehicle is a physical move someone has to
@@ -121,7 +129,7 @@ async function applyZone(
   // fallback (the controller must always have a destination); ZONING does not
   // inherit it, because a zone nobody chose is worse than an empty cell a human
   // will fill.
-  const candidate = parseDestinationZone(analysis.actions ?? []);
+  const candidate = explicitZone ?? parseDestinationZone(analysis.actions ?? []);
   if (!candidate || !isValidZone(candidate)) {
     return { outcome: "invalid", value: candidate ?? undefined };
   }
@@ -388,7 +396,12 @@ export async function POST(request: Request) {
       // back to statusWorkOrder() when it produced no destination at all. The
       // resulting list is what both the ACTION cell and the zone parse read, so
       // the two can never describe different destinations.
-      const finalActions = withDestination(analysis.actions ?? [], vehicle);
+      // withDestination() exists to guarantee a destination on a MODEL answer and
+      // to normalise its wording. The fixed-routing line is already exact and
+      // already single, and putting it through the parse would only give the
+      // provider-name form a chance to be rewritten — so it is passed straight
+      // through.
+      const finalActions = fixedActions ?? withDestination(analysis.actions ?? [], vehicle);
       const text = formatWorkOrder({ ...analysis, actions: finalActions });
       if (!text) {
         results.push({ imm, outcome: "no-action" });
@@ -412,7 +425,7 @@ export async function POST(request: Request) {
       // instructions. Reported as its own outcome rather than folded into the
       // ACTION one, because "work order written, zone rejected" is a real and
       // actionable state.
-      const zone = await applyZone(row, analysis, vehicle);
+      const zone = await applyZone(row, analysis, vehicle, fixedRoutingZone(vehicle));
       if (zone?.outcome === "invalid") {
         log("warn", "parking-actions", "Model named a zone that is not in the dropdown", {
           imm,

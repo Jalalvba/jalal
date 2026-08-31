@@ -373,14 +373,48 @@ export function fixedRoutingActions(vehicle: ZoneVehicle): string[] | null {
     // provider", so PRESTATAIRE overrides ZONING and the vehicle goes to the
     // workshop.
     if (/scal/i.test(prestataire)) return [ATELIER_ACTION];
-    // Verbatim: an operator-entered field, not free text to interpret. Nothing
-    // to invent when it is empty, so the line simply carries no name.
+    // The NAME alone — « Envoyer vers HAMID CLIM ». The controller is being
+    // told which garage to drive to, and "PRESTATAIRE-EXTERNE" is the zone's
+    // internal label, not somewhere a person can go. Verbatim: an
+    // operator-entered field, not free text to interpret.
+    //
+    // NOTE this line no longer names its own zone, so it can no longer be
+    // parsed back into one — see fixedRoutingZone(), which is what the ZONING
+    // write reads instead. Nothing to substitute when the cell is empty, so
+    // that case keeps the label.
     return prestataire
-      ? [`Envoyer vers ${ZONE.PRESTATAIRE_EXTERNE} (${prestataire})`]
+      ? [`Envoyer vers ${prestataire}`]
       : [`Envoyer vers ${ZONE.PRESTATAIRE_EXTERNE}`];
   }
 
   return [`Envoyer vers ${zoning}`];
+}
+
+/**
+ * The ZONING value a fixed-routing row must end up with — the cell value, not
+ * the ACTION text.
+ *
+ * These are two different strings on purpose. applyZone() otherwise recovers
+ * the zone by parsing it back out of the last action line, which works only
+ * while that line happens to contain the zone's name. It stopped being true
+ * for PRESTATAIRE-EXTERNE the moment the ACTION line became « Envoyer vers
+ * HAMID CLIM »: parseDestinationZone() would hand back "HAMID CLIM",
+ * isValidZone() would reject it, and the ZONING cell would silently go
+ * unwritten while the ACTION cell looked perfect.
+ *
+ * So the fixed-routing path states its zone instead of round-tripping it
+ * through prose. ZONING keeps the exact dropdown value in every case.
+ */
+export function fixedRoutingZone(vehicle: ZoneVehicle): string | null {
+  const zoning = String(vehicle.zoning ?? "").trim();
+  if (!A00_FIXED_ROUTING_ZONES.includes(zoning)) return null;
+  // The one case where the ACTION and the ZONING disagree by design: an
+  // operator naming Scal means the work is internal, so the vehicle is
+  // re-routed to the workshop and the cell must say so.
+  if (zoning === ZONE.PRESTATAIRE_EXTERNE && /scal/i.test(String(vehicle.prestataire ?? ""))) {
+    return ZONE.ATELIER;
+  }
+  return zoning;
 }
 
 export function zonePreconditionFailure(zone: string, vehicle: ZoneVehicle): string | null {
