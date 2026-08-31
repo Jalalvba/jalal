@@ -177,17 +177,18 @@ async function fetchSheetRows(): Promise<BddRow[]> {
 // FORMULAS maps exist) or these columns stay permanently blank -- Sheets
 // doesn't auto-fill a formula into a row the API appends.
 //
-// "mois_restant"'s template hardcodes "N{ROW}" (not looked up via colMap)
-// because that's what the live formula itself hardcodes -- N is
-// date_fin_contrat's column letter in the sheet's current layout. This stays
-// correct as long as the column order isn't restructured; if it ever is,
-// every existing row's formula breaks too, not just newly-added ones.
+// "mois_restant"'s template hardcodes "O{ROW}" (not looked up via colMap)
+// because that's what the live formula itself hardcodes -- O is
+// date_fin_contrat's column letter in the sheet's current layout, and N is
+// mois_restant's own column. This stays correct as long as the column order
+// isn't restructured; if it ever is, every existing row's formula breaks too,
+// not just newly-added ones.
 const BDD_FORMULAS: Record<string, string> = {
   date: '=XLOOKUP(A{ROW};RL!D:D;RL!B:B;46422;0;1)',
   client: '=XLOOKUP(A{ROW};RL!D:D;RL!C:C;"INCONNU";0;1)',
   modele: '=XLOOKUP(A{ROW};parc!F:F;parc!E:E;"INCONNU";0;1)',
   "Reunion N-1": '=XLOOKUP(A{ROW};RL_reunion!A:A;RL_reunion!B:B;"";0;1)',
-  mois_restant: '=IFERROR(DATEDIF(TODAY();N{ROW};"m");0)',
+  mois_restant: '=IFERROR(DATEDIF(TODAY();O{ROW};"m");0)',
   date_fin_contrat: '=XLOOKUP(A{ROW};CP!G:G;CP!Q:Q;"";0;1)',
   lieu_Reparation: '=XLOOKUP(A{ROW};RL!D:D;RL!U:U;"";0;1)',
   Motif: '=XLOOKUP(A{ROW};RL!D:D;RL!S:S;"";0;1)',
