@@ -308,8 +308,22 @@ export function resolveIMM(token: string, immList: string[]): string {
 
 // ─── addIMMsFromWeb ────────────────────────────────────────────────────────
 
-// XLOOKUP formulas, verbatim from Parking.gs's CFG_PARKING_SHEET.FORMULAS —
-// semicolon argument separators are this spreadsheet's locale, not a typo.
+// XLOOKUP formulas seeded into a newly-appended row. Semicolon argument
+// separators are this spreadsheet's locale, not a typo.
+//
+// WHAT IS ACTUALLY VERIFIED: every template here was confirmed identical to
+// the formula live on the sheet, across all 42 data rows, via a
+// valueRenderOption: FORMULA read (2026-08-31) — not just row 2, and each
+// column was 100% homogeneous.
+//
+// An earlier version of this comment claimed the map was "verbatim from
+// Parking.gs's CFG_PARKING_SHEET.FORMULAS". That was never checked. The GAS
+// project is not readable from this environment (no Apps Script API access,
+// and no .gs file in this repo — it is the port, not a copy), so agreement
+// with deployed GAS source cannot be asserted from here, only agreement with
+// the live sheet, which is what actually governs correctness. If someone does
+// compare against a pasted copy of the config, that proves the paste is
+// consistent — not that it is what is deployed.
 const FORMULAS: Record<string, string> = {
   MARQUE: '=XLOOKUP(A{ROW};parc!F:F;parc!D:D;"";0;1)',
   MODEL: '=XLOOKUP(A{ROW};parc!F:F;parc!E:E;"";0;1)',
