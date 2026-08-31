@@ -325,6 +325,10 @@ const FORMULAS: Record<string, string> = {
   PARTS: '=XLOOKUP(A{ROW};ds!D:D;ds!G:G;"";0;-1)',
   TECHNICEIN: '=XLOOKUP(A{ROW};ds!D:D;ds!E:E;"";0;-1)',
   FOUNISSEUR: '=XLOOKUP(A{ROW};ds!D:D;ds!F:F;"";0;-1)',
+  // Column S, added to the live sheet 2026-08-31 — reads the provider out of
+  // BDD!F:F (prestataire). Missing from this map until now, so every plate
+  // added through the API had a permanently blank PRESTATAIRE cell.
+  PRESTATAIRE: '=XLOOKUP(A{ROW};BDD!A:A;BDD!F:F;"";0;1)',
 };
 
 /**
