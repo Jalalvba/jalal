@@ -351,6 +351,22 @@ const FORMULAS: Record<string, string> = {
   PRESTATAIRE: '=XLOOKUP(A{ROW};BDD!A:A;BDD!F:F;"";0;1)',
 };
 
+// KM is deliberately absent from the map above, and its absence is NOT an
+// oversight of the same kind PRESTATAIRE's was. KM is a manual-entry column
+// (CFG_PARKING_SHEET classifies it 'manual'; updateManualKm() writes it, and
+// resolveVehicleKm() gives a manual value priority over the DS-derived one),
+// so a new row correctly starts blank and waits for someone to type a reading.
+//
+// A live read will nonetheless show 35 of 42 rows carrying
+// `=XLOOKUP(A{ROW};ATELIER!A:A;ATELIER!B:B;"";0;1)` in KM while 7 are empty
+// (2026-08-31). That split is legacy, not a bug and not a seed new rows are
+// missing out on. Note the dating is the sheet owner's account, not something
+// this repo can prove: PARKING's TIMESTAMP is bumped on re-add, so it is not a
+// creation date and cannot place those rows relative to 9877bff. What IS
+// checkable is that the formula evaluates to "" on all 35 rows today, so it
+// contributes nothing either way. Don't "restore" it here.
+
+
 /**
  * Comma-separated tokens, each resolved via resolveIMM(). A plate already
  * present in PARKING just gets its TIMESTAMP bumped to now (moves it to the
