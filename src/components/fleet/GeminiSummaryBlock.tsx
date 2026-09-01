@@ -18,7 +18,6 @@ import { useBddRows } from "@/hooks/useBddRows";
 import { useStoredAnalyses, useInvalidateStoredAnalyses } from "@/hooks/useStoredAnalyses";
 import { markFresh } from "@/hooks/freshFetch";
 import { AnalyseAndSaveButton } from "@/components/fleet/AnalyseAndSaveButton";
-import { DetailsToggle } from "@/components/fleet/DetailsToggle";
 
 type Props = {
   imm: string;
@@ -121,15 +120,44 @@ export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo, hideB
   }
 
   return (
-    <div className={`rounded-xl border border-border bg-muted/40 px-3 py-2 ${className ?? ""}`}>
+    <div className={`rounded-xl border border-border bg-muted/40 px-3 py-1.5 ${className ?? ""}`}>
+      {/* One row, collapsed: label + chevron + Regénérer. The separate
+          full-width toggle bar this replaced made the block two rows tall
+          before it showed anything, which on Suivi RL is 25 cards each
+          spending a row to say they have a row.
+
+          The label and chevron are the toggle — the whole left side is the
+          hit target — and the Regénérer button sits OUTSIDE it rather than
+          inside: a <button> cannot contain another <button>, and nesting them
+          would also make "regenerate" ambiguous with "expand". */}
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-semibold uppercase tracking-widest text-muted-foreground transition hover:text-foreground"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className="flex-shrink-0"
+            aria-hidden="true"
+          >
+            <path d={open ? "M4 10l4-4 4 4" : "M4 6l4 4 4-4"} strokeLinecap="round" />
+          </svg>
           Résumé IA
-        </span>
+        </button>
         {!hideButton && (
         <AnalyseAndSaveButton
           imm={imm}
-          className="ml-auto"
+          // h-7 so the collapsed block matches the height of the
+          // FieldRowTrigger rows above it; the button's own default sizing
+          // made the row 14px taller than Emplacement / Délai / Prestataire.
+          className="h-7"
           // A plate that already has a summary costs a full Gemini call to
           // re-answer, so re-running is put behind a confirm — see the note at
           // the top of AnalyseAndSaveButton.
@@ -152,13 +180,6 @@ export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo, hideB
           </span>
         )}
       </p>
-      <DetailsToggle
-        open={open}
-        onToggle={() => setOpen((o) => !o)}
-        openLabel="Masquer le résumé"
-        closedLabel="Voir le résumé"
-        className="mt-1"
-      />
     </div>
   );
 }
