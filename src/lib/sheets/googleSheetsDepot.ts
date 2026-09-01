@@ -9,6 +9,7 @@ import {
   getSheetsClient,
   invalidateCache,
   nowToSerial,
+  requireCol,
   serialToUTCDate,
   verifyRowIdentity,
   withCache,
@@ -107,12 +108,12 @@ async function fetchDepotRows(): Promise<DepotRow[]> {
 
   const headers = values[0].map((h) => String(h ?? "").trim().toUpperCase());
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
-  const actionCol = colMap["ACTION"] ?? 2;
-  const marqueCol = colMap["MARQUE"] ?? 3;
-  const modelCol = colMap["MODEL"] ?? 4;
-  const clientCol = colMap["CLIENT"] ?? 5;
-  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const immCol = requireCol(colMap, "IMM", DEPOT_TAB);
+  const actionCol = requireCol(colMap, "ACTION", DEPOT_TAB);
+  const marqueCol = requireCol(colMap, "MARQUE", DEPOT_TAB);
+  const modelCol = requireCol(colMap, "MODEL", DEPOT_TAB);
+  const clientCol = requireCol(colMap, "CLIENT", DEPOT_TAB);
+  const tsCol = requireCol(colMap, "TIMESTAMP", DEPOT_TAB);
   const rlReunionCol = colMap["RL_REUNION"];
   const motifCol = colMap["MOTIF"];
   const etatVehiculeCol = colMap["ETAT VÉHICULE"];
@@ -219,8 +220,8 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
-  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const immCol = requireCol(colMap, "IMM", DEPOT_TAB);
+  const tsCol = requireCol(colMap, "TIMESTAMP", DEPOT_TAB);
 
   const dataRes = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
@@ -325,9 +326,9 @@ export async function updateDepotAction(rowIndex: number, action: string, expect
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
-  const actionCol = colMap["ACTION"] ?? 2;
-  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const immCol = requireCol(colMap, "IMM", DEPOT_TAB);
+  const actionCol = requireCol(colMap, "ACTION", DEPOT_TAB);
+  const tsCol = requireCol(colMap, "TIMESTAMP", DEPOT_TAB);
 
   await verifyRowIdentity(
     sheets,
@@ -360,7 +361,7 @@ export async function deleteDepotRow(rowIndex: number, expectedImm: string): Pro
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
+  const immCol = requireCol(colMap, "IMM", DEPOT_TAB);
 
   await verifyRowIdentity(
     sheets,
@@ -392,9 +393,9 @@ export async function clearDepotAll(): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
-  const actionCol = colMap["ACTION"] ?? 2;
-  const tsCol = colMap["TIMESTAMP"] ?? 15;
+  const immCol = requireCol(colMap, "IMM", DEPOT_TAB);
+  const actionCol = requireCol(colMap, "ACTION", DEPOT_TAB);
+  const tsCol = requireCol(colMap, "TIMESTAMP", DEPOT_TAB);
 
   const props = await getDepotSheetProps(sheets);
   const lastRow = props.rowCount;
