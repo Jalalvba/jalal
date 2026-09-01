@@ -15,6 +15,7 @@ import {
   getSheetsClient,
   invalidateCache,
   nowToSerial,
+  requireCol,
   serialToUTCDate,
   verifyRowIdentity,
   withCache,
@@ -121,7 +122,7 @@ async function fetchAtelierRows(): Promise<AtelierRow[]> {
 
   const headers = values[0].map((h) => String(h ?? "").trim().toUpperCase());
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
+  const immCol = requireCol(colMap, "IMM", ATELIER_TAB);
   const marqueCol = colMap["MARQUE"];
   const modelCol = colMap["MODEL"];
   const clientCol = colMap["CLIENT"];
@@ -244,7 +245,7 @@ export async function addAtelierPlates(rawInput: string): Promise<ParkingAddResp
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
+  const immCol = requireCol(colMap, "IMM", ATELIER_TAB);
   const tsCol = colMap["TIMESTAMP"];
   if (!tsCol) throw new Error(`Column 'TIMESTAMP' not found in the live '${ATELIER_TAB}' header row`);
 
@@ -365,7 +366,7 @@ export async function updateAtelierField(
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
+  const immCol = requireCol(colMap, "IMM", ATELIER_TAB);
   const fieldCol = colMap[field];
   const tsCol = colMap["TIMESTAMP"];
   if (!fieldCol) throw new Error(`Column '${field}' not found in the live '${ATELIER_TAB}' header row`);
@@ -402,7 +403,7 @@ export async function deleteAtelierRow(rowIndex: number, expectedImm: string): P
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
+  const immCol = requireCol(colMap, "IMM", ATELIER_TAB);
 
   await verifyRowIdentity(
     sheets,
@@ -434,7 +435,7 @@ export async function clearAtelierAll(): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"] ?? 1;
+  const immCol = requireCol(colMap, "IMM", ATELIER_TAB);
   const tsCol = colMap["TIMESTAMP"];
 
   const props = await getAtelierSheetProps(sheets);
@@ -515,7 +516,7 @@ export async function writeAtelierGeminiSummary(
   const match = rows.find((r) => r.imm.trim() === plate);
   if (!match) return { ok: false, reason: "no-row" };
 
-  const immCol = colMap["IMM"] ?? 1;
+  const immCol = requireCol(colMap, "IMM", ATELIER_TAB);
   try {
     await verifyRowIdentity(
       sheets,
