@@ -358,15 +358,13 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
             <FieldRowTrigger label="Emplacement" placeholder="— Choisir —" {...state} />
           )}
         />
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-micro uppercase tracking-wide text-muted-foreground">Délai</span>
-          <InlineEditDate
-            value={String(row["Délai"] ?? "")}
-            resyncDeps={[row._row, row["Délai"]]}
-            onCommit={commitField("Délai")}
-            className="max-w-[9.5rem]"
-          />
-        </div>
+        <InlineEditDate
+          value={String(row["Délai"] ?? "")}
+          onCommit={commitField("Délai")}
+          renderTrigger={(state) => (
+            <FieldRowTrigger label="Délai" placeholder="— Aucune —" {...state} />
+          )}
+        />
         <InlineEditCombobox
           value={row.prestataire}
           options={optionValues(options.PRESTATAIRE_OPTIONS)}

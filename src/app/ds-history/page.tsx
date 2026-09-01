@@ -676,14 +676,11 @@ function BddEditableRow({ row }: { row: BddRow }) {
         {f("Catégorie", row["Catégorie"])}
         {f("Technicien", row.Technicien)}
         {f("Réunion N-1", row["Reunion N-1"])}
-        <div>
-          <div className="text-micro uppercase tracking-wide text-muted-foreground">Délai</div>
-          <InlineEditDate
-            value={String(row["Délai"] ?? "")}
-            resyncDeps={[row._row, row["Délai"]]}
-            onCommit={commitField("Délai")}
-          />
-        </div>
+        <InlineEditDate
+          value={String(row["Délai"] ?? "")}
+          onCommit={commitField("Délai")}
+          renderTrigger={(state) => <FieldRowTrigger label="Délai" placeholder="— Aucune —" {...state} />}
+        />
       </div>
 
       <div className="mt-3">
