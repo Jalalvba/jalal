@@ -399,7 +399,6 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
               modele: String(row.modele ?? ""),
               etat: String(row.ETAT ?? ""),
               prestataire: String(row.prestataire ?? ""),
-              flag: String(row.flag ?? ""),
               categorie: String(row["Catégorie"] ?? ""),
               technicien: String(row.Technicien ?? ""),
               delai: String(row["Délai"] ?? ""),

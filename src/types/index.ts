@@ -877,11 +877,15 @@ export type ImportStatusResponse =
 // precisely so this stays true.
 export type { CostInfo } from "@/lib/ai/types";
 
+// NOTE: `flag` is deliberately ABSENT. It is an internal triage marker the
+// team re-sorts month to month; it says nothing about the vehicle, so putting
+// it in an AI payload can only add ungrounded noise. Removed from this type,
+// from buildUserTurn() and from the call site together — structurally, not by
+// telling the model to ignore it, same as the blank-field rule in that route.
 export type ReformulateCommentContext = {
   modele?: string;
   etat?: string;
   prestataire?: string;
-  flag?: string;
   categorie?: string;
   technicien?: string;
   /** BDD's "Délai" — the manual target date. */

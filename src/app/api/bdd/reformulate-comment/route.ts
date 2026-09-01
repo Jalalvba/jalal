@@ -23,6 +23,7 @@ import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
 import { callAI, AiCallError, type AiErrorKind } from "@/lib/ai";
 import type { ReformulateCommentRequest } from "@/types";
+import { isInHousePrestataire } from "@/lib/utils/prestataire";
 
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60 * 1000; // 1 minute
@@ -50,9 +51,13 @@ const SYSTEM_INSTRUCTION = [
   "5. Only the context fields listed in the message exist. Any other field is absent, and absent means it is never mentioned — not its value, and not its name either.",
   "6. For an absent field, write NOTHING about it. No placeholder, no empty label, no 'non spécifié', no 'non renseigné', no 'aucun technicien assigné', no 'à définir', no parentheses left open. Do not point out that anything is missing. The note must read as if that field had never applied to this vehicle.",
   "",
+  "IN-HOUSE VS EXTERNAL:",
+  "7. When the message says 'Prise en charge: en interne, à notre propre atelier', the work is being done by AVIS's own workshop. Say so — 'pris en charge en interne à l'atelier' or equivalent. NEVER present it as an outside garage, never write 'chez le prestataire', and never name the in-house entity as if it were a provider.",
+  "8. Only a line labelled 'Prestataire' names an EXTERNAL garage. If there is no such line, no external provider is involved: do not invent one.",
+  "",
   "STYLE:",
-  "7. Concise, factual, professional French. Fix grammar and tighten wording. No commercial pitch, no alarmist tone.",
-  "8. Return ONLY the rewritten Commentaire text — no labels, no quotes, no explanation, no heading.",
+  "9. Concise, factual, professional French. Fix grammar and tighten wording. No commercial pitch, no alarmist tone.",
+  "10. Return ONLY the rewritten Commentaire text — no labels, no quotes, no explanation, no heading.",
 ].join("\n");
 
 // Builds the user-turn text, omitting any blank/undefined context field
@@ -78,11 +83,20 @@ const SYSTEM_INSTRUCTION = [
 // footgun), so this coerces via String() rather than trusting the declared
 // `string | undefined` type and calling .trim() directly.
 function buildUserTurn(comment: string, context: ReformulateCommentRequest["context"]): string {
+  // "Prestataire" labels an EXTERNAL garage only. An in-house value (SCAL and
+  // its variants) is never emitted under that label — it becomes the
+  // "Prise en charge" line below instead, so the model is never handed the
+  // words that produce "chez le prestataire SCAL". Structural, like the
+  // blank-field omission above: the wrong framing is not available to it.
+  //
+  // `flag` is absent from ReformulateCommentContext entirely and must stay
+  // absent — an internal triage marker, re-sorted month to month, carrying
+  // nothing about the vehicle.
+  const inHouse = isInHousePrestataire(context?.prestataire);
   const pairs: [string, unknown][] = [
     ["Modèle", context?.modele],
     ["ETAT", context?.etat],
-    ["Prestataire", context?.prestataire],
-    ["Flag", context?.flag],
+    ["Prestataire", inHouse ? "" : context?.prestataire],
     ["Catégorie", context?.categorie],
     ["Technicien", context?.technicien],
     ["Délai", context?.delai],
@@ -97,6 +111,7 @@ function buildUserTurn(comment: string, context: ReformulateCommentRequest["cont
 
   return [
     contextLine ? `Contexte: ${contextLine}` : "",
+    inHouse ? "Prise en charge: en interne, à notre propre atelier" : "",
     reunion ? `Conclusion de la dernière réunion (à suivre): ${reunion}` : "",
     `Commentaire original: ${comment}`,
   ]

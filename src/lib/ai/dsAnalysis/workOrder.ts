@@ -7,6 +7,7 @@
 
 import type { DsAnalysis } from "@/lib/ai/prompts/dsAnalysis";
 import { A00_FIXED_ROUTING_ZONES, PARKING_ZONE_VALUES, ZONE, isValidZone } from "@/lib/ai/dsAnalysis/prompt-parking";
+import { isInHousePrestataire } from "@/lib/utils/prestataire";
 
 /** A cell holding more than this is unusable in a spreadsheet UI anyway. */
 const MAX_CELL = 1500;
@@ -367,12 +368,11 @@ export function fixedRoutingActions(vehicle: ZoneVehicle): string[] | null {
 
   if (zoning === ZONE.PRESTATAIRE_EXTERNE) {
     const prestataire = String(vehicle.prestataire ?? "").trim();
-    // "Scal" — in any case, anywhere in the value ("Scal Casa", "SCAL AVIS") —
-    // is AVIS's OWN in-house entity. An operator naming Scal has said the work
-    // is internal, which cannot be true at the same time as "external
-    // provider", so PRESTATAIRE overrides ZONING and the vehicle goes to the
-    // workshop.
-    if (/scal/i.test(prestataire)) return [ATELIER_ACTION];
+    // An operator naming Scal has said the work is internal, so PRESTATAIRE
+    // overrides ZONING and the vehicle goes to the workshop. The predicate
+    // itself lives in src/lib/utils/prestataire.ts, shared with the Commentaire
+    // reformulation route so the two cannot disagree on what is in-house.
+    if (isInHousePrestataire(prestataire)) return [ATELIER_ACTION];
     // The NAME alone — « Envoyer vers HAMID CLIM ». The controller is being
     // told which garage to drive to, and "PRESTATAIRE-EXTERNE" is the zone's
     // internal label, not somewhere a person can go. Verbatim: an
