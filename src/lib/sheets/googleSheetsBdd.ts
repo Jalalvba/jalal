@@ -87,7 +87,7 @@ function buildColMap(headers: string[]): Record<string, number> {
 // see BDD_HEADERS comment in src/types/index.ts); "RDV" added — its XLOOKUP
 // formula returns RDV!A:A (the RDV tab's Date column), confirmed live to
 // be a date serial too.
-const DATE_LIKE_HEADERS = new Set(["date", "date_fin_contrat", "date_ds", "RDV"]);
+const DATE_LIKE_HEADERS = new Set(["date", "date_fin_contrat", "date_ds", "RDV", "Délai"]);
 
 function formatCellValue(header: string, raw: unknown): string | number {
   if (raw == null) return "";
@@ -151,11 +151,11 @@ async function fetchSheetRows(): Promise<BddRow[]> {
     const record: Record<string, string | number> = {};
     headers.forEach((header, colIdx) => {
       if (!header) return; // unnamed trailing columns (e.g. W-AB on this sheet)
-      // Live sheet has a duplicate header ("Technicien" appears at both the
-      // real editable column and a mislabeled DATE_DS-formula column further
-      // right) — keep the first occurrence so reads agree with
-      // updateSheetRow()'s headers.indexOf(), which already resolves to the
-      // first match.
+      // Defensive: the live sheet once carried a duplicate header
+      // ("Technicien" on both the real column and a mislabeled DATE_DS one).
+      // No duplicates remain as of the 2026-09-01 live read, but keeping the
+      // first occurrence is what updateSheetRow()'s headers.indexOf() resolves
+      // to, so the two stay in agreement if one ever reappears.
       if (header in record) return;
       record[header] = formatCellValue(header, row[colIdx]);
     });
@@ -177,12 +177,12 @@ async function fetchSheetRows(): Promise<BddRow[]> {
 // FORMULAS maps exist) or these columns stay permanently blank -- Sheets
 // doesn't auto-fill a formula into a row the API appends.
 //
-// "mois_restant"'s template hardcodes "O{ROW}" (not looked up via colMap)
-// because that's what the live formula itself hardcodes -- O is
-// date_fin_contrat's column letter in the sheet's current layout, and N is
-// mois_restant's own column. This stays correct as long as the column order
-// isn't restructured; if it ever is, every existing row's formula breaks too,
-// not just newly-added ones.
+// "mois_restant"'s template hardcodes "V{ROW}" (not looked up via colMap)
+// because that's what the live formula itself hardcodes -- V is
+// date_fin_contrat's column letter in the sheet's current layout, and U is
+// mois_restant's own column. That letter was "O" until the 2026-09-01 sheet
+// restructure moved the column; it is the one thing in this map that a column
+// reorder silently breaks, so re-read it live whenever the layout changes.
 const BDD_FORMULAS: Record<string, string> = {
   // "SANS RL", not the serial 46422: `date` is in DATE_LIKE_HEADERS, so a
   // numeric fallback renders as a fabricated date instead of the marker.
@@ -194,7 +194,11 @@ const BDD_FORMULAS: Record<string, string> = {
     '=IF(XLOOKUP(A{ROW}; parc!F:F; parc!C:C; ""; 0; 1)=""; XLOOKUP(A{ROW}; parc!F:F; parc!B:B; ""; 0; 1); XLOOKUP(A{ROW}; parc!F:F; parc!C:C; ""; 0; 1))',
   modele: '=XLOOKUP(A{ROW};parc!F:F;parc!E:E;"";0;1)',
   "Reunion N-1": '=XLOOKUP(A{ROW};RL_reunion!A:A;RL_reunion!B:B;"";0;1)',
-  mois_restant: '=IFERROR(DATEDIF(TODAY();O{ROW};"m");0)',
+  // Manual until the 2026-09-01 restructure, now ATELIER-tab lookups -- an
+  // appended row needs them written in like every other formula column.
+  "Catégorie": '=XLOOKUP(A{ROW};ATELIER!A:A;ATELIER!G:G;"";0;1)',
+  Technicien: '=XLOOKUP(A{ROW};ATELIER!A:A;ATELIER!H:H;"";0;1)',
+  mois_restant: '=IFERROR(DATEDIF(TODAY();V{ROW};"m");0)',
   date_fin_contrat: '=XLOOKUP(A{ROW};CP!G:G;CP!Q:Q;"";0;1)',
   lieu_Reparation: '=XLOOKUP(A{ROW};RL!D:D;RL!U:U;"";0;1)',
   Motif: '=XLOOKUP(A{ROW};RL!D:D;RL!S:S;"";0;1)',

@@ -209,7 +209,7 @@ async function downloadBddExcel(
 // Server allowlist (src/types/index.ts's BDD_EDITABLE_FIELDS) is unchanged — this
 // page just commits one of these keys at a time now instead of bundling
 // all of them into one form submit.
-type FieldKey = "ETAT" | "prestataire" | "flag" | "Emplacement" | "Catégorie" | "commentaire" | "Technicien";
+type FieldKey = "ETAT" | "prestataire" | "flag" | "Emplacement" | "commentaire";
 
 // Everything shown once, either as one of the always-visible editable rows
 // below or promoted into the client/modele subtitle — the remainder is
@@ -233,8 +233,6 @@ const READONLY_HEADERS = BDD_HEADERS.filter(
     // the dim reference list — it is a paragraph, not a reference value, and
     // the one field on this card the app writes rather than the user.
     h !== "gemini" &&
-    h !== "Catégorie" &&
-    h !== "Technicien" &&
     !(BDD_ZONE_DETECTION_HEADERS as readonly string[]).includes(h)
 );
 
@@ -350,24 +348,6 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
           onCommit={commitField("Emplacement")}
           renderTrigger={(state) => (
             <FieldRowTrigger label="Emplacement" placeholder="— Choisir —" {...state} />
-          )}
-        />
-        <InlineEditSelect
-          value={row["Catégorie"]}
-          options={options.CATEGORIE_OPTIONS}
-          label="Catégorie"
-          onCommit={commitField("Catégorie")}
-          renderTrigger={(state) => (
-            <FieldRowTrigger label="Catégorie" placeholder="— Choisir —" {...state} />
-          )}
-        />
-        <InlineEditSelect
-          value={row.Technicien}
-          options={options.TECHNICIEN_OPTIONS}
-          label="Technicien"
-          onCommit={commitField("Technicien")}
-          renderTrigger={(state) => (
-            <FieldRowTrigger label="Technicien" placeholder="— Choisir —" {...state} />
           )}
         />
         <InlineEditCombobox

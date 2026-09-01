@@ -130,6 +130,15 @@ export type CpApiResponse = {
 // src/hooks/useVehicleZone.ts already computes client-side. The two can
 // legitimately disagree (stale manual entry, or a failed automated match)
 // — that disagreement is itself useful, not a bug to reconcile away.
+//
+// 2026-09-01, re-read live: the sheet-side GAS was restructured. The order
+// below is the live header row verbatim, and three things changed with it.
+// "Délai" is new — a MANUAL date column on the sheet, preserved across
+// InitializeAndSyncBDDTab() resets, read-only from this app. "Catégorie" and
+// "Technicien" stopped being manual and are now per-row XLOOKUPs against the
+// ATELIER tab (columns G and H), so they left BDD_EDITABLE_FIELDS: writing a
+// value there would overwrite the formula in the live sheet. And there are no
+// duplicate header names anywhere in the row.
 
 export const BDD_HEADERS = [
   "IMM",
@@ -141,26 +150,27 @@ export const BDD_HEADERS = [
   "flag",
   "Emplacement",
   "commentaire",
-  "gemini",
+  "Reunion N-1",
+  "Délai",
   "Catégorie",
   "Technicien",
-  "Reunion N-1",
-  "ds",
   "date_ds",
+  "ds",
   "Parts",
-  "Technicein_ds",
   "Founisseur",
-  "mois_restant",
-  "date_fin_contrat",
-  "lieu_Reparation",
-  "Motif",
-  "station_départ",
-  "RDV",
-  "CONVOYEUR",
-  "Intervention",
   "ATELIER",
   "DEPOT",
   "PARKING",
+  "mois_restant",
+  "date_fin_contrat",
+  "gemini",
+  "lieu_Reparation",
+  "Motif",
+  "station_départ",
+  "Technicein_ds",
+  "RDV",
+  "CONVOYEUR",
+  "Intervention",
 ] as const;
 
 export type BddRow = {
@@ -179,6 +189,8 @@ export type BddRow = {
   "Catégorie": string;
   Technicien: string;
   "Reunion N-1": string;
+  /** Manual target/deadline date, entered on the sheet side only. */
+  "Délai": string;
   ds: string;
   date_ds: string;
   Parts: string;
@@ -198,8 +210,10 @@ export type BddRow = {
 };
 
 // Business-rule allowlist (not derived from the sheet — a deliberate policy:
-// only these 7 of the 28 real columns in BDD_HEADERS above are writable from
-// this app; Emplacement joined the list in 3d9bd87). Shared
+// only these 5 of the 30 real columns in BDD_HEADERS above are writable from
+// this app; Emplacement joined the list in 3d9bd87, and Catégorie/Technicien
+// left it on 2026-09-01 when the sheet turned them into XLOOKUP formulas).
+// Shared
 // between the server-side check in src/lib/sheets/googleSheetsBdd.ts and the UI's edit
 // form so both agree on the same set without duplicating the literal list.
 export const BDD_EDITABLE_FIELDS = [
@@ -207,9 +221,7 @@ export const BDD_EDITABLE_FIELDS = [
   "prestataire",
   "flag",
   "Emplacement",
-  "Catégorie",
   "commentaire",
-  "Technicien",
   // Written only by the AI-analysis save path, never by an inline cell edit —
   // the UI does not expose it as editable. It is on this allowlist because
   // updateSheetRow() refuses anything absent from it, which is the guard worth

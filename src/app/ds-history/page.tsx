@@ -584,7 +584,7 @@ function f(label: string, val?: string) {
 
 // ─── BDD row (editable) ───────────────────────────────────────────────────────
 //
-// Same 6 BDD_EDITABLE_FIELDS, same InlineEdit* components, same
+// Same BDD_EDITABLE_FIELDS, same InlineEdit* components, same
 // useUpdateBddRow/useOptimisticBddUpdate mutation as src/app/suivi-rl/page.tsx —
 // this card and Suivi RL edit the exact same sheet row (matched by `_row`),
 // now via the same shared react-query cache (see useBddRows()), so a write
@@ -672,20 +672,8 @@ function BddEditableRow({ row }: { row: BddRow }) {
           placeholder="Prestataire…"
           renderTrigger={(state) => <FieldRowTrigger label="Prestataire" placeholder="— Aucun —" dot={dot} {...state} />}
         />
-        <InlineEditSelect
-          value={row["Catégorie"]}
-          options={options.CATEGORIE_OPTIONS}
-          label="Catégorie"
-          onCommit={commitField("Catégorie")}
-          renderTrigger={(state) => <FieldRowTrigger label="Catégorie" placeholder="— Choisir —" {...state} />}
-        />
-        <InlineEditSelect
-          value={row.Technicien}
-          options={options.TECHNICIEN_OPTIONS}
-          label="Technicien"
-          onCommit={commitField("Technicien")}
-          renderTrigger={(state) => <FieldRowTrigger label="Technicien" placeholder="— Choisir —" {...state} />}
-        />
+        {f("Catégorie", row["Catégorie"])}
+        {f("Technicien", row.Technicien)}
         {f("Réunion N-1", row["Reunion N-1"])}
       </div>
 
