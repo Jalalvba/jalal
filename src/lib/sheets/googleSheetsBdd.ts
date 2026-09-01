@@ -13,6 +13,7 @@ import {
   fmtDateOnlySlash,
   getSheetsClient,
   invalidateCache,
+  isoDateToSerial,
   serialToUTCDate,
   verifyRowIdentity,
   withCache,
@@ -310,6 +311,29 @@ export async function addBddRow(imm: string, etat: string): Promise<ParkingAddRe
 }
 
 /**
+ * The value actually written for one field.
+ *
+ * Everything is written RAW (never USER_ENTERED — it eats the leading zeros
+ * off digit-only text), and RAW stores a JSON string as a string. That is
+ * right for every text field, but wrong for an editable DATE column: writing
+ * "2026-09-15" there leaves a text cell that only *looks* like a date, so the
+ * column's date format renders nothing, the sheet-side date validation
+ * rejects it, and this module's own reader — which converts a date column
+ * only when the raw value is a number — would hand the text straight back.
+ *
+ * So an editable date field is converted to a whole-day serial and written as
+ * a JSON number, which RAW stores as a real date value. An empty string stays
+ * an empty string: that is how the field is cleared. A malformed value is
+ * passed through unchanged rather than silently becoming a wrong date — the
+ * `<input type="date">` cannot produce one, and a caller that hand-rolls a
+ * request deserves to see its own bad input in the cell, not a guess.
+ */
+function toCellValue(field: string, value: string): string | number {
+  if (!DATE_LIKE_HEADERS.has(field) || value.trim() === "") return value;
+  return isoDateToSerial(value) ?? value;
+}
+
+/**
  * Writes `updates` to the given sheet row. Only fields in BDD_EDITABLE_FIELDS
  * are ever accepted — anything else is rejected outright (the whole call
  * fails, nothing partial-writes), and the rejected field names are returned
@@ -405,11 +429,49 @@ export async function updateSheetRow(
         const colLetter = columnIndexToLetter(colIdx + 1);
         return {
           range: `'${BDD_TAB_NAME}'!${colLetter}${row}`,
-          values: [[updates[field]]],
+          values: [[toCellValue(field, updates[field])]],
         };
       }),
     },
   });
+
+  // Re-assert the date format on every date column written.
+  //
+  // A RAW values write of "" does not blank a cell, it DELETES it — and the
+  // deleted cell takes its userEnteredFormat with it. Clearing Délai from the
+  // card therefore stripped the column's dd/mm/yyyy format, and the next date
+  // written into that cell rendered as a bare serial ("46295") instead of a
+  // date. Observed live on BDD!K2 while testing this field: every other row in
+  // the column still carried the format, that one no longer did.
+  //
+  // repeatCell is a format-only request (the fields mask names numberFormat
+  // and nothing else), so it never touches the value just written.
+  const dateFields = requestedFields.filter((f) => DATE_LIKE_HEADERS.has(f));
+  if (dateFields.length > 0) {
+    const { sheetId } = await getBddSheetProps(sheets);
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: spreadsheetId!,
+      requestBody: {
+        requests: dateFields.map((field) => {
+          const colIdx = headers.indexOf(field); // 0-based
+          return {
+            repeatCell: {
+              range: {
+                sheetId,
+                startRowIndex: row - 1,
+                endRowIndex: row,
+                startColumnIndex: colIdx,
+                endColumnIndex: colIdx + 1,
+              },
+              cell: { userEnteredFormat: { numberFormat: { type: "DATE", pattern: "dd/mm/yyyy" } } },
+              fields: "userEnteredFormat.numberFormat",
+            },
+          };
+        }),
+      },
+    });
+  }
+
   invalidateCache(ROWS_CACHE_KEY);
 
   return { ok: true, written: requestedFields };

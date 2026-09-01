@@ -31,6 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { InlineEditSelect } from "@/components/fleet/InlineEditSelect";
+import { InlineEditDate } from "@/components/fleet/InlineEditDate";
 import { InlineEditText } from "@/components/fleet/InlineEditText";
 import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
 import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
@@ -675,6 +676,14 @@ function BddEditableRow({ row }: { row: BddRow }) {
         {f("Catégorie", row["Catégorie"])}
         {f("Technicien", row.Technicien)}
         {f("Réunion N-1", row["Reunion N-1"])}
+        <div>
+          <div className="text-micro uppercase tracking-wide text-muted-foreground">Délai</div>
+          <InlineEditDate
+            value={String(row["Délai"] ?? "")}
+            resyncDeps={[row._row, row["Délai"]]}
+            onCommit={commitField("Délai")}
+          />
+        </div>
       </div>
 
       <div className="mt-3">

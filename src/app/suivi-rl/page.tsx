@@ -30,6 +30,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { usePlateAutocomplete } from "@/hooks/usePlateAutocomplete";
 import { InlineEditSelect, type InlineEditTriggerState } from "@/components/fleet/InlineEditSelect";
+import { InlineEditDate } from "@/components/fleet/InlineEditDate";
 import { InlineEditText } from "@/components/fleet/InlineEditText";
 import { InlineEditCombobox } from "@/components/fleet/InlineEditCombobox";
 import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
@@ -209,7 +210,7 @@ async function downloadBddExcel(
 // Server allowlist (src/types/index.ts's BDD_EDITABLE_FIELDS) is unchanged — this
 // page just commits one of these keys at a time now instead of bundling
 // all of them into one form submit.
-type FieldKey = "ETAT" | "prestataire" | "flag" | "Emplacement" | "commentaire";
+type FieldKey = "ETAT" | "prestataire" | "flag" | "Emplacement" | "commentaire" | "Délai";
 
 // Everything shown once, either as one of the always-visible editable rows
 // below or promoted into the client/modele subtitle — the remainder is
@@ -229,6 +230,7 @@ const READONLY_HEADERS = BDD_HEADERS.filter(
     h !== "flag" &&
     h !== "Emplacement" &&
     h !== "commentaire" &&
+    h !== "Délai" &&
     // Rendered as its own block below with the analyse button, not folded into
     // the dim reference list — it is a paragraph, not a reference value, and
     // the one field on this card the app writes rather than the user.
@@ -350,6 +352,15 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
             <FieldRowTrigger label="Emplacement" placeholder="— Choisir —" {...state} />
           )}
         />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-micro uppercase tracking-wide text-muted-foreground">Délai</span>
+          <InlineEditDate
+            value={String(row["Délai"] ?? "")}
+            resyncDeps={[row._row, row["Délai"]]}
+            onCommit={commitField("Délai")}
+            className="max-w-[9.5rem]"
+          />
+        </div>
         <InlineEditCombobox
           value={row.prestataire}
           options={optionValues(options.PRESTATAIRE_OPTIONS)}

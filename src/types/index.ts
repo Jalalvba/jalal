@@ -210,11 +210,10 @@ export type BddRow = {
 };
 
 // Business-rule allowlist (not derived from the sheet — a deliberate policy:
-// only these 5 of the 30 real columns in BDD_HEADERS above are writable from
+// only these 6 of the 30 real columns in BDD_HEADERS above are writable from
 // this app; Emplacement joined the list in 3d9bd87, and Catégorie/Technicien
 // left it on 2026-09-01 when the sheet turned them into XLOOKUP formulas).
-// Shared
-// between the server-side check in src/lib/sheets/googleSheetsBdd.ts and the UI's edit
+// Shared between the server-side check in src/lib/sheets/googleSheetsBdd.ts and the UI's edit
 // form so both agree on the same set without duplicating the literal list.
 export const BDD_EDITABLE_FIELDS = [
   "ETAT",
@@ -222,6 +221,11 @@ export const BDD_EDITABLE_FIELDS = [
   "flag",
   "Emplacement",
   "commentaire",
+  // Manual on the sheet side (preserved across InitializeAndSyncBDDTab()) and
+  // a real date column with GAS date-validation on it — so the UI edits it
+  // through InlineEditDate, and updateSheetRow() writes a date serial rather
+  // than the dd/mm/yyyy text every other field writes.
+  "Délai",
   // Written only by the AI-analysis save path, never by an inline cell edit —
   // the UI does not expose it as editable. It is on this allowlist because
   // updateSheetRow() refuses anything absent from it, which is the guard worth
