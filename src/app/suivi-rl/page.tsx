@@ -374,14 +374,22 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
             <FieldRowTrigger label="Prestataire" placeholder="— Aucun —" dot={dot} {...state} />
           )}
         />
-        <div className="flex items-start gap-1.5">
+        {/* The reformulate button is positioned OVER the textarea's top-right
+            rather than laid out beside it: as a flex sibling it took 46px of
+            the row, leaving Commentaire visibly narrower than the Emplacement
+            / Délai / Prestataire rows above it. Overlaying gives the field the
+            card's full width, and pr-10 keeps the text clear of the button as
+            the box grows. */}
+        <div className="relative">
           <InlineEditText
             value={row.commentaire}
             resyncDeps={[row._row, row.commentaire]}
             onCommit={commitField("commentaire")}
             placeholder="Commentaire…"
-            className="flex-1"
+            className="pr-10"
+            autoGrow
           />
+          <div className="absolute right-0.5 top-0.5">
           <ReformulateCommentButton
             comment={row.commentaire}
             context={{
@@ -399,6 +407,7 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
             }}
             onAccept={commitField("commentaire")}
           />
+          </div>
         </div>
       </div>
 

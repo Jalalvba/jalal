@@ -689,6 +689,7 @@ function BddEditableRow({ row }: { row: BddRow }) {
           resyncDeps={[row._row, row.commentaire]}
           onCommit={commitField("commentaire")}
           placeholder="Commentaire…"
+          autoGrow
         />
       </div>
 
