@@ -74,10 +74,12 @@ function DepotCard({
           className="h-auto py-2 text-micro"
         />
       </Field>
-      <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
       {/* Summary + its button. Looked up from BDD by plate — this tab has
-          no gemini column of its own. */}
-      <GeminiSummaryBlock imm={row.imm} className="mt-2" />
+          no gemini column of its own. The reference fields are nested so the
+          card has ONE detail toggle rather than a control per section. */}
+      <GeminiSummaryBlock imm={row.imm} className="mt-2">
+        <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
+      </GeminiSummaryBlock>
     </RecordCard>
   );
 }

@@ -219,12 +219,16 @@ function ParkingCard({
           className="h-auto py-2 text-micro"
         />
       </Field>
-      <ReadonlyFieldList
-        fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: String(row[f.key] ?? "") }))}
-      />
       {/* This tab has its own gemini column, so the value is passed straight
-          in — no BDD lookup, and it shows even for a vehicle with no BDD row. */}
-      <GeminiSummaryBlock imm={row.imm} summary={row.gemini} className="mt-2" saveTo="parking" hideButton />
+          in — no BDD lookup, and it shows even for a vehicle with no BDD row.
+          The reference fields are nested so the card has ONE detail toggle
+          rather than a separate control per section. */}
+      <GeminiSummaryBlock imm={row.imm} summary={row.gemini} className="mt-2" saveTo="parking" hideButton>
+        <ReadonlyFieldList
+          fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: String(row[f.key] ?? "") }))}
+        />
+      </GeminiSummaryBlock>
+
     </RecordCard>
   );
 }

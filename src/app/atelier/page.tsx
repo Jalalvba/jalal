@@ -142,10 +142,13 @@ function AtelierCard({
         </Field>
       </div>
 
-      <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
       {/* This tab has its own gemini column, so the value is passed straight
-          in — no BDD lookup, and it shows even for a vehicle with no BDD row. */}
-      <GeminiSummaryBlock imm={row.imm} summary={row.gemini} className="mt-2" />
+          in — no BDD lookup, and it shows even for a vehicle with no BDD row.
+          The reference fields are nested so the card has ONE detail toggle
+          rather than a separate control per section. */}
+      <GeminiSummaryBlock imm={row.imm} summary={row.gemini} className="mt-2">
+        <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
+      </GeminiSummaryBlock>
     </RecordCard>
   );
 }

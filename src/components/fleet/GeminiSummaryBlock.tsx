@@ -46,9 +46,18 @@ type Props = {
    * affordances for the same thing in two places.
    */
   hideButton?: boolean;
+  /**
+   * The card's raw reference fields. Passed IN rather than rendered beside
+   * this block so both collapse under one control: the card had two stacked
+   * toggles (this one and the field list's own "Voir les détails"), which is
+   * two clicks to see one card's detail. Taking them as children means the
+   * single useState below drives both — no state lifted into four different
+   * card components, and auto-expand-on-regenerate keeps working unchanged.
+   */
+  children?: React.ReactNode;
 };
 
-export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo, hideButton }: Props) {
+export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo, hideButton, children }: Props) {
   const queryClient = useQueryClient();
   // Only subscribe when the caller did NOT supply the value — otherwise Suivi
   // RL would pull a second copy of data it is already rendering.
@@ -103,15 +112,17 @@ export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo, hideB
     invalidateStored(imm);
   }
 
-  // Nothing to show yet: render the trigger ALONE, no panel. An empty bordered
-  // rectangle saying "aucun résumé" on every un-analysed row is a page full of
-  // boxes announcing their own emptiness — on Suivi RL that was ~95 of them.
-  // The affordance to create one is all that is needed until one exists.
-  // Nothing to show and no trigger to offer: render nothing at all rather than
-  // an empty container.
-  if (!text && hideButton) return null;
+  // Nothing collapsible and nothing to offer: render nothing at all rather
+  // than an empty container.
+  const hasBody = Boolean(text) || Boolean(children);
+  if (!hasBody && hideButton) return null;
 
-  if (!text) {
+  // No summary, no fields, but a trigger to offer: the trigger ALONE, no panel.
+  // An empty bordered rectangle saying "aucun résumé" on every un-analysed row
+  // is a page full of boxes announcing their own emptiness — on Suivi RL that
+  // was ~95 of them. The affordance to create one is all that is needed until
+  // one exists.
+  if (!hasBody) {
     return (
       <div className={`flex justify-end ${className ?? ""}`}>
         <AnalyseAndSaveButton imm={imm} pro={pro} saveTo={saveTo} onSaved={onGenerated} iconOnly />
@@ -121,21 +132,18 @@ export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo, hideB
 
   return (
     <div className={`rounded-xl border border-border bg-muted/40 px-3 py-1.5 ${className ?? ""}`}>
-      {/* One row, collapsed: label + chevron + Regénérer. The separate
-          full-width toggle bar this replaced made the block two rows tall
-          before it showed anything, which on Suivi RL is 25 cards each
-          spending a row to say they have a row.
-
-          The label and chevron are the toggle — the whole left side is the
-          hit target — and the Regénérer button sits OUTSIDE it rather than
-          inside: a <button> cannot contain another <button>, and nesting them
-          would also make "regenerate" ambiguous with "expand". */}
+      {/* One row for the whole card's detail: chevron + label + Regénérer.
+          The label and chevron ARE the toggle — the whole left side is the hit
+          target — and Regénérer sits OUTSIDE that button rather than inside:
+          a <button> cannot contain another <button>, and nesting them would
+          also make "regenerate" ambiguous with "expand". Regénérer stays on
+          this row so it is reachable without expanding first. */}
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-semibold uppercase tracking-widest text-muted-foreground transition hover:text-foreground"
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-medium text-muted-foreground transition hover:text-foreground"
         >
           <svg
             width="12"
@@ -149,7 +157,7 @@ export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo, hideB
           >
             <path d={open ? "M4 10l4-4 4 4" : "M4 6l4 4 4-4"} strokeLinecap="round" />
           </svg>
-          Résumé IA
+          {open ? "Masquer les détails" : "Voir les détails"}
         </button>
         {!hideButton && (
         <AnalyseAndSaveButton
@@ -171,15 +179,20 @@ export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo, hideB
         )}
       </div>
       {/* `hidden` (display:none), not a conditional render, and nothing about
-          the fetch changes: `text` is already resolved above from data this
-          page has loaded regardless. Same constraint as the raw-field toggle. */}
-      <p hidden={!open} className="mt-1 whitespace-pre-wrap text-sm text-card-foreground">
-        {text || (
-          <span className="italic text-muted-foreground">
-            Aucun résumé — lancez l&apos;analyse pour en générer un.
-          </span>
+          the fetch changes: `text` is already resolved above, and `children`
+          come from data the card has loaded regardless. Summary first, then
+          the card's own fields, matching the order they had as two blocks. */}
+      <div hidden={!open}>
+        {text && (
+          <>
+            <div className="mt-1.5 text-micro font-bold uppercase tracking-widest text-muted-foreground">
+              Résumé IA
+            </div>
+            <p className="mt-0.5 whitespace-pre-wrap text-sm text-card-foreground">{text}</p>
+          </>
         )}
-      </p>
+        {children}
+      </div>
     </div>
   );
 }
