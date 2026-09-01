@@ -8,7 +8,6 @@ import { memo, useCallback, useDeferredValue, useMemo, useState } from "react";
 import {
   BDD_HEADERS,
   BDD_ZONE_DETECTION_HEADERS,
-  getFlagStyle,
   getPrestataireDotClass,
   EMPLACEMENT_INTROUVABLE,
   ETAT_INTERNE,
@@ -210,7 +209,7 @@ async function downloadBddExcel(
 // Server allowlist (src/types/index.ts's BDD_EDITABLE_FIELDS) is unchanged — this
 // page just commits one of these keys at a time now instead of bundling
 // all of them into one form submit.
-type FieldKey = "ETAT" | "prestataire" | "flag" | "Emplacement" | "commentaire" | "Délai";
+type FieldKey = "ETAT" | "prestataire" | "Emplacement" | "commentaire" | "Délai";
 
 // Everything shown once, either as one of the always-visible editable rows
 // below or promoted into the client/modele subtitle — the remainder is
@@ -227,6 +226,9 @@ const READONLY_HEADERS = BDD_HEADERS.filter(
     h !== "modele" &&
     h !== "ETAT" &&
     h !== "prestataire" &&
+    // Still excluded even though this page no longer shows flag anywhere:
+    // dropping this line would make it reappear inside "Voir les détails",
+    // which is the opposite of hiding it.
     h !== "flag" &&
     h !== "Emplacement" &&
     h !== "commentaire" &&
@@ -240,6 +242,12 @@ const READONLY_HEADERS = BDD_HEADERS.filter(
 
 // ─── Card ───────────────────────────────────────────────────────────────────
 
+// `flag` is deliberately absent from this page — no badge, no left stripe, no
+// filter axis, no count. It is an internal triage marker the team re-sorts
+// month to month, and on this page it was pure chrome competing with ÉTAT and
+// the zone badges for the header. It is NOT removed from the data: the column
+// still exists in BDD, is still in BDD_HEADERS and BDD_EDITABLE_FIELDS, and is
+// still shown and editable on /ds-history. Only this page ignores it.
 // memo'd deliberately: every keystroke in the plate filter re-renders this
 // page, and without this each of ~100 cards re-rendered its inline editors,
 // zone badges and AI summary block along with it — measured at 1.2s per
@@ -260,7 +268,6 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
     };
   }
 
-  const flagStyle = getFlagStyle(row.flag, options.FLAG_OPTIONS);
   const dot = getPrestataireDotClass(row.prestataire, options.PRESTATAIRE_OPTIONS);
   // Emplacement is a human's manual assessment (see src/types/index.ts) —
   // EMPLACEMENT_INTROUVABLE means someone has flagged this vehicle as
@@ -276,41 +283,15 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
     <RecordCard
       imm={row.IMM}
       subtitle={[row.client, row.modele].filter(Boolean).join(" · ")}
+      // No flag-coloured left stripe here any more — see the note on this
+      // page's flag removal above RlCard.
       className={cn(
-        flagStyle && `border-l-4 ${flagStyle.border}`,
         isIntrouvable && "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20"
       )}
       onDelete={() => onDelete(row._row, row.IMM)}
       headerLeft={
         <>
           {row.date && <span className="font-mono text-xs text-muted-foreground">{row.date}</span>}
-          <InlineEditSelect
-            value={row.flag}
-            options={optionValues(options.FLAG_OPTIONS)}
-            label="Flag"
-            onCommit={commitField("flag")}
-            renderTrigger={({ value, pending, justSaved, onOpen }: InlineEditTriggerState) => (
-              <button
-                type="button"
-                onClick={onOpen}
-                disabled={pending}
-                className="flex min-h-8 items-center py-1 disabled:opacity-60"
-              >
-                {value && getFlagStyle(value, options.FLAG_OPTIONS) ? (
-                  <Badge className={cn(getFlagStyle(value, options.FLAG_OPTIONS)!.badge, justSaved && "ring-2 ring-emerald-400")}>{value}</Badge>
-                ) : (
-                  <span
-                    className={cn(
-                      "rounded-lg border border-dashed border-border px-1.5 py-0.5 text-micro text-muted-foreground",
-                      justSaved && "ring-2 ring-emerald-400"
-                    )}
-                  >
-                    + Flag
-                  </span>
-                )}
-              </button>
-            )}
-          />
           <ZoneBadges {...zone} />
           {isIntrouvable && <Badge variant="error">⚠ Introuvable</Badge>}
         </>
@@ -571,7 +552,7 @@ function ReformulateCommentButton({
 // sheet data, so no union could enumerate them ahead of time. (This comment
 // previously said the chips render every options.ETAT_OPTIONS value, which
 // was true only before c0d5965 switched Flotte to the data-derived,
-// cascade-narrowing pattern Prestataire/Flag already used.)
+// cascade-narrowing pattern Prestataire already used.)
 type Fleet = string;
 
 const EMPTY_ROWS: BddRow[] = [];
@@ -606,7 +587,7 @@ export default function SuiviRlPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   // Multi-select per axis (empty array = "TOUS"/no filter on that axis) —
   // axes still combine with AND, same as before (Flotte ∩ Emplacement ∩
-  // Prestataire ∩ Flag), but each axis can now hold more than one selected
+  // ∩ Prestataire), but each axis can now hold more than one selected
   // value, ORed together within that axis. Selecting/deselecting an
   // upstream axis still resets every downstream axis to "TOUS" (see
   // selectFleet/selectEmplacement/selectPrestataire below) — same cascade
@@ -614,7 +595,6 @@ export default function SuiviRlPage() {
   const [activeFleet, setActiveFleet] = useState<Fleet[]>([ETAT_INTERNE]);
   const [activeEmplacement, setActiveEmplacement] = useState<string[]>([]);
   const [activePrestataire, setActivePrestataire] = useState<string[]>([]);
-  const [activeFlag, setActiveFlag] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
@@ -649,11 +629,11 @@ export default function SuiviRlPage() {
 
   // Flotte/Emplacement chip options used to come from admin-config lists
   // (options.ETAT_OPTIONS/EMPLACEMENT_OPTIONS) rather than the live data —
-  // unlike Prestataire/Flag below, which already derive from what's
+  // unlike Prestataire below, which already derives from what's
   // currently in scope. That meant a config-only value with zero live rows
   // (e.g. ANNULE/ANNULEE, confirmed via live data to currently have none)
   // still rendered as a clickable, always-empty chip. Switched to the same
-  // cascade-narrowing, data-derived pattern Prestataire/Flag already use:
+  // cascade-narrowing, data-derived pattern Prestataire already uses:
   // Flotte from the full dataset (top of the cascade, nothing upstream of
   // it), Emplacement from fleetFiltered (narrowed by the Flotte selection).
   // options.ETAT_OPTIONS/EMPLACEMENT_OPTIONS are untouched elsewhere — the
@@ -687,21 +667,7 @@ export default function SuiviRlPage() {
     [emplacementFiltered, activePrestataire]
   );
 
-  const visibleFlags = useMemo(
-    () => [...new Set(prestataireFiltered.map((r) => r.flag).filter(Boolean))].sort(),
-    [prestataireFiltered]
-  );
-  const hasBlankFlag = useMemo(() => prestataireFiltered.some((r) => !r.flag?.trim()), [prestataireFiltered]);
-
-  const flagFiltered = useMemo(
-    () => (activeFlag.length === 0 ? prestataireFiltered : prestataireFiltered.filter((r) => axisMatches(r.flag, activeFlag))),
-    [prestataireFiltered, activeFlag]
-  );
-
-  // Plate-only search, standardized on the same shared autocomplete pattern
-  // as Parking/Atelier — client/modele/prestataire/commentaire free-text
-  // matching was removed by explicit product decision. By design, this
-  // bypasses the Flotte/Prestataire/Flag chip cascade entirely: chips are a
+  // bypasses the Flotte/Emplacement/Prestataire chip cascade entirely: chips are a
   // separate browsing filter, while search is for finding a specific real
   // plate regardless of what chips currently happen to be set. Chips only
   // apply when the search box is empty.
@@ -713,9 +679,9 @@ export default function SuiviRlPage() {
 
   const searched = useMemo(() => {
     const term = search.trim().toUpperCase();
-    if (!term) return flagFiltered;
+    if (!term) return prestataireFiltered;
     return rows.filter((r) => String(r.IMM ?? "").toUpperCase().includes(term));
-  }, [flagFiltered, rows, search]);
+  }, [prestataireFiltered, rows, search]);
 
   // The list is re-rendered at LOWER priority than the keystroke that changed
   // it. Every card is dense — inline editors, zone badges, the AI summary, two
@@ -744,9 +710,8 @@ export default function SuiviRlPage() {
     if (activeFleet.length > 0) filters.push({ label: "Flotte", value: activeFleet.map(displayAxisValue).join(" ou ") });
     if (activeEmplacement.length > 0) filters.push({ label: "Emplacement", value: activeEmplacement.map(displayAxisValue).join(" ou ") });
     if (activePrestataire.length > 0) filters.push({ label: "Prestataire", value: activePrestataire.map(displayAxisValue).join(" ou ") });
-    if (activeFlag.length > 0) filters.push({ label: "Flag", value: activeFlag.map(displayAxisValue).join(" ou ") });
     return filters;
-  }, [search, activeFleet, activeEmplacement, activePrestataire, activeFlag]);
+  }, [search, activeFleet, activeEmplacement, activePrestataire]);
 
   function handleExportPdf() {
     downloadBddPdf(searched, activeFilters, search.trim(), setExportingPdf);
@@ -758,23 +723,20 @@ export default function SuiviRlPage() {
   // Multi-select within each axis (OR), still ANDed across axes — selecting
   // an upstream axis still resets every downstream axis to "TOUS" (empty
   // array), same cascade as the single-select version this replaced: the
-  // "visible*" lists (visiblePrestataires/visibleFlags) are computed from
+  // "visible*" lists (visiblePrestataires) are computed from
   // whatever's still in scope upstream, so a stale downstream selection
   // could otherwise reference a value no longer reachable.
   function selectFleet(f: Fleet[]) {
     setActiveFleet(f);
     setActiveEmplacement([]);
     setActivePrestataire([]);
-    setActiveFlag([]);
   }
   function selectEmplacement(e: string[]) {
     setActiveEmplacement(e);
     setActivePrestataire([]);
-    setActiveFlag([]);
   }
   function selectPrestataire(p: string[]) {
     setActivePrestataire(p);
-    setActiveFlag([]);
   }
 
   // Original page only surfaced fetch errors when it had nothing cached to
@@ -873,27 +835,6 @@ export default function SuiviRlPage() {
             )}
           </ToggleGroup>
         </div>
-        {(visibleFlags.length > 0 || hasBlankFlag) && (
-          <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto">
-            <AllChip active={activeFlag.length === 0} onClick={() => setActiveFlag([])} />
-            <ToggleGroup
-              type="multiple"
-              value={activeFlag}
-              onValueChange={(v) => setActiveFlag(v)}
-            >
-              {visibleFlags.map((f) => (
-                <ToggleGroupItem key={f} value={f}>
-                  {f}
-                </ToggleGroupItem>
-              ))}
-              {hasBlankFlag && (
-                <ToggleGroupItem key={NON_RENSEIGNE} value={NON_RENSEIGNE}>
-                  Non renseigné
-                </ToggleGroupItem>
-              )}
-            </ToggleGroup>
-          </div>
-        )}
 
         <div className="mt-2 flex items-center justify-end gap-2">
           <button
