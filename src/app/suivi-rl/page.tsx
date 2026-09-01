@@ -24,6 +24,7 @@ import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";
 import { RecordCard } from "@/components/fleet/RecordCard";
 import { GeminiSummaryBlock } from "@/components/fleet/GeminiSummaryBlock";
 import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
+import { DetailsToggle } from "@/components/fleet/DetailsToggle";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Combobox } from "@/components/ui/combobox";
@@ -252,6 +253,11 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
   const applyOptimisticUpdate = useOptimisticBddUpdate();
   const zone = useVehicleZone(row.IMM);
   const { options } = useSheetFieldOptions();
+  // Collapsed by default: the summary above is the thing worth reading, and
+  // these ~19 reference fields pushed it off the top of the card. Purely
+  // visual — the content stays mounted and hidden (see below), so nothing
+  // about how it is fetched, edited or refreshed changes.
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   function commitField(field: FieldKey) {
     return async (value: string) => {
@@ -401,11 +407,20 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
           looking it up when a caller does not. */}
       <GeminiSummaryBlock imm={String(row.IMM ?? "")} summary={String(row.gemini ?? "")} className="mt-2" pro />
 
-      <ReadonlyFieldList fields={READONLY_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))} />
-      <ReadonlyFieldList
-        title="Détection de zone (auto)"
-        fields={BDD_ZONE_DETECTION_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))}
-      />
+      <DetailsToggle open={detailsOpen} onToggle={() => setDetailsOpen((o) => !o)} />
+
+      {/* `hidden` (display:none), not a conditional render: these fields are
+          already in the row object this card was handed, so unmounting them
+          would save no fetch and only cost a re-mount on every open. Nothing
+          here is editable either — READONLY_HEADERS is BDD_HEADERS minus every
+          BDD_EDITABLE_FIELDS entry, so no edit surface is hidden behind this. */}
+      <div hidden={!detailsOpen}>
+        <ReadonlyFieldList fields={READONLY_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))} />
+        <ReadonlyFieldList
+          title="Détection de zone (auto)"
+          fields={BDD_ZONE_DETECTION_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))}
+        />
+      </div>
     </RecordCard>
   );
 });
