@@ -579,6 +579,18 @@ function displayAxisValue(v: string): string {
 // blank field, any other selected value is an exact (optionally normalized,
 // e.g. ETAT's uppercase compare) match — OR'd across whatever's selected in
 // this axis, same "multi-select within an axis" semantics as before.
+// Hidden from the DEFAULT view only. INST rows are a standing backlog nobody
+// works from day to day, so they crowd out the list they are listed in — but
+// they are not deleted, filtered-out data: the INST chip still shows them, and
+// a plate search still finds one. Compared trimmed/uppercased so a stray
+// " inst " is hidden too; each raw spelling keeps its own chip, so nothing
+// becomes unreachable.
+const DEFAULT_HIDDEN_FLAG = "INST";
+
+function isDefaultHiddenFlag(value: string | undefined): boolean {
+  return (value ?? "").trim().toUpperCase() === DEFAULT_HIDDEN_FLAG;
+}
+
 function axisMatches(value: string | undefined, selected: string[], normalize?: (v: string) => string): boolean {
   const v = normalize ? normalize(value ?? "") : value ?? "";
   return selected.some((s) => (s === NON_RENSEIGNE ? !v.trim() : v === s));
@@ -686,8 +698,23 @@ export default function SuiviRlPage() {
   );
   const hasBlankFlag = useMemo(() => prestataireFiltered.some((r) => !r.flag?.trim()), [prestataireFiltered]);
 
+  // No flag selected is not "no flag filter": it is the default view, which
+  // hides DEFAULT_HIDDEN_FLAG. An explicit selection always wins — pick INST
+  // (alone or alongside other flags) and those rows come back.
+  //
+  // Same shape as fleetFiltered above, which has always meant "TOUS" as
+  // INTERNE + EXTERNE rather than literally everything. This axis is the
+  // second instance of that pattern on this page, not a new idea.
+  //
+  // The exclusion lives HERE and not upstream on purpose. visibleFlags reads
+  // prestataireFiltered, so the INST chip stays in the row and stays
+  // clickable; excluding upstream would delete the chip and make INST rows
+  // permanently unreachable.
   const flagFiltered = useMemo(
-    () => (activeFlag.length === 0 ? prestataireFiltered : prestataireFiltered.filter((r) => axisMatches(r.flag, activeFlag))),
+    () =>
+      activeFlag.length === 0
+        ? prestataireFiltered.filter((r) => !isDefaultHiddenFlag(r.flag))
+        : prestataireFiltered.filter((r) => axisMatches(r.flag, activeFlag)),
     [prestataireFiltered, activeFlag]
   );
 
