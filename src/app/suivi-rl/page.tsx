@@ -394,6 +394,8 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
               flag: String(row.flag ?? ""),
               categorie: String(row["Catégorie"] ?? ""),
               technicien: String(row.Technicien ?? ""),
+              delai: String(row["Délai"] ?? ""),
+              reunionN1: String(row["Reunion N-1"] ?? ""),
             }}
             onAccept={commitField("commentaire")}
           />

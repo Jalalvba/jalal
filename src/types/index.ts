@@ -884,6 +884,12 @@ export type ReformulateCommentContext = {
   flag?: string;
   categorie?: string;
   technicien?: string;
+  /** BDD's "Délai" — the manual target date. */
+  delai?: string;
+  /** BDD's "Reunion N-1" — what the last meeting concluded for this vehicle.
+   *  Carried separately from the rest because the prompt treats it as an
+   *  action item to follow up, not as another descriptive attribute. */
+  reunionN1?: string;
 };
 
 export type ReformulateCommentRequest = {

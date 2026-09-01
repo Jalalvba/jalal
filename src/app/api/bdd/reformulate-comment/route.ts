@@ -29,26 +29,54 @@ const RATE_WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_COMMENT_LENGTH = 1000;
 const DEFAULT_MODEL = "gemini-flash-lite-latest";
 const REQUEST_TIMEOUT_MS = 20_000;
-const MAX_OUTPUT_TOKENS = 150;
+// Raised from 150 when this prompt stopped being a pure rewrite: a note that
+// weaves in up to seven context fields is longer than one that only tightens
+// the original wording, and 150 truncated it mid-sentence.
+const MAX_OUTPUT_TOKENS = 400;
 const TEMPERATURE = 0.3;
-const SYSTEM_INSTRUCTION =
-  "You are reformulating a short internal fleet-maintenance comment (Commentaire) written by a technician, in French. You are given the following context about the vehicle/case:\n" +
-  "- Modèle (vehicle model)\n" +
-  "- ETAT (current status/state)\n" +
-  "- Prestataire (service provider)\n" +
-  "- Flag (issue category flag)\n" +
-  "- Catégorie (category)\n" +
-  "- Technicien (technician name)\n\n" +
-  "Use this context ONLY to understand what the comment likely refers to and to reformulate it more clearly and professionally — do NOT restate the context fields in the output, do NOT invent details not present in the original comment, do NOT change the comment's actual meaning. Fix grammar, tighten wording, keep it concise and professional French. If a context field is blank, ignore it. Return only the reformulated Commentaire text, nothing else — no labels, no quotes, no explanation.";
+const SYSTEM_INSTRUCTION = [
+  "You are rewriting a short internal fleet-maintenance note (Commentaire) for AVIS Maroc, in French.",
+  "",
+  "SOURCE OF TRUTH — this overrides everything else:",
+  "1. The 'Commentaire original' is the ROOT of the output. Everything you write must be grounded in it. Never replace it, never drop what it says, never change its meaning.",
+  "2. NEVER invent a fact that is not in the Commentaire original or in the context fields you were given. No diagnosis, no cause, no part, no date, no next step that is not already stated.",
+  "",
+  "ENRICHMENT — only from the context fields actually present in the message:",
+  "3. Weave the given context fields into the note so it reads as one continuous French paragraph, not a list and not a set of labelled pairs.",
+  "4. The last review meeting's conclusion reaches you ONLY as a line starting with 'Conclusion de la dernière réunion'. When that line is present, it is not a descriptive attribute: it is what has to be acted on, so present it as the outstanding decision or follow-up to carry out, not as a fact to restate.",
+  "4b. When that line is ABSENT, no meeting has been recorded for this vehicle. Do not mention a meeting, a 'réunion', a 'réunion N-1', a decision taken or a follow-up agreed — in any wording. In particular, NEVER attribute the Commentaire original to a meeting: the comment is a technician's note, not a meeting outcome, and presenting it as one invents a decision that was never taken. This was a real observed failure, not a hypothetical.",
+  "",
+  "SILENCE OVER FALSE CONTENT — a field you were not given DOES NOT EXIST for this vehicle:",
+  "5. Only the context fields listed in the message exist. Any other field is absent, and absent means it is never mentioned — not its value, and not its name either.",
+  "6. For an absent field, write NOTHING about it. No placeholder, no empty label, no 'non spécifié', no 'non renseigné', no 'aucun technicien assigné', no 'à définir', no parentheses left open. Do not point out that anything is missing. The note must read as if that field had never applied to this vehicle.",
+  "",
+  "STYLE:",
+  "7. Concise, factual, professional French. Fix grammar and tighten wording. No commercial pitch, no alarmist tone.",
+  "8. Return ONLY the rewritten Commentaire text — no labels, no quotes, no explanation, no heading.",
+].join("\n");
 
 // Builds the user-turn text, omitting any blank/undefined context field
 // entirely rather than sending a literal "Modèle=undefined" — the whole
-// "Contexte:" line is dropped too if every field is blank. Context values
-// come from client-supplied JSON, not a type-checked internal call — a
-// BddRow field like modele can be a raw number straight from the Sheet
-// (see src/app/suivi-rl/page.tsx's downloadBddPdf comment on the same
-// footgun), so this coerces via String() rather than trusting the
-// declared `string | undefined` type and calling .trim() directly.
+// "Contexte:" line is dropped too if every field is blank.
+//
+// This omission IS the "ignore absent fields" rule, enforced structurally
+// rather than by asking the model nicely: a blank field never reaches the
+// model at all, so there is nothing for it to hedge about, apologise for or
+// render as "non spécifié". Rule 6 in SYSTEM_INSTRUCTION is the backstop for
+// the case where a field is present but the model wants to editorialise about
+// what is missing around it — same discipline as src/lib/ai/prompts/oilGrade.ts,
+// where a check that cannot fire is simply absent from the payload rather than
+// reported as inconclusive.
+//
+// Réunion N-1 is labelled in place rather than passed as a bare value: the
+// label is what tells the model this line is the last meeting's conclusion to
+// act on (rule 4), not another attribute to mention in passing.
+//
+// Context values come from client-supplied JSON, not a type-checked internal
+// call — a BddRow field like modele can be a raw number straight from the
+// Sheet (see src/app/suivi-rl/page.tsx's downloadBddPdf comment on the same
+// footgun), so this coerces via String() rather than trusting the declared
+// `string | undefined` type and calling .trim() directly.
 function buildUserTurn(comment: string, context: ReformulateCommentRequest["context"]): string {
   const pairs: [string, unknown][] = [
     ["Modèle", context?.modele],
@@ -57,6 +85,7 @@ function buildUserTurn(comment: string, context: ReformulateCommentRequest["cont
     ["Flag", context?.flag],
     ["Catégorie", context?.categorie],
     ["Technicien", context?.technicien],
+    ["Délai", context?.delai],
   ];
   const contextLine = pairs
     .map(([k, v]) => [k, String(v ?? "").trim()] as const)
@@ -64,9 +93,15 @@ function buildUserTurn(comment: string, context: ReformulateCommentRequest["cont
     .map(([k, v]) => `${k}=${v}`)
     .join(", ");
 
-  return contextLine
-    ? `Contexte: ${contextLine}\nCommentaire original: ${comment}`
-    : `Commentaire original: ${comment}`;
+  const reunion = String(context?.reunionN1 ?? "").trim();
+
+  return [
+    contextLine ? `Contexte: ${contextLine}` : "",
+    reunion ? `Conclusion de la dernière réunion (à suivre): ${reunion}` : "",
+    `Commentaire original: ${comment}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 // Client-facing French messages per failure kind. The wrapper logs the raw
