@@ -20,10 +20,15 @@ export function DetailsToggle({
   open,
   onToggle,
   className,
+  openLabel = "Masquer les détails",
+  closedLabel = "Voir les détails",
 }: {
   open: boolean;
   onToggle: () => void;
   className?: string;
+  /** Defaults suit a raw-field list; GeminiSummaryBlock passes the résumé wording. */
+  openLabel?: string;
+  closedLabel?: string;
 }) {
   return (
     <button
@@ -46,7 +51,7 @@ export function DetailsToggle({
       >
         <path d={open ? "M4 10l4-4 4 4" : "M4 6l4 4 4-4"} strokeLinecap="round" />
       </svg>
-      {open ? "Masquer les détails" : "Voir les détails"}
+      {open ? openLabel : closedLabel}
     </button>
   );
 }

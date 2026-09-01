@@ -12,12 +12,13 @@
 // Query entry (~101 rows), so a page rendering 84 of these makes ONE request,
 // not 84.
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBddRows } from "@/hooks/useBddRows";
 import { useStoredAnalyses, useInvalidateStoredAnalyses } from "@/hooks/useStoredAnalyses";
 import { markFresh } from "@/hooks/freshFetch";
 import { AnalyseAndSaveButton } from "@/components/fleet/AnalyseAndSaveButton";
+import { DetailsToggle } from "@/components/fleet/DetailsToggle";
 
 type Props = {
   imm: string;
@@ -75,7 +76,20 @@ export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo, hideB
 
   const invalidateStored = useInvalidateStoredAnalyses();
 
+  // Collapsed by default, on every page this block appears on. Per-card and
+  // per-page-view only: plain state, no localStorage. This codebase persists a
+  // UI preference in exactly two places (ThemeToggle's "theme-explicit" and
+  // ImportTrigger's last run) and neither is a per-row disclosure — the
+  // raw-field toggle added alongside this one is plain state too, and one card
+  // remembering itself while the 90 next to it do not is worse than none.
+  const [open, setOpen] = useState(false);
+
   function onGenerated() {
+    // Auto-expand: someone who just paid for a fresh summary wants to read it,
+    // and leaving it collapsed hides the only visible result of the click —
+    // the button would look like it did nothing.
+    setOpen(true);
+
     // The write fans out to every tab that has the plate AND a gemini column
     // (see /api/bdd/gemini), so every one of those caches is now stale — not
     // just the one this block happens to read.
@@ -128,13 +142,23 @@ export function GeminiSummaryBlock({ imm, summary, className, pro, saveTo, hideB
         />
         )}
       </div>
-      <p className="mt-1 whitespace-pre-wrap text-sm text-card-foreground">
+      {/* `hidden` (display:none), not a conditional render, and nothing about
+          the fetch changes: `text` is already resolved above from data this
+          page has loaded regardless. Same constraint as the raw-field toggle. */}
+      <p hidden={!open} className="mt-1 whitespace-pre-wrap text-sm text-card-foreground">
         {text || (
           <span className="italic text-muted-foreground">
             Aucun résumé — lancez l&apos;analyse pour en générer un.
           </span>
         )}
       </p>
+      <DetailsToggle
+        open={open}
+        onToggle={() => setOpen((o) => !o)}
+        openLabel="Masquer le résumé"
+        closedLabel="Voir le résumé"
+        className="mt-1"
+      />
     </div>
   );
 }
