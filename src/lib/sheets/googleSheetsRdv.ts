@@ -8,6 +8,7 @@ import {
   getSheetsClient,
   invalidateCache,
   isoDateToSerial,
+  requireCol,
   serialToUTCDate,
   withCache,
 } from "@/lib/sheets/googleSheetsClient";
@@ -105,7 +106,7 @@ async function fetchRdvRows(): Promise<RdvRow[]> {
 
   const headers = values[0].map((h) => String(h ?? "").trim());
   const colMap = buildColMap(headers);
-  const dateCol = colMap["Date"] ?? 1;
+  const dateCol = requireCol(colMap, "Date", RDV_TAB);
   const heureCol = colMap["Heure"];
   const clientsCol = colMap["Clients"];
   const vehiculeCol = colMap["Véhicule"];
@@ -218,7 +219,7 @@ async function writeToFlatTab(input: RdvAddInput): Promise<{ rowIndex: number } 
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const dateCol = colMap["Date"] ?? 1;
+  const dateCol = requireCol(colMap, "Date", RDV_TAB);
 
   const dataRes = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
