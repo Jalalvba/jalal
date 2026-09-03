@@ -21,6 +21,7 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { rateLimitOrNull } from "@/lib/http/rateLimit";
+import { toErrorResponse } from "@/lib/http/apiError";
 import { callAI, AiCallError, type AiErrorKind } from "@/lib/ai";
 import type { ReformulateCommentRequest } from "@/types";
 import { isInHousePrestataire } from "@/lib/utils/prestataire";
@@ -176,7 +177,11 @@ export async function POST(request: Request) {
     if (e instanceof AiCallError) {
       return NextResponse.json({ ok: false, error: ERROR_MESSAGES[e.kind] }, { status: e.status });
     }
-    console.error("[bdd/reformulate-comment] Unexpected failure:", e);
-    return NextResponse.json({ ok: false, error: "Échec de la reformulation" }, { status: 500 });
+    // AiCallError is handled above: it carries its own curated French message
+    // and status, and is NOT an ApiError, so toErrorResponse would flatten it
+    // into a generic 500. Everything past that branch is genuinely unexpected,
+    // which is exactly what toErrorResponse is for — it replaces a bare
+    // console.error with the structured log the other 45 routes emit.
+    return toErrorResponse(e, "Échec de la reformulation");
   }
 }
