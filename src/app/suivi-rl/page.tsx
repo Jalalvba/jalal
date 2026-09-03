@@ -13,6 +13,7 @@ import {
   ETAT_INTERNE,
   ETAT_EXTERNE,
   etatBadgeClass,
+  getFlagStyle,
   type BddRow,
   type ReformulateCommentContext,
   type CostInfo,
@@ -209,7 +210,7 @@ async function downloadBddExcel(
 // Server allowlist (src/types/index.ts's BDD_EDITABLE_FIELDS) is unchanged — this
 // page just commits one of these keys at a time now instead of bundling
 // all of them into one form submit.
-type FieldKey = "ETAT" | "prestataire" | "Emplacement" | "commentaire" | "Délai";
+type FieldKey = "ETAT" | "prestataire" | "Emplacement" | "commentaire" | "Délai" | "flag";
 
 // Everything shown once, either as one of the always-visible editable rows
 // below or promoted into the client/modele subtitle — the remainder is
@@ -226,9 +227,8 @@ const READONLY_HEADERS = BDD_HEADERS.filter(
     h !== "modele" &&
     h !== "ETAT" &&
     h !== "prestataire" &&
-    // Still excluded even though this page no longer shows flag anywhere:
-    // dropping this line would make it reappear inside "Voir les détails",
-    // which is the opposite of hiding it.
+    // Shown as an editable badge in the card header, so it must not also
+    // appear inside "Voir les détails".
     h !== "flag" &&
     h !== "Emplacement" &&
     h !== "commentaire" &&
@@ -242,19 +242,10 @@ const READONLY_HEADERS = BDD_HEADERS.filter(
 
 // ─── Card ───────────────────────────────────────────────────────────────────
 
-// `flag` is deliberately absent from the CARD — no badge, no flag-coloured
-// left stripe, no inline editor, and excluded from FieldKey and from the
-// "Voir les détails" expansion. It remains a FILTER axis: the chip row above
-// still narrows by it, which is what it is actually useful for. The split is
-// the point — flag is an internal triage marker the team re-sorts month to
-// month, so it earns a way to slice the list without earning space on every
-// card, where it competed with ÉTAT and the zone badges.
+// `flag` is both a card field and a filter axis here: the header carries an
+// editable, colour-coded badge (same InlineEditSelect + getFlagStyle pattern
+// as /ds-history), and the chip row above still narrows by it.
 //
-// The chips show the raw values as plain text and never call getFlagStyle, so
-// the filter UI needs nothing from the card's display path.
-//
-// Not a data change: the column still exists in BDD, is still in BDD_HEADERS
-// and BDD_EDITABLE_FIELDS, and is still shown and editable on /ds-history.
 // memo'd deliberately: every keystroke in the plate filter re-renders this
 // page, and without this each of ~100 cards re-rendered its inline editors,
 // zone badges and AI summary block along with it — measured at 1.2s per
@@ -290,8 +281,6 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
     <RecordCard
       imm={row.IMM}
       subtitle={[row.client, row.modele].filter(Boolean).join(" · ")}
-      // No flag-coloured left stripe here any more — see the note on this
-      // page's flag removal above RlCard.
       className={cn(
         isIntrouvable && "border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/20"
       )}
@@ -299,6 +288,30 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
       headerLeft={
         <>
           {row.date && <span className="font-mono text-xs text-muted-foreground">{row.date}</span>}
+          <InlineEditSelect
+            value={row.flag}
+            options={optionValues(options.FLAG_OPTIONS)}
+            label="Flag"
+            onCommit={commitField("flag")}
+            renderTrigger={({ value, pending, justSaved, onOpen }: InlineEditTriggerState) => (
+              <button type="button" onClick={onOpen} disabled={pending} className="disabled:opacity-60">
+                {value && getFlagStyle(value, options.FLAG_OPTIONS) ? (
+                  <Badge className={cn(getFlagStyle(value, options.FLAG_OPTIONS)!.badge, justSaved && "ring-2 ring-emerald-400")}>
+                    {value}
+                  </Badge>
+                ) : (
+                  <span
+                    className={cn(
+                      "rounded-lg border border-dashed border-border px-1.5 py-0.5 text-micro text-muted-foreground",
+                      justSaved && "ring-2 ring-emerald-400"
+                    )}
+                  >
+                    + Flag
+                  </span>
+                )}
+              </button>
+            )}
+          />
           <ZoneBadges {...zone} />
           {isIntrouvable && <Badge variant="error">⚠ Introuvable</Badge>}
         </>
@@ -687,11 +700,9 @@ export default function SuiviRlPage() {
     [emplacementFiltered, activePrestataire]
   );
 
-  // flag is a FILTER-ONLY axis on this page: these three drive the chip row
-  // and narrow the list, and nothing here reaches the card. The card renders
-  // no badge and no flag-coloured stripe — see the note above RlCard. The
-  // chips carry the raw values as plain text (no getFlagStyle), which is the
-  // whole reason filtering can come back without the display coming with it.
+  // flag chip axis: these three drive the chip row and narrow the list; the
+  // card shows the same value as an editable badge (see the note above
+  // BddCard). The chips carry the raw values as plain text.
   const visibleFlags = useMemo(
     () => [...new Set(prestataireFiltered.map((r) => r.flag).filter(Boolean))].sort(),
     [prestataireFiltered]
