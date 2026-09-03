@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongo/client";
+import { toErrorResponse } from "@/lib/http/apiError";
 import { escapeRegex } from "@/lib/utils/regex";
 import { checkRateLimit, clientIp } from "@/lib/http/rateLimit";
 import type { Document } from "mongodb";
@@ -226,10 +227,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ ok: true, count: items.length, items });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { ok: false, error: "Aggregation failed" },
-      { status: 500 }
-    );
+    return toErrorResponse(error, "Aggregation failed");
   }
 }

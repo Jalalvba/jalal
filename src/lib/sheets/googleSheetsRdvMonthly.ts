@@ -1,7 +1,7 @@
 import { type sheets_v4 } from "googleapis";
 import type { RdvAddInput, MonthlyWriteResult, RdvEditableField } from "@/types";
 import { RDV_EDITABLE_FIELDS } from "@/types";
-import { getSheetsClient, isoDateToSerial, columnIndexToLetter } from "@/lib/sheets/googleSheetsClient";
+import { getSheetsClient, isoDateToSerial, columnIndexToLetter, verifyRowIdentity } from "@/lib/sheets/googleSheetsClient";
 import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY, RdvIdentityError } from "@/lib/sheets/rdvIdentity";
 import { getAllSheetFieldOptions } from "@/lib/mongo/sheetFieldOptions";
 
@@ -357,6 +357,36 @@ async function findRowByIdentity(
 }
 
 /**
+ * Second, cheap identity gate between findRowByIdentity()'s full-tab read and
+ * the actual write. findRowByIdentity() resolves the row from a snapshot of
+ * the tab that is already stale by the time the write is issued — the
+ * insertFallbackRow() path above can insertDimension and shift every row below
+ * it at any moment in between, which would land this write on a different
+ * appointment's row. verifyRowIdentity() re-reads just the resolved row's key
+ * cell immediately before the write and throws RowIdentityError (409) on any
+ * mismatch, rather than writing blind — the same guard every other Sheets
+ * mutation path in this app already runs (AGENTS.md rule 3).
+ *
+ * Key cell is Matricule (the plate — this tab's real identity column, same as
+ * the flat RDV tab's), falling back to Clients when a row carries no plate:
+ * verifyRowIdentity() refuses an empty expected value, and Clients is the
+ * column findEmptyRow() itself treats as the occupancy marker, so it is
+ * guaranteed non-blank for any row that resolved to a real appointment.
+ */
+async function verifyMonthlyRowIdentity(
+  sheets: sheets_v4.Sheets,
+  tabName: string,
+  row: number,
+  snapshot: RdvAddInput
+): Promise<void> {
+  const useMatricule = snapshot.matricule.trim() !== "";
+  const field: RdvEditableField = useMatricule ? "Matricule" : "Clients";
+  const expected = useMatricule ? snapshot.matricule : snapshot.clients;
+  const col = columnIndexToLetter(RDV_EDITABLE_FIELDS.indexOf(field) + 1);
+  await verifyRowIdentity(sheets, spreadsheetId!, `'${tabName}'!${col}${row}`, expected);
+}
+
+/**
  * Editing Date in place would be a MOVE (a different day-block, possibly a
  * different row count crossing a weekday/Saturday boundary, possibly a
  * different monthly tab entirely) — materially more than a same-row field
@@ -387,6 +417,10 @@ export async function updateAppointmentInMonthlyTab(
   let row: number;
   try {
     row = await findRowByIdentity(sheets, tabName, oldSnapshot, EDITABLE_TO_INPUT_KEY[field]);
+    // Matricule is still the OLD value in the sheet at this point even when
+    // Matricule is the field being edited, so oldSnapshot is the right
+    // expectation in every case.
+    await verifyMonthlyRowIdentity(sheets, tabName, row, oldSnapshot);
   } catch (e) {
     return { written: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -416,6 +450,7 @@ export async function clearAppointmentInMonthlyTab(snapshot: RdvAddInput): Promi
   let row: number;
   try {
     row = await findRowByIdentity(sheets, tabName, snapshot);
+    await verifyMonthlyRowIdentity(sheets, tabName, row, snapshot);
   } catch (e) {
     return { written: false, error: e instanceof Error ? e.message : String(e) };
   }

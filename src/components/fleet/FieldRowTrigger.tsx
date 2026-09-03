@@ -50,7 +50,7 @@ export function FieldRowTrigger({
         </span>
         <Pencil className="mt-0.5 h-3 w-3 flex-shrink-0 text-muted-foreground" />
       </button>
-      {error && <div className="mt-1 text-micro text-red-400">{error}</div>}
+      {error && <div className="mt-1 text-micro text-red-600 dark:text-red-400">{error}</div>}
     </div>
   );
 }

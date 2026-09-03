@@ -88,11 +88,11 @@ export function InlineEditText({
         className={cn(
           "w-full rounded-lg border bg-muted px-2.5 py-2 text-xs leading-snug text-foreground outline-none transition-colors placeholder:text-muted-foreground disabled:opacity-60",
           autoGrow ? "resize-none overflow-hidden" : "resize-none",
-          justSaved ? "border-emerald-500/60" : error ? "border-red-500/60" : "border-border focus:border-amber-500",
+          justSaved ? "border-emerald-500/60" : error ? "border-red-500/60" : "border-border focus:border-zinc-500",
           className
         )}
       />
-      {error && <div className="mt-1 text-micro text-red-400">{error}</div>}
+      {error && <div className="mt-1 text-micro text-red-600 dark:text-red-400">{error}</div>}
     </div>
   );
 }

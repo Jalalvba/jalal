@@ -14,6 +14,7 @@ import {
   getSheetsClient,
   invalidateCache,
   isoDateToSerial,
+  requireCol,
   serialToUTCDate,
   verifyRowIdentity,
   withCache,
@@ -70,7 +71,10 @@ async function getBddSheetProps(sheets: sheets_v4.Sheets): Promise<{ sheetId: nu
 function buildColMap(headers: string[]): Record<string, number> {
   const map: Record<string, number> = {};
   headers.forEach((h, i) => {
-    if (h) map[h] = i + 1; // 1-based
+    // First occurrence wins — same tie-break as getBddRows() below (and as
+    // the headers.indexOf() this replaced), so a duplicated header can never
+    // make a read and a write disagree about which column it means.
+    if (h && map[h] === undefined) map[h] = i + 1; // 1-based
   });
   return map;
 }
@@ -155,8 +159,8 @@ async function fetchSheetRows(): Promise<BddRow[]> {
       // Defensive: the live sheet once carried a duplicate header
       // ("Technicien" on both the real column and a mislabeled DATE_DS one).
       // No duplicates remain as of the 2026-09-01 live read, but keeping the
-      // first occurrence is what updateSheetRow()'s headers.indexOf() resolves
-      // to, so the two stay in agreement if one ever reappears.
+      // first occurrence is what buildColMap()/requireCol() resolve to, so the
+      // two stay in agreement if one ever reappears.
       if (header in record) return;
       record[header] = formatCellValue(header, row[colIdx]);
     });
@@ -245,10 +249,8 @@ export async function addBddRow(imm: string, etat: string): Promise<ParkingAddRe
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
   const colMap = buildColMap(headers);
-  const immCol = colMap["IMM"];
-  const etatCol = colMap["ETAT"];
-  if (!immCol) throw new Error(`Column 'IMM' not found in the live '${BDD_TAB_NAME}' header row`);
-  if (!etatCol) throw new Error(`Column 'ETAT' not found in the live '${BDD_TAB_NAME}' header row`);
+  const immCol = requireCol(colMap, "IMM", BDD_TAB_NAME);
+  const etatCol = requireCol(colMap, "ETAT", BDD_TAB_NAME);
 
   const dataRes = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId!,
@@ -402,15 +404,13 @@ export async function updateSheetRow(
     };
   }
 
-  const immColIdx = headers.indexOf("IMM"); // 0-based
-  if (immColIdx === -1) {
-    throw new Error("Column 'IMM' not found in the live BDD sheet header row");
-  }
+  const colMap = buildColMap(headers);
+  const immCol = requireCol(colMap, "IMM", BDD_TAB_NAME); // 1-based
 
   await verifyRowIdentity(
     sheets,
     spreadsheetId!,
-    `'${BDD_TAB_NAME}'!${columnIndexToLetter(immColIdx + 1)}${row}`,
+    `'${BDD_TAB_NAME}'!${columnIndexToLetter(immCol)}${row}`,
     expectedImm
   );
 
@@ -425,8 +425,7 @@ export async function updateSheetRow(
     requestBody: {
       valueInputOption: "RAW",
       data: requestedFields.map((field) => {
-        const colIdx = headers.indexOf(field); // 0-based
-        const colLetter = columnIndexToLetter(colIdx + 1);
+        const colLetter = columnIndexToLetter(requireCol(colMap, field, BDD_TAB_NAME));
         return {
           range: `'${BDD_TAB_NAME}'!${colLetter}${row}`,
           values: [[toCellValue(field, updates[field])]],
@@ -453,7 +452,7 @@ export async function updateSheetRow(
       spreadsheetId: spreadsheetId!,
       requestBody: {
         requests: dateFields.map((field) => {
-          const colIdx = headers.indexOf(field); // 0-based
+          const colIdx = requireCol(colMap, field, BDD_TAB_NAME) - 1; // 0-based
           return {
             repeatCell: {
               range: {
@@ -488,15 +487,12 @@ export async function updateSheetRow(
 export async function deleteBddRow(row: number, expectedImm: string): Promise<void> {
   const sheets = getSheetsClient();
   const headers = await getHeaderRow(sheets);
-  const immColIdx = headers.indexOf("IMM"); // 0-based
-  if (immColIdx === -1) {
-    throw new Error("Column 'IMM' not found in the live BDD sheet header row");
-  }
+  const immCol = requireCol(buildColMap(headers), "IMM", BDD_TAB_NAME); // 1-based
 
   await verifyRowIdentity(
     sheets,
     spreadsheetId!,
-    `'${BDD_TAB_NAME}'!${columnIndexToLetter(immColIdx + 1)}${row}`,
+    `'${BDD_TAB_NAME}'!${columnIndexToLetter(immCol)}${row}`,
     expectedImm
   );
 
