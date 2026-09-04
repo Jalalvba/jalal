@@ -1,8 +1,19 @@
 // DS History "Analyse IA": sends one vehicle's maintenance history to the AI
-// module and returns a structured health analysis. READ-ONLY — this route
-// writes nothing to Mongo or Sheets and persists no analysis. The only record
-// it leaves is the usual gemini_usage cost row, under action
-// "ds-history-analysis" so it is traceable separately from bdd-reformulate.
+// module and returns a structured health analysis. Writes nothing to
+// Sheets, but IS NOT read-only: runDsAnalysis() (src/lib/ai/dsAnalysis/run.ts)
+// upserts the result into Mongo's ds_analyses collection, keyed by the
+// client-supplied `imm` in the request body — one document per plate, the
+// CURRENT analysis, not a log. That document is what /api/ds-history/analysis
+// reads back, and what Suivi RL's cards render without paying for a re-run.
+// The client-controlled imm is accepted deliberately (see the trade-off note
+// below on the whole payload being client-controlled): a compromised page
+// could only ever overwrite its OWN analysis document, and
+// parking/actions/route.ts's reuse (:322-347) is additionally gated on
+// promptHash matching the CURRENT prompt, so a stale or tampered document
+// can't silently outlive the rules that were supposed to produce it. The
+// only OTHER record this route leaves is the usual gemini_usage cost row,
+// under action "ds-history-analysis" so it is traceable separately from
+// bdd-reformulate.
 //
 // The client sends data it has ALREADY loaded rather than this route
 // re-fetching it. /api/ds/history's ~100-line aggregation (with its $lookup
