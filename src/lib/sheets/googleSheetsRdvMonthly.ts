@@ -293,6 +293,25 @@ export async function addAppointmentToMonthlyTab(input: RdvAddInput): Promise<Mo
 
   const emptyRow = findEmptyRow(values, block);
   if (emptyRow != null) {
+    // Same defensive re-check as insertFallbackRow() above: the row was
+    // empty in the full-tab read at :279, but that read is already stale by
+    // the time this write fires — a second concurrent add resolving the same
+    // block would find the same empty row and silently overwrite the first
+    // appointment. Clients (column C) is the occupancy marker findEmptyRow()
+    // itself uses, so re-reading just that cell is enough to catch the race.
+    const recheck = await sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheetId!,
+      range: `'${tabName}'!C${emptyRow}`,
+      valueRenderOption: "UNFORMATTED_VALUE",
+    });
+    const stillEmpty = String(recheck.data.values?.[0]?.[0] ?? "").trim() === "";
+    if (!stillEmpty) {
+      return {
+        written: false,
+        error: "Ce créneau vient d'être pris par un autre rendez-vous — réessayez l'ajout.",
+      };
+    }
+
     await sheets.spreadsheets.values.update({
       spreadsheetId: spreadsheetId!,
       range: `'${tabName}'!A${emptyRow}:H${emptyRow}`,
