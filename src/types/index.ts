@@ -587,12 +587,14 @@ export type ParkingRow = {
   isAvis: boolean;
 };
 
-export type ParkingAddStatus = "added" | "updated";
+export type ParkingAddStatus = "added" | "updated" | "rejected";
 
 export type ParkingAddResultItem = {
   imm: string;
   status: ParkingAddStatus;
   inParc: boolean;
+  /** Only set when status is "rejected" — why the token was refused. */
+  error?: string;
 };
 
 export type ParkingAddResponse =

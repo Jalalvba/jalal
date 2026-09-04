@@ -10,6 +10,7 @@ import {
   fmtDateTime,
   getSheetsClient,
   invalidateCache,
+  isFormulaTriggerToken,
   nowToSerial,
   requireCol,
   serialToUTCDate,
@@ -445,6 +446,17 @@ export async function addPlates(rawInput: string): Promise<ParkingAddResponse> {
   for (const token of tokens) {
     const resolved = resolveIMM(token, immList) || token.trim().toUpperCase();
     const inParc = immList.includes(resolved);
+
+    // resolveIMM()'s no-match fallback returns the caller's raw uppercased
+    // token verbatim — an unresolved plate reaches the IMM cell unchanged,
+    // and USER_ENTERED (used below for the batch write) parses a leading
+    // formula-trigger char regardless of the column. Refuse before it
+    // consumes a row rather than writing a live formula into IMM.
+    if (isFormulaTriggerToken(resolved)) {
+      results.push({ imm: resolved, status: "rejected", inParc, error: "Caractère de formule non autorisé en première position" });
+      continue;
+    }
+
     const duplicate = existingSet.has(resolved);
 
     if (duplicate) {
@@ -526,7 +538,11 @@ export async function updateAction(rowIndex: number, action: string, expectedImm
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: spreadsheetId!,
     requestBody: {
-      valueInputOption: "USER_ENTERED",
+      // RAW, not USER_ENTERED: ACTION is free text (a work order, either
+      // AI-generated or hand-typed) and must land exactly as written — see
+      // googleSheetsAtelier.ts's writeAtelierGeminiSummary() for the same
+      // reasoning on the same class of write.
+      valueInputOption: "RAW",
       data: [
         { range: `'${PARKING_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`, values: [[text]] },
         { range: `'${PARKING_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`, values: [[nowToSerial()]] },

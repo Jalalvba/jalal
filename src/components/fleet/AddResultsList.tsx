@@ -8,7 +8,9 @@ export function AddResultsList({ results }: { results: ParkingAddResultItem[] })
       {results.map((r, i) => (
         <div key={i} className="flex items-center justify-between border-b border-border py-0.5 last:border-0">
           <span className="font-mono">{r.imm}</span>
-          {r.status === "updated" ? (
+          {r.status === "rejected" ? (
+            <Badge variant="error">✗ Refusé{r.error ? ` (${r.error})` : ""}</Badge>
+          ) : r.status === "updated" ? (
             <Badge variant="warning">⚠ Date actualisée (doublon)</Badge>
           ) : r.inParc ? (
             <Badge variant="success">✓ Ajouté (Parc OK)</Badge>

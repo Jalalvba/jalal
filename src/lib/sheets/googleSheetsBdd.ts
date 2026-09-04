@@ -13,6 +13,7 @@ import {
   fmtDateOnlySlash,
   getSheetsClient,
   invalidateCache,
+  isFormulaTriggerToken,
   isoDateToSerial,
   requireCol,
   serialToUTCDate,
@@ -272,6 +273,13 @@ export async function addBddRow(imm: string, etat: string): Promise<ParkingAddRe
   const immList = await getIMMListSafe();
   const resolved = resolveIMM(token, immList) || token.trim().toUpperCase();
   const inParc = immList.includes(resolved);
+
+  // See googleSheetsParking.ts's addPlates() for why this check exists —
+  // resolveIMM()'s no-match fallback returns the raw uppercased token
+  // verbatim, and the batch write below is USER_ENTERED.
+  if (isFormulaTriggerToken(resolved)) {
+    return { ok: false, error: "Caractère de formule non autorisé en première position" };
+  }
 
   if (existingSet.has(resolved)) {
     return { ok: false, error: `${resolved} existe déjà dans BDD.` };

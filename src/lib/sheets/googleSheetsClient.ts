@@ -149,6 +149,26 @@ function wrapWithRetry(sheets: sheets_v4.Sheets): sheets_v4.Sheets {
   return sheets;
 }
 
+// ─── Formula-injection guard ───────────────────────────────────────────────
+
+/**
+ * Sheets parses a cell starting with one of these as a formula regardless of
+ * valueInputOption — RAW stops Sheets reinterpreting a value's TYPE (e.g. a
+ * digit-only string as a number), but it does not stop formula parsing.
+ * addPlates()/addAtelierPlates()/addDepotPlates()/addBddRow() write the IMM
+ * column from resolveIMM()'s fallback, which returns the caller's raw
+ * uppercased token verbatim on no match — so an operator pasting a stray
+ * "=SOMETHING()" into the add box would otherwise land a live formula in a
+ * production IMM cell.
+ */
+const FORMULA_TRIGGER_CHARS = new Set(["=", "+", "-", "@", "'"]);
+
+/** True when writing `value` as a Sheets cell risks Sheets parsing it as a formula rather than storing it literally. */
+export function isFormulaTriggerToken(value: string): boolean {
+  const c = value.trim().charAt(0);
+  return c !== "" && FORMULA_TRIGGER_CHARS.has(c);
+}
+
 // ─── Row-identity guard ────────────────────────────────────────────────────
 
 /**

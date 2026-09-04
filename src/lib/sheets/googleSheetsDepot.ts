@@ -8,6 +8,7 @@ import {
   fmtDateTime,
   getSheetsClient,
   invalidateCache,
+  isFormulaTriggerToken,
   nowToSerial,
   requireCol,
   serialToUTCDate,
@@ -271,6 +272,15 @@ export async function addDepotPlates(rawInput: string): Promise<ParkingAddRespon
   for (const token of tokens) {
     const resolved = resolveIMM(token, immList) || token.trim().toUpperCase();
     const inParc = immList.includes(resolved);
+
+    // See googleSheetsParking.ts's addPlates() for why this check exists —
+    // resolveIMM()'s no-match fallback returns the raw uppercased token
+    // verbatim, and the batch write below is USER_ENTERED.
+    if (isFormulaTriggerToken(resolved)) {
+      results.push({ imm: resolved, status: "rejected", inParc, error: "Caractère de formule non autorisé en première position" });
+      continue;
+    }
+
     const duplicate = existingSet.has(resolved);
 
     if (duplicate) {
@@ -340,7 +350,10 @@ export async function updateDepotAction(rowIndex: number, action: string, expect
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId: spreadsheetId!,
     requestBody: {
-      valueInputOption: "USER_ENTERED",
+      // RAW, not USER_ENTERED: ACTION is free text and must land exactly as
+      // written — see googleSheetsAtelier.ts's writeAtelierGeminiSummary()
+      // for the same reasoning on the same class of write.
+      valueInputOption: "RAW",
       data: [
         { range: `'${DEPOT_TAB}'!${columnIndexToLetter(actionCol)}${rowIndex}`, values: [[action.trim()]] },
         { range: `'${DEPOT_TAB}'!${columnIndexToLetter(tsCol)}${rowIndex}`, values: [[nowToSerial()]] },
