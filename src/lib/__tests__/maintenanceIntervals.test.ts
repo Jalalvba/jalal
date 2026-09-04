@@ -564,6 +564,48 @@ describe("checkInterval / checkBeltPump — honouring the override", () => {
     expect(formatBeltPumpCheck(r)).toHaveLength(1);
   });
 
+  it("refuses a manual reading that understates the vehicle's own DS maximum, rather than silently downgrading a real flag to 'not_applicable'", () => {
+    // DS history reaches 200,000 km via unrelated services. A manual reading
+    // of 50,000 — far below that — would otherwise pull the vehicle back
+    // under the 120,000 km threshold and flip "never serviced, over
+    // threshold" to "not_applicable", which formatBeltPumpCheck renders as
+    // NO LINE AT ALL. "skipped" stays visible.
+    const entries = [
+      e("2023-01-10", 45_000, "VIDANGE 1:HUILE+FILTRE H+MO"),
+      e("2023-06-10", 90_000, "PLAQUETTE DE FREIN AV"),
+      e("2024-02-10", 150_000, "KIT EMBRAYAGE"),
+      e("2025-03-10", 200_000, "AMORTISSEUR AR"),
+    ];
+    expect(checkBeltPump(entries).status).toBe("never");
+
+    const r = checkBeltPump(entries, 50_000);
+    expect(r.status).toBe("skipped");
+    expect(r.note).toContain("contradiction");
+    // Visible in the prompt, unlike "not_applicable" — this is the whole
+    // point of the fix: a contradicted reading must not silence the check.
+    expect(formatBeltPumpCheck(r)).toEqual([
+      "- Distribution / pompe à eau : NON VÉRIFIÉ — " + r.note,
+    ]);
+
+    // A manual reading genuinely above the DS maximum is still honoured.
+    const legit = checkBeltPump(entries, 210_000);
+    expect(legit.status).toBe("never");
+    expect(legit.currentKm).toBe(210_000);
+  });
+
+  it("does not apply the DS-maximum guard when a belt/pump service is already on record", () => {
+    // The "ok" path never renders currentKm (formatBeltPumpCheck's "ok" case
+    // shows only the service date/km), so a contradicted manual reading here
+    // has nothing to corrupt — it must not be refused.
+    const entries = [
+      e("2023-01-10", 45_000, "VIDANGE 1:HUILE+FILTRE H+MO"),
+      e("2024-05-01", 60_000, "CHANGEMENT KIT DE DISTRIBUTION"),
+      e("2025-03-10", 200_000, "AMORTISSEUR AR"),
+    ];
+    const r = checkBeltPump(entries, 50_000);
+    expect(r.status).toBe("ok");
+  });
+
   it("changes nothing for a zone that passes no override", () => {
     const entries = [e("2025-01-01", 100_000, "VIDANGE 1:HUILE+FILTRE H+MO"), e("2025-06-01", 118_000, "PNEU")];
     expect(computeIntervalChecks(entries, undefined)).toEqual(computeIntervalChecks(entries));

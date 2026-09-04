@@ -499,6 +499,33 @@ export function checkBeltPump(
     };
   }
 
+  // Same conflict checkInterval refuses to silently resolve, and it matters
+  // MORE here: this is a threshold check, not a gap calculation, so a manual
+  // reading that understates the true odometer doesn't just soften a number
+  // — it can pull the vehicle back under BELT_PUMP_KM_THRESHOLD entirely,
+  // flipping "never serviced, over the threshold" to "not_applicable", which
+  // formatBeltPumpCheck() renders as NO LINE AT ALL. A never-serviced timing
+  // belt at real 200,000 km would then vanish from the prompt without a
+  // trace, and grounding rule 16 forbids the model from mentioning a check
+  // it was not given. "skipped" (unlike "not_applicable") IS rendered — see
+  // formatBeltPumpCheck()'s NON VÉRIFIÉ line — so the check stays visible
+  // instead of silently disappearing.
+  const dsMax = currentKmOf(entries);
+  if (
+    resolveVehicleKm(manualKm, entries).source === "manual" &&
+    dsMax !== null &&
+    currentKm < dsMax - KM_REGRESSION_TOLERANCE
+  ) {
+    return {
+      ...base,
+      status: "skipped",
+      note:
+        `Le kilométrage saisi manuellement (${currentKm.toLocaleString("fr-FR")} km) est inférieur ` +
+        `au kilométrage le plus élevé de l'historique DS (${dsMax.toLocaleString("fr-FR")} km) — ` +
+        "relevé manuel et historique DS en contradiction, contrôle non effectué.",
+    };
+  }
+
   if (currentKm <= BELT_PUMP_KM_THRESHOLD) {
     return { ...base, status: "not_applicable", currentKm };
   }
