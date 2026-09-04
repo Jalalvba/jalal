@@ -518,6 +518,36 @@ describe("checkInterval / checkBeltPump — honouring the override", () => {
     expect(r.currentKm).toBe(50_000);
   });
 
+  it("refuses to invent a gap when the manual reading clears the last-service guard but still contradicts the DS maximum", () => {
+    // last vidange at 45,000 km is old; the vehicle's real DS history reaches
+    // 200,000 km via later, unrelated services. A manual reading of 100,000
+    // clears "above last.km - 1000" but is still far below the true odometer
+    // — taking it as the current km would silently understate a real overdue
+    // interval instead of refusing it.
+    const entries = [
+      e("2023-01-10", 45_000, "VIDANGE 1:HUILE+FILTRE H+MO"),
+      e("2023-06-10", 90_000, "PLAQUETTE DE FREIN AV"),
+      e("2024-02-10", 150_000, "KIT EMBRAYAGE"),
+      e("2025-03-10", 200_000, "AMORTISSEUR AR"),
+    ];
+    // Sanity: the old bug — 100,000 clears the last-service-only guard.
+    expect(100_000).toBeGreaterThan(45_000 - 1_000);
+
+    const baseline = checkInterval("vidange", entries);
+    expect(baseline.status).toBe("overdue");
+
+    const r = checkInterval("vidange", entries, 100_000);
+    expect(r.status).toBe("unknown");
+    expect(r.note).toContain("contradiction");
+    expect(r.note).toContain("historique DS");
+    expect(r.currentKm).toBe(100_000);
+
+    // A manual reading genuinely above the DS maximum is still honoured.
+    const legit = checkInterval("vidange", entries, 210_000);
+    expect(legit.status).toBe("overdue");
+    expect(legit.currentKm).toBe(210_000);
+  });
+
   it("tolerates a keying-noise difference rather than refusing on it", () => {
     const entries = [e("2025-01-01", 100_000, "VIDANGE 1:HUILE+FILTRE H+MO")];
     expect(checkInterval("vidange", entries, 99_950).status).toBe("ok");

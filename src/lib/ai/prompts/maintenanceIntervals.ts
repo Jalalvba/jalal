@@ -297,6 +297,31 @@ export function checkInterval(
     };
   }
 
+  // The SAME conflict, against a DIFFERENT number: the vehicle's own
+  // DS-derived odometer (not just the last service of this type). `last.km`
+  // above can be far below the true DS maximum — e.g. an old vidange at
+  // 45,000 km on a vehicle whose history actually reaches 200,000 km — so a
+  // manual reading can clear the check above while still being a wildly
+  // understated odometer that "finish" below would then adopt outright as
+  // the vehicle's current km, silently turning a real overdue interval into
+  // "À JOUR". Same tolerance, same refusal, for the same reason.
+  if (resolved.source === "manual") {
+    const dsMax = currentKmOf(entries);
+    if (dsMax !== null && currentKm < dsMax - KM_REGRESSION_TOLERANCE) {
+      return {
+        ...base,
+        status: "unknown",
+        lastKm: last.km,
+        lastDate: last.date,
+        currentKm,
+        note:
+          `Le kilométrage saisi manuellement (${currentKm.toLocaleString("fr-FR")} km) est inférieur ` +
+          `au kilométrage le plus élevé de l'historique DS (${dsMax.toLocaleString("fr-FR")} km) — ` +
+          "relevé manuel et historique DS en contradiction, écart non calculable.",
+      };
+    }
+  }
+
   // The window that actually matters: readings from that service onward. A bad
   // reading from two years and forty entries ago must not block a calculation
   // that only needs the last three.
