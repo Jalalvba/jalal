@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { sheets_v4 } from "googleapis";
-import { verifyRowIdentity, RowIdentityError, isFormulaTriggerToken } from "@/lib/sheets/googleSheetsClient";
+import { verifyRowIdentity, RowIdentityError, isFormulaTriggerToken, isoDateToSerial } from "@/lib/sheets/googleSheetsClient";
 
 /** Minimal fake of the one Sheets client method verifyRowIdentity calls. */
 function fakeSheets(cellValue: unknown): sheets_v4.Sheets {
@@ -69,5 +69,27 @@ describe("isFormulaTriggerToken", () => {
   it("checks only the first non-whitespace character, not the whole string", () => {
     expect(isFormulaTriggerToken("  =SUM(A1:A2)")).toBe(true);
     expect(isFormulaTriggerToken("A=B")).toBe(false);
+  });
+});
+
+describe("isoDateToSerial", () => {
+  it("parses a real, in-range date to its correct serial", () => {
+    // 2026-09-15 is the value already used as a worked example elsewhere in
+    // this codebase's comments (serialToUTCDate's header).
+    expect(isoDateToSerial("2026-09-15")).toBe(46280);
+  });
+
+  it.each([
+    ["2026-02-31", "day 31 does not exist in February"],
+    ["2026-13-45", "month 13 and day 45 both out of range"],
+    ["2026-00-00", "month 0 and day 0 both out of range"],
+    ["0001-01-01", "year outside the 1900-2200 window"],
+  ])("rejects %s (%s) instead of rolling it over to a different date", (input) => {
+    expect(isoDateToSerial(input)).toBeNull();
+  });
+
+  it("rejects a value that doesn't match the yyyy-mm-dd shape at all", () => {
+    expect(isoDateToSerial("not-a-date")).toBeNull();
+    expect(isoDateToSerial("15/09/2026")).toBeNull();
   });
 });

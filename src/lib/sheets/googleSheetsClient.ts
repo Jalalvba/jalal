@@ -280,13 +280,33 @@ export function nowToSerial(): number {
  * Parses a "yyyy-mm-dd" date-only string (the value shape an HTML
  * `<input type="date">` produces) into a whole-day Sheets serial number, for
  * writing a real date value (not text) into a date column — e.g. RDV's Date
- * field. Returns null if the string isn't that exact shape.
+ * field, or BDD's "Délai" manual deadline. Returns null if the string isn't
+ * that exact shape, OR if the date doesn't actually exist.
+ *
+ * The regex alone is not enough: Date.UTC() silently NORMALIZES an
+ * out-of-range component instead of rejecting it (e.g. "2026-02-31" becomes
+ * 2026-03-03, "2026-13-45" becomes 2027-02-14) — so a value that matches the
+ * shape can still produce a wrong date with no error anywhere. Round-tripping
+ * the parsed Date's own fields back against the input catches every such
+ * case; toCellValue() in googleSheetsBdd.ts falls back to storing the raw
+ * text on null, which is visible and correctable, rather than a plausible
+ * wrong date that is neither.
  */
 export function isoDateToSerial(iso: string): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
   if (!m) return null;
-  const [, y, mo, d] = m;
-  return dateToSerial(new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d))));
+  const [, yStr, moStr, dStr] = m;
+  const y = Number(yStr);
+  const mo = Number(moStr);
+  const d = Number(dStr);
+  // A sane calendar window, not a Sheets/JS limit — no legitimate use of this
+  // function (RDV appointments, BDD deadlines) needs a date outside it.
+  if (y < 1900 || y > 2200) return null;
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) {
+    return null;
+  }
+  return dateToSerial(date);
 }
 
 /**
