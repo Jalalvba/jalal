@@ -345,7 +345,16 @@ export function checkInterval(
   ): IntervalCheck => {
     const effectiveCurrent =
       resolved.source === "manual" ? currentKm : Math.max(...readings.map((r) => r.km));
-    const kmSince = effectiveCurrent - last.km;
+    // Clamped at 0, never negative. The two guards above only refuse a
+    // manual reading that contradicts last.km or the DS maximum by more
+    // than KM_REGRESSION_TOLERANCE — inside that tolerance band (keying
+    // noise, deliberately still "ok") effectiveCurrent can sit a few
+    // hundred km below last.km, and reporting a negative "distance
+    // travelled" is exactly the kind of number this module refuses to emit
+    // everywhere else. 0 km since is the honest floor: the interval cannot
+    // be exceeded by an odometer that hasn't (as far as this data can tell)
+    // moved forward at all.
+    const kmSince = Math.max(0, effectiveCurrent - last.km);
     const overdue = kmSince > intervalKm;
     return {
       ...base,

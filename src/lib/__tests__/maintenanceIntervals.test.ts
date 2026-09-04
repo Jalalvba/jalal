@@ -553,6 +553,23 @@ describe("checkInterval / checkBeltPump — honouring the override", () => {
     expect(checkInterval("vidange", entries, 99_950).status).toBe("ok");
   });
 
+  it("clamps kmSince to 0 rather than reporting a negative distance travelled", () => {
+    // Inside the tolerance band the guard stays silent (by design — keying
+    // noise, not a real conflict) but the naive subtraction still goes
+    // negative. Reporting "-500 km depuis le dernier" is exactly the kind
+    // of number this module refuses to emit elsewhere.
+    const entries = [e("2023-01-10", 45_000, "VIDANGE 1:HUILE+FILTRE H+MO")];
+    for (const manual of [45_000, 44_500, 44_001, 44_000]) {
+      const r = checkInterval("vidange", entries, manual);
+      expect(r.status).toBe("ok");
+      expect(r.kmSince).toBe(0);
+      expect(r.overdueByKm).toBeUndefined();
+    }
+    // Just past the tolerance boundary, the existing conflict guard still
+    // fires — unaffected by the clamp.
+    expect(checkInterval("vidange", entries, 43_999).status).toBe("unknown");
+  });
+
   it("crosses the belt/pump threshold on a manual reading the DS history cannot see", () => {
     // 118,157 km in the history — the 44329-B-7 case, correctly silent. An
     // operator reading 130,000 off the dashboard changes that.
