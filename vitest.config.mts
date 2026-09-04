@@ -28,6 +28,10 @@ export default defineConfig({
       // dummies above, needed just to make the module importable when a
       // test gives it a fully mocked `sheets` client.
       GOOGLE_SHEETS_ID: "test-dummy-sheet-id",
+      // src/lib/sheets/googleSheetsRdvMonthly.ts throws at module load if this
+      // is unset — same reasoning as GOOGLE_SHEETS_ID above, needed by
+      // src/lib/__tests__/googleSheetsRdvMonthly.test.ts's fully-mocked client.
+      GOOGLE_RDV_SHEETS_ID: "test-dummy-rdv-sheet-id",
       // src/lib/auth/googleOAuth.ts throws at module load if these are unset —
       // pulled in transitively by src/app/api/config/options/route.ts (via
       // AUTHORIZED_EMAIL), same reasoning as the dummies above.
