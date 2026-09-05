@@ -15,6 +15,24 @@ describe("isInHousePrestataire", () => {
     }
   });
 
+  it("does not match 'scal' as a bare substring of an unrelated word — word-bounded, not a plain includes()", () => {
+    // All real-shaped external garage names that a bare /scal/i previously
+    // matched, silently routing them to ATELIER and describing them as
+    // in-house. "Pascal" is an entirely ordinary garage name.
+    for (const p of [
+      "Garage Pascal",
+      "PASCAL AUTO",
+      "Carrosserie Pascal",
+      "Escale Auto",
+      "GARAGE L'ESCALE",
+      "Fiscal Services",
+      "Mescaline Motors",
+      "Rescal",
+    ]) {
+      expect(isInHousePrestataire(p)).toBe(false);
+    }
+  });
+
   it("treats a blank or absent value as not in-house — an empty cell says nothing", () => {
     expect(isInHousePrestataire("")).toBe(false);
     expect(isInHousePrestataire(null)).toBe(false);

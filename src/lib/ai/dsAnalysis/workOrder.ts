@@ -410,8 +410,11 @@ export function fixedRoutingZone(vehicle: ZoneVehicle): string | null {
   if (!A00_FIXED_ROUTING_ZONES.includes(zoning)) return null;
   // The one case where the ACTION and the ZONING disagree by design: an
   // operator naming Scal means the work is internal, so the vehicle is
-  // re-routed to the workshop and the cell must say so.
-  if (zoning === ZONE.PRESTATAIRE_EXTERNE && /scal/i.test(String(vehicle.prestataire ?? ""))) {
+  // re-routed to the workshop and the cell must say so. isInHousePrestataire()
+  // is the same predicate fixedRoutingActions() above uses — a second inline
+  // /scal/i here is exactly the kind of drift that helper exists to prevent
+  // (see its own header), and it was a bare substring match, not word-bounded.
+  if (zoning === ZONE.PRESTATAIRE_EXTERNE && isInHousePrestataire(vehicle.prestataire)) {
     return ZONE.ATELIER;
   }
   return zoning;
