@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult } from "@/types";
+import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult, RdvMoveResult } from "@/types";
 
 // Same pattern as src/hooks/useAtelierRows.ts. No clear-all mutation — RDV is an
 // append-only appointment log, so unlike Atelier/Parking there's no bulk-wipe
@@ -93,6 +93,29 @@ export function useClearRdvRow() {
         body: JSON.stringify(identity),
       }),
     meta: { successMessage: "Rendez-vous effacé" },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
+  });
+}
+
+/**
+ * Moves an appointment to a different date — a cut-and-paste of the full row
+ * (new slot written, old slot cleared), never an in-place Date edit. `identity`
+ * is re-resolved fresh server-side in both tabs, same as
+ * useUpdateRdvField/useClearRdvRow. fetchJson() throws on `ok: false`
+ * (including the duplicate partial-failure case), so mutateAsync only ever
+ * resolves with the `ok: true` variant — callers only need to handle
+ * `result.warning`, same as the other mutations here.
+ */
+export function useMoveRdvRow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ identity, newDate }: { identity: RdvAddInput; newDate: string }) =>
+      fetchJson<RdvMoveResult & { ok: true }>("/api/rdv/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identity, newDate }),
+      }),
+    meta: { successMessage: "Rendez-vous déplacé" },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ROWS_KEY }),
   });
 }

@@ -774,6 +774,25 @@ export type RdvClearResult =
   | { ok: true; monthlyTab: MonthlyWriteResult; flatTab: { written: boolean }; warning?: string }
   | { ok: false; error: string };
 
+// Outcome of moveAppointment() in src/lib/sheets/googleSheetsRdvMonthly.ts — a
+// write into the NEW date's slot followed by a clear of the OLD one, never the
+// reverse order (see that function's header). `duplicate: true` marks the one
+// unsafe outcome: the write succeeded but the old slot could not be cleared,
+// so the appointment now exists in both places and needs manual correction —
+// `error` in that case names both locations explicitly.
+export type MonthlyMoveResult =
+  | { moved: true; tab: string; row: number }
+  | { moved: false; error: string; duplicate?: true };
+
+// Same two-write shape as RdvUpdateResult (monthly tab first — durable
+// source — then the flat mirror's Date cell, retried once, degrading to a
+// warning rather than a hard failure). `duplicate: true` propagates
+// MonthlyMoveResult's unsafe outcome so the API route can respond with a
+// distinct status and the UI can treat it as a hard error, never a warning.
+export type RdvMoveResult =
+  | { ok: true; monthlyMove: MonthlyMoveResult & { moved: true }; flatTab: { written: boolean }; warning?: string }
+  | { ok: false; error: string; duplicate?: true };
+
 // ─── DEPOT sheet (Google Sheets, tab "DEPOT", gid=1365327220) ─────────────────
 //
 // Confirmed live to be a byte-for-byte structural clone of PARKING: same 15

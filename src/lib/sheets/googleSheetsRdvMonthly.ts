@@ -1,5 +1,5 @@
 import { type sheets_v4 } from "googleapis";
-import type { RdvAddInput, MonthlyWriteResult, RdvEditableField } from "@/types";
+import type { RdvAddInput, MonthlyWriteResult, MonthlyMoveResult, RdvEditableField } from "@/types";
 import { RDV_EDITABLE_FIELDS } from "@/types";
 import { getSheetsClient, isoDateToSerial, columnIndexToLetter, verifyRowIdentity } from "@/lib/sheets/googleSheetsClient";
 import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY, RdvIdentityError } from "@/lib/sheets/rdvIdentity";
@@ -456,6 +456,78 @@ export async function updateAppointmentInMonthlyTab(
   });
 
   return { written: true, tab: tabName, row };
+}
+
+/**
+ * Moves an appointment to a different date within the monthly calendar tab(s)
+ * — a cut-and-paste of the full row, not an in-place Date edit (which
+ * updateAppointmentInMonthlyTab above refuses for exactly this reason: a
+ * different day-block, a different row count, possibly a different tab
+ * entirely). oldDate and newDate resolve their own tab names independently
+ * (resolveTargetTab is called once per date, inside the two composed
+ * functions below) — both tabs live in the same spreadsheet
+ * (GOOGLE_RDV_SHEETS_ID), so moving across the current/next-month boundary is
+ * not a special case, just two different tab names.
+ *
+ * WRITE THEN CLEAR, never the reverse: composes addAppointmentToMonthlyTab()
+ * (new slot — inherits its empty-row race recheck) and
+ * clearAppointmentInMonthlyTab() (old slot — inherits
+ * verifyMonthlyRowIdentity()) in that order. If the write fails, nothing has
+ * been touched and the old appointment is untouched and intact. If the write
+ * succeeds but the clear fails, the appointment now exists in BOTH slots —
+ * strictly better than clear-then-write's failure mode, which could lose the
+ * appointment entirely if the write step failed after the clear succeeded.
+ * That duplicate outcome is never silent: logged distinctly here and
+ * returned with `duplicate: true` and both locations named in the message,
+ * so an operator can go fix it by hand immediately.
+ */
+export async function moveAppointment(oldSnapshot: RdvAddInput, newDate: string): Promise<MonthlyMoveResult> {
+  if (newDate === oldSnapshot.date) {
+    return { moved: false, error: "La nouvelle date est identique à l'actuelle — aucun déplacement à effectuer." };
+  }
+
+  const newInput: RdvAddInput = { ...oldSnapshot, date: newDate };
+  const writeResult = await addAppointmentToMonthlyTab(newInput);
+  if (!writeResult.written) {
+    // Nothing written anywhere yet — the old appointment is still exactly
+    // where it was, so this is a plain failure, not a partial one.
+    return { moved: false, error: writeResult.error };
+  }
+
+  // Resolved BEFORE attempting the clear, purely for error reporting: if the
+  // clear's own internal resolve throws (row not found, ambiguous — see
+  // findRowByIdentity), the failure below would otherwise have no way to
+  // name WHERE the now-duplicated appointment still sits. Best-effort only —
+  // clearAppointmentInMonthlyTab still does its own full resolve+verify and
+  // is the one that actually decides success/failure.
+  const oldResolved = resolveTargetTab(oldSnapshot.date);
+  const oldTabName = "tabName" in oldResolved ? oldResolved.tabName : oldSnapshot.date;
+  let oldRowForReporting: number | null = null;
+  try {
+    const sheets = getSheetsClient();
+    oldRowForReporting = await findRowByIdentity(sheets, oldTabName, oldSnapshot);
+  } catch {
+    // Swallowed — see comment above.
+  }
+
+  const clearResult = await clearAppointmentInMonthlyTab(oldSnapshot);
+  if (!clearResult.written) {
+    const oldLocation = oldRowForReporting != null ? `"${oldTabName}" ligne ${oldRowForReporting}` : `"${oldTabName}"`;
+    console.error(
+      `[RDV] DUPLICATE APPOINTMENT after move: wrote to "${writeResult.tab}" row ${writeResult.row}, ` +
+        `failed to clear old slot at ${oldLocation} — ${clearResult.error}`
+    );
+    return {
+      moved: false,
+      duplicate: true,
+      error:
+        `Le rendez-vous a été copié vers "${writeResult.tab}" (ligne ${writeResult.row}) mais l'ancien créneau à ` +
+        `${oldLocation} n'a pas pu être effacé (${clearResult.error}) — il existe maintenant à deux endroits, ` +
+        "une correction manuelle est nécessaire immédiatement.",
+    };
+  }
+
+  return { moved: true, tab: writeResult.tab, row: writeResult.row };
 }
 
 /** Clears C:H only, leaving Date/Heure pre-filled — matches this tab's own empty-slot convention, and keeps the row reusable by findEmptyRow() above without a second structural (deleteDimension) operation. */

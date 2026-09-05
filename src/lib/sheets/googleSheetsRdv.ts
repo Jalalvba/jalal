@@ -1,5 +1,5 @@
 import { type sheets_v4 } from "googleapis";
-import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult } from "@/types";
+import type { RdvRow, RdvEditableField, RdvAddInput, RdvAddResponse, RdvUpdateResult, RdvClearResult, RdvMoveResult } from "@/types";
 import { RDV_EDITABLE_FIELDS } from "@/types";
 import {
   ROWS_CACHE_TTL_MS,
@@ -12,7 +12,7 @@ import {
   serialToUTCDate,
   withCache,
 } from "@/lib/sheets/googleSheetsClient";
-import { addAppointmentToMonthlyTab, updateAppointmentInMonthlyTab, clearAppointmentInMonthlyTab } from "@/lib/sheets/googleSheetsRdvMonthly";
+import { addAppointmentToMonthlyTab, updateAppointmentInMonthlyTab, clearAppointmentInMonthlyTab, moveAppointment } from "@/lib/sheets/googleSheetsRdvMonthly";
 import { resolveUniqueMatch, EDITABLE_TO_INPUT_KEY, RdvIdentityError } from "@/lib/sheets/rdvIdentity";
 
 const ROWS_CACHE_KEY = "rows:RDV";
@@ -442,6 +442,47 @@ export async function clearRdvRow(snapshot: RdvAddInput): Promise<RdvClearResult
   }
 
   return { ok: true, monthlyTab, flatTab: { written: true } };
+}
+
+// ─── moveRdvRow ────────────────────────────────────────────────────────────
+
+/**
+ * Moves an appointment to a different date — the monthly tab's real move
+ * (write new slot, then clear old slot; see moveAppointment()'s own header
+ * for why that order is mandatory) first, since it is the durable source;
+ * only on success does the flat mirror's Date cell get updated IN PLACE
+ * (tryUpdateFlatTab already has a "Date" branch — see updateRdvField above —
+ * this is the first caller to actually exercise it, since updateRdvField
+ * itself refuses Date edits before reaching it). Same retry-once-then-warn
+ * degradation as addRdvRow/updateRdvField/clearRdvRow: a mirror-lag failure
+ * here is soft (synced on the next "Synchroniser" or page reload), unlike a
+ * failure in the monthly tab move itself, which aborts before any mirror
+ * write is attempted.
+ */
+export async function moveRdvRow(oldSnapshot: RdvAddInput, newDate: string): Promise<RdvMoveResult> {
+  const monthlyMove = await moveAppointment(oldSnapshot, newDate);
+  if (!monthlyMove.moved) {
+    return { ok: false, error: monthlyMove.error, duplicate: monthlyMove.duplicate };
+  }
+
+  let flatResult = await tryUpdateFlatTab(oldSnapshot, "Date", newDate);
+  if ("error" in flatResult) {
+    console.error(`[RDV] Flat-tab mirror move (Date update) failed after monthly-tab move succeeded, retrying once: ${flatResult.error}`);
+    flatResult = await tryUpdateFlatTab(oldSnapshot, "Date", newDate);
+  }
+
+  if ("error" in flatResult) {
+    console.error(`[RDV] Flat-tab mirror move (Date update) failed twice, giving up: ${flatResult.error}`);
+    return {
+      ok: true,
+      monthlyMove,
+      flatTab: { written: false },
+      warning:
+        "Rendez-vous déplacé dans le calendrier mensuel, mais la mise à jour du miroir rapide a échoué — il sera synchronisé au prochain \"Synchroniser\" du classeur, ou rechargez la page dans quelques instants.",
+    };
+  }
+
+  return { ok: true, monthlyMove, flatTab: { written: true } };
 }
 
 async function tryClearFlatTab(snapshot: RdvAddInput): Promise<{ ok: true } | { error: string }> {

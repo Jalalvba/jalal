@@ -10,7 +10,9 @@ import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";
 import { AddRdvDialog } from "@/components/fleet/AddRdvDialog";
 import { InlineEditText } from "@/components/fleet/InlineEditText";
+import { InlineEditDate } from "@/components/fleet/InlineEditDate";
 import { InlineEditSelect, type InlineEditTriggerState } from "@/components/fleet/InlineEditSelect";
+import { FieldRowTrigger } from "@/components/fleet/FieldRowTrigger";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -25,13 +27,15 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { useRdvRows, useUpdateRdvField, useClearRdvRow, useRefreshRdvRows, rdvRowToIdentity } from "@/hooks/useRdvRows";
+import { useRdvRows, useUpdateRdvField, useClearRdvRow, useMoveRdvRow, useRefreshRdvRows, rdvRowToIdentity } from "@/hooks/useRdvRows";
 
-// Read-only Date column intentionally not offered here — see
-// src/lib/sheets/googleSheetsRdvMonthly.ts's updateAppointmentInMonthlyTab(): editing
-// Date in place would be a move to a different day-block (and possibly a
-// different monthly tab), materially more than a same-row field write.
-// Clear + re-add via AddRdvDialog is the workaround for moving a date.
+// Date is editable via InlineEditDate below, but it is a MOVE, not a
+// same-row field write — see src/lib/sheets/googleSheetsRdvMonthly.ts's
+// moveAppointment(): the full row is written into the new date's day-block
+// (possibly a different row count, possibly a different monthly tab) and the
+// old slot is cleared only after that write succeeds. commitDate() below
+// calls useMoveRdvRow(), never useUpdateRdvField() — Date is deliberately
+// excluded from commitField()'s generic per-field path.
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -73,6 +77,7 @@ function TableCellTrigger({ value, pending, justSaved, error, onOpen }: InlineEd
 }
 
 const COLUMNS: { label: string; className?: string }[] = [
+  { label: "Date" },
   { label: "Heure" },
   { label: "Clients" },
   { label: "Véhicule" },
@@ -177,12 +182,14 @@ function MobileRdvCard({
   onToggleSelect,
   commitField,
   commitMatricule,
+  commitDate,
 }: {
   row: RdvRow;
   selected: boolean;
   onToggleSelect: () => void;
   commitField: (row: RdvRow, field: RdvEditableField) => (value: string) => Promise<void>;
   commitMatricule: (row: RdvRow) => (value: string) => Promise<void>;
+  commitDate: (row: RdvRow) => (value: string) => Promise<void>;
 }) {
   const { options } = useSheetFieldOptions();
   return (
@@ -192,6 +199,14 @@ function MobileRdvCard({
         selected ? "border-fuchsia-500 bg-fuchsia-500/5 ring-1 ring-inset ring-fuchsia-500/40" : "border-border bg-card"
       )}
     >
+      <div className="mb-2">
+        <InlineEditDate
+          value={row.date}
+          onCommit={commitDate(row)}
+          renderTrigger={(state) => <FieldRowTrigger label="Date" placeholder="—" {...state} />}
+        />
+      </div>
+
       <div className="mb-2 flex items-start gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <InlineEditText
@@ -270,6 +285,7 @@ function MobileRdvCard({
 export default function RdvPage() {
   const rowsQuery = useRdvRows();
   const updateMutation = useUpdateRdvField();
+  const moveMutation = useMoveRdvRow();
   const clearMutation = useClearRdvRow();
   const refreshMutation = useRefreshRdvRows();
   const { options } = useSheetFieldOptions();
@@ -371,6 +387,30 @@ export default function RdvPage() {
       const identity = rdvRowToIdentity(row);
       const result = await updateMutation.mutateAsync({ identity, field: "Matricule", value: trimmed });
       if (result.warning) flashWarning(result.warning);
+    };
+  }
+
+  /**
+   * Date is a MOVE, not a field write — see the comment near the imports
+   * above. Unlike commitField/commitMatricule, this must never fail
+   * silently: a thrown error already surfaces inline via InlineEditDate's
+   * own 3s flash (useInlineFieldCommit), but that's easy to miss for
+   * something that just moved real data, so it's also flashed on the
+   * page-level banner via flashError — including the duplicate case, where
+   * the write landed in the new slot but the old one couldn't be cleared and
+   * the message names both locations for manual correction. Rethrown after
+   * flashing so the inline state still shows its own brief error too.
+   */
+  function commitDate(row: RdvRow) {
+    return async (value: string) => {
+      const identity = rdvRowToIdentity(row);
+      try {
+        const result = await moveMutation.mutateAsync({ identity, newDate: value });
+        if (result.warning) flashWarning(result.warning);
+      } catch (e) {
+        flashError(e instanceof Error ? e.message : "Erreur réseau");
+        throw e;
+      }
     };
   }
 
@@ -548,6 +588,7 @@ export default function RdvPage() {
                   onToggleSelect={() => toggleSelect(row)}
                   commitField={commitField}
                   commitMatricule={commitMatricule}
+                  commitDate={commitDate}
                 />
               ))}
             </div>
@@ -569,6 +610,9 @@ export default function RdvPage() {
                     const isSelected = selectedRowIndex === row.rowIndex;
                     return (
                       <tr key={row.rowIndex} className={cn("hover:bg-muted align-top", isSelected && "bg-fuchsia-500/5")}>
+                        <td className="px-3 py-2 min-w-[7rem]">
+                          <InlineEditDate value={row.date} onCommit={commitDate(row)} renderTrigger={(state) => <TableCellTrigger {...state} />} />
+                        </td>
                         <td className="px-3 py-2 min-w-[5rem]">
                           <InlineEditText value={row.heure} resyncDeps={[row.rowIndex, row.heure]} onCommit={commitField(row, "Heure")} />
                         </td>
