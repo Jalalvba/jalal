@@ -10,7 +10,7 @@ import { PlateFilterInput } from "@/components/fleet/PlateFilterInput";
 import { AddResultsList } from "@/components/fleet/AddResultsList";
 import { RecordCard } from "@/components/fleet/RecordCard";
 import { GeminiSummaryBlock } from "@/components/fleet/GeminiSummaryBlock";
-import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
+import { ReadonlyFieldList, hasPopulatedFields } from "@/components/fleet/ReadonlyFieldList";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
@@ -54,6 +54,7 @@ function DepotCard({
   onDelete: (rowIndex: number, imm: string) => void;
 }) {
   const [action, setAction] = useEditableState(row.action, [row.rowIndex, row.action, row.timestamp]);
+  const readonlyFields = READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }));
 
   return (
     <RecordCard
@@ -78,7 +79,7 @@ function DepotCard({
           no gemini column of its own. The reference fields are nested so the
           card has ONE detail toggle rather than a control per section. */}
       <GeminiSummaryBlock imm={row.imm} className="mt-2">
-        <ReadonlyFieldList fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: row[f.key] }))} />
+        {hasPopulatedFields(readonlyFields) ? <ReadonlyFieldList fields={readonlyFields} /> : undefined}
       </GeminiSummaryBlock>
     </RecordCard>
   );

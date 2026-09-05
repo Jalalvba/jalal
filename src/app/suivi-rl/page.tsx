@@ -23,7 +23,7 @@ import { ListPageHeader } from "@/components/fleet/ListPageHeader";
 import { LoadingSkeleton } from "@/components/fleet/LoadingSkeleton";
 import { RecordCard } from "@/components/fleet/RecordCard";
 import { GeminiSummaryBlock } from "@/components/fleet/GeminiSummaryBlock";
-import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
+import { ReadonlyFieldList, hasPopulatedFields } from "@/components/fleet/ReadonlyFieldList";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Combobox } from "@/components/ui/combobox";
@@ -266,6 +266,9 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
     };
   }
 
+  const readonlyHeaderFields = READONLY_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }));
+  const zoneDetectionFields = BDD_ZONE_DETECTION_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }));
+
   const dot = getPrestataireDotClass(row.prestataire, options.PRESTATAIRE_OPTIONS);
   // Emplacement is a human's manual assessment (see src/types/index.ts) —
   // EMPLACEMENT_INTROUVABLE means someone has flagged this vehicle as
@@ -413,11 +416,12 @@ const BddCard = memo(function BddCard({ row, onDelete }: { row: BddRow; onDelete
           minus every BDD_EDITABLE_FIELDS entry, so no edit surface is hidden
           behind it. */}
       <GeminiSummaryBlock imm={String(row.IMM ?? "")} summary={String(row.gemini ?? "")} className="mt-2" pro>
-        <ReadonlyFieldList fields={READONLY_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))} />
-        <ReadonlyFieldList
-          title="Détection de zone (auto)"
-          fields={BDD_ZONE_DETECTION_HEADERS.map((h) => ({ label: h, value: String(row[h] ?? "") }))}
-        />
+        {(hasPopulatedFields(readonlyHeaderFields) || hasPopulatedFields(zoneDetectionFields)) && (
+          <>
+            <ReadonlyFieldList fields={readonlyHeaderFields} />
+            <ReadonlyFieldList title="Détection de zone (auto)" fields={zoneDetectionFields} />
+          </>
+        )}
       </GeminiSummaryBlock>
     </RecordCard>
   );

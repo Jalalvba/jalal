@@ -13,7 +13,7 @@ import { RecordCard } from "@/components/fleet/RecordCard";
 import { GeminiSummaryBlock } from "@/components/fleet/GeminiSummaryBlock";
 import { GenerateActionsButton } from "@/components/fleet/GenerateActionsButton";
 import { ParkingRowAiButtons } from "@/components/fleet/ParkingRowAiButtons";
-import { ReadonlyFieldList } from "@/components/fleet/ReadonlyFieldList";
+import { ReadonlyFieldList, hasPopulatedFields } from "@/components/fleet/ReadonlyFieldList";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Field } from "@/components/fleet/Field";
 import { Input } from "@/components/ui/input";
@@ -137,6 +137,7 @@ function ParkingCard({
   onAiDone: () => void;
 }) {
   const [action, setAction] = useEditableState(row.action, [row.rowIndex, row.action, row.timestamp]);
+  const readonlyFields = READONLY_FIELDS.map((f) => ({ label: f.label, value: String(row[f.key] ?? "") }));
 
   return (
     <RecordCard
@@ -224,9 +225,7 @@ function ParkingCard({
           The reference fields are nested so the card has ONE detail toggle
           rather than a separate control per section. */}
       <GeminiSummaryBlock imm={row.imm} summary={row.gemini} className="mt-2" saveTo="parking" hideButton>
-        <ReadonlyFieldList
-          fields={READONLY_FIELDS.map((f) => ({ label: f.label, value: String(row[f.key] ?? "") }))}
-        />
+        {hasPopulatedFields(readonlyFields) ? <ReadonlyFieldList fields={readonlyFields} /> : undefined}
       </GeminiSummaryBlock>
 
     </RecordCard>

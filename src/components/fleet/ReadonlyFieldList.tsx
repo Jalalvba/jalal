@@ -9,6 +9,17 @@
  * fields vs. a distinctly-sourced "automated zone detection" block) without
  * the two blending together.
  */
+/**
+ * Whether ReadonlyFieldList would actually render anything for these fields.
+ * Callers passing this component as GeminiSummaryBlock's `children` must
+ * check this THEMSELVES before rendering the element — `Boolean(children)`
+ * on the JSX element is always true regardless of what it renders once
+ * mounted, so the caller is the only place that can know in advance.
+ */
+export function hasPopulatedFields(fields: { label: string; value: string }[]): boolean {
+  return fields.some((f) => String(f.value ?? "").trim().length > 0);
+}
+
 export function ReadonlyFieldList({ fields, title }: { fields: { label: string; value: string }[]; title?: string }) {
   // String(... ?? "") rather than f.value.trim(): the values come from network
   // payloads whose declared types describe the current server, not the deploy
