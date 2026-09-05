@@ -277,10 +277,22 @@ describe("zonePreconditionFailure — the factual gates, in one place", () => {
   });
 
   it("leaves the interpretive and residual criteria ungoverned", () => {
-    // 5, 6 are genuine readings of the history; 7, 8, 9 are residual.
-    for (const z of ["CARROSSERIE-FSM", "PRESTATAIRE-EXTERNE", "ATELIER", "DISPONIBLE-A-LIVRER", "DEPOT-DISPONIBLE", "visite technique"]) {
+    // 5 is a genuine reading of the history; 7, 8, 9 are residual.
+    for (const z of ["CARROSSERIE-FSM", "ATELIER", "DISPONIBLE-A-LIVRER", "DEPOT-DISPONIBLE"]) {
       expect(zonePreconditionFailure(z, { etat: "LLD", isAvis: false })).toBeNull();
     }
+  });
+
+  it("refuses PRESTATAIRE-EXTERNE when the prestataire is actually in-house (Scal)", () => {
+    expect(zonePreconditionFailure("PRESTATAIRE-EXTERNE", { etat: "LLD", prestataire: "SCAL Casa" })).toContain(
+      "A0.5.6"
+    );
+    expect(zonePreconditionFailure("PRESTATAIRE-EXTERNE", { etat: "LLD", prestataire: "Garage Hamid" })).toBeNull();
+    expect(zonePreconditionFailure("PRESTATAIRE-EXTERNE", { etat: "LLD" })).toBeNull();
+  });
+
+  it("refuses 'visite technique' on the A0.5 analysis path — it is only reachable via A0.0's ZONING bypass", () => {
+    expect(zonePreconditionFailure("visite technique", { etat: "LLD", isAvis: false })).not.toBeNull();
   });
 });
 

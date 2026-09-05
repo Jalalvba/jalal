@@ -443,6 +443,23 @@ export function zonePreconditionFailure(zone: string, vehicle: ZoneVehicle): str
   if (zone === ZONE.REMPLACEMENT && etat !== "REMPLACEMENT") {
     return "A0.5.2 exige ETAT « Remplacement »";
   }
+  // isInHousePrestataire() is a pure fact about the row, not an inference —
+  // when it's true, PRESTATAIRE-EXTERNE contradicts it exactly the same way
+  // fixedRoutingZone() above refuses ZONING=PRESTATAIRE-EXTERNE for it on the
+  // A0.0 path. Without this, the model reaching PRESTATAIRE-EXTERNE through
+  // A0.5 criterion 6's own analysis (rather than ZONING already being set)
+  // could route a vehicle to an external provider it names as its own.
+  if (zone === ZONE.PRESTATAIRE_EXTERNE && isInHousePrestataire(vehicle.prestataire)) {
+    return "A0.5.6 exige un prestataire externe — le prestataire renseigné est interne (Scal)";
+  }
+  // "visite technique" is a valid ZONING value but is named by no A0.5
+  // criterion (1-9) — it only exists as an A0.0 fixed-routing destination,
+  // which bypasses this function entirely (see the bypass above). Refusing
+  // it here closes the one path where the model could still write it from
+  // its own reasoning rather than from an already-fixed ZONING cell.
+  if (zone === ZONE.VISITE_TECHNIQUE) {
+    return "« visite technique » n'est atteignable que via A0.0 (ZONING déjà fixé), jamais par analyse A0.5";
+  }
   return null;
 }
 
