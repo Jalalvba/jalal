@@ -776,9 +776,18 @@ export default function SuiviRlPage() {
     if (activeFleet.length > 0) filters.push({ label: "Flotte", value: activeFleet.map(displayAxisValue).join(" ou ") });
     if (activeEmplacement.length > 0) filters.push({ label: "Emplacement", value: activeEmplacement.map(displayAxisValue).join(" ou ") });
     if (activePrestataire.length > 0) filters.push({ label: "Prestataire", value: activePrestataire.map(displayAxisValue).join(" ou ") });
-    if (activeFlag.length > 0) filters.push({ label: "Flag", value: activeFlag.map(displayAxisValue).join(" ou ") });
+    if (activeFlag.length > 0) {
+      filters.push({ label: "Flag", value: activeFlag.map(displayAxisValue).join(" ou ") });
+    } else if (prestataireFiltered.some((r) => isDefaultHiddenFlag(r.flag))) {
+      // No explicit Flag selection means the default INST exclusion is in
+      // effect (see flagFiltered above) — `searched` (what's exported) has
+      // already had those rows removed. Recorded from the real exclusion,
+      // not a constant, so this line disappears when no INST rows exist to
+      // hide in the first place.
+      filters.push({ label: "Flag", value: `${DEFAULT_HIDDEN_FLAG} masqué par défaut` });
+    }
     return filters;
-  }, [search, activeFleet, activeEmplacement, activePrestataire, activeFlag]);
+  }, [search, activeFleet, activeEmplacement, activePrestataire, activeFlag, prestataireFiltered]);
 
   function handleExportPdf() {
     downloadBddPdf(searched, activeFilters, search.trim(), setExportingPdf);
